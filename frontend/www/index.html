@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>家人與貓咪體重紀錄</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding-bottom: 80px; }
+    .tab-active { color: #0d9488; font-weight: 600; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- 頂部導覽列 -->
+  <header class="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200 px-4 py-3 flex justify-between items-center">
+    <div>
+      <h1 class="text-lg font-bold text-slate-800">🐾 家人與貓咪體重</h1>
+      <p id="header-family-code" class="text-xs text-slate-500">同步碼：載入中...</p>
+    </div>
+    <button id="btn-refresh" class="text-sm bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700">
+      🔄 同步
+    </button>
+  </header>
+
+  <!-- 狀態提示條 (Toast) -->
+  <div id="toast" class="hidden fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-sm text-white shadow-lg transition-all"></div>
+
+  <!-- 載入中遮罩 -->
+  <div id="loading" class="hidden fixed inset-0 bg-white/60 backdrop-blur-sm z-40 flex items-center justify-center">
+    <div class="bg-white px-5 py-3 rounded-xl shadow-md border text-sm font-medium text-slate-600">資料同步中...</div>
+  </div>
+
+  <!-- 主內容區 -->
+  <main class="max-w-lg mx-auto p-4">
+
+    <!-- 分頁 1：總覽 -->
+    <section id="view-overview" class="space-y-4">
+      <div id="member-cards" class="space-y-3"></div>
+      <button id="btn-open-record-modal" class="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl shadow-sm">
+        ＋ 記錄今日體重
+      </button>
+    </section>
+
+    <!-- 分頁 2：趨勢圖表 -->
+    <section id="view-charts" class="hidden space-y-4">
+      <!-- 成員切換 -->
+      <div id="chart-member-pills" class="flex gap-2 overflow-x-auto pb-1"></div>
+
+      <!-- 日/週/月/年 切換按鈕 -->
+      <div id="chart-range-pills" class="flex bg-slate-200 p-1 rounded-xl text-xs font-medium">
+        <button data-range="day" class="range-btn flex-1 py-1.5 rounded-lg bg-white text-teal-700 shadow-sm">日</button>
+        <button data-range="week" class="range-btn flex-1 py-1.5 rounded-lg text-slate-600">週</button>
+        <button data-range="month" class="range-btn flex-1 py-1.5 rounded-lg text-slate-600">月</button>
+        <button data-range="year" class="range-btn flex-1 py-1.5 rounded-lg text-slate-600">年</button>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+        <canvas id="weightChart" height="220"></canvas>
+      </div>
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+        <h3 class="font-bold text-sm text-slate-600 mb-3">歷史紀錄</h3>
+        <ul id="history-list" class="divide-y divide-slate-100 text-sm"></ul>
+      </div>
+    </section>
+
+    <!-- 分頁 3：指標計算 -->
+    <section id="view-calc" class="hidden space-y-4">
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+        <h2 class="font-bold text-teal-700">👤 台灣衛福部成人 BMI 計算</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="calc-height" type="number" step="0.1" placeholder="身高 (cm)" class="border rounded-lg p-2 text-sm" />
+          <input id="calc-weight" type="number" step="0.1" placeholder="體重 (kg)" class="border rounded-lg p-2 text-sm" />
+        </div>
+        <button id="btn-calc-bmi" class="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-medium">計算 BMI</button>
+        <div id="bmi-result" class="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg hidden"></div>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+        <h2 class="font-bold text-orange-600">🐱 貓咪每日熱量 (RER / DER)</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <input id="calc-cat-weight" type="number" step="0.01" placeholder="貓咪體重 (kg)" class="border rounded-lg p-2 text-sm" />
+          <select id="calc-cat-factor" class="border rounded-lg p-2 text-sm bg-white">
+            <option value="1.2">已結紮成貓 (1.2x)</option>
+            <option value="1.4">未結紮成貓 (1.4x)</option>
+            <option value="0.8">減重中貓咪 (0.8x)</option>
+            <option value="2.5">幼貓成長期 (2.5x)</option>
+          </select>
+        </div>
+        <button id="btn-calc-cat" class="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">計算每日熱量</button>
+        <div id="cat-result" class="text-sm text-slate-600 bg-orange-50 p-3 rounded-lg hidden"></div>
+      </div>
+    </section>
+
+    <!-- 分頁 4：設定與成員管理 -->
+    <section id="view-settings" class="hidden space-y-4">
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+        <h2 class="font-bold text-slate-700">☁️ 雲端同步設定</h2>
+        <div>
+          <label class="text-xs text-slate-500">家庭同步碼（輸入相同代碼即可同步）</label>
+          <input id="input-family-code" type="text" class="w-full border rounded-lg p-2 text-sm mt-1" />
+        </div>
+        <button id="btn-save-settings" class="w-full py-2 bg-slate-800 text-white rounded-lg text-sm font-medium">儲存並重新同步</button>
+      </div>
+
+      <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="font-bold text-slate-700">👥 成員管理</h2>
+          <button id="btn-open-member-modal" class="text-xs bg-teal-600 text-white px-3 py-1.5 rounded-lg">＋ 新增成員</button>
+        </div>
+        <ul id="settings-member-list" class="divide-y divide-slate-100 text-sm"></ul>
+      </div>
+    </section>
+  </main>
+
+  <!-- 底部導覽列 -->
+  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex justify-around py-2.5 text-xs text-slate-500 z-30">
+    <button data-tab="overview" class="nav-btn tab-active flex flex-col items-center gap-0.5"><span>🏠</span>總覽</button>
+    <button data-tab="charts" class="nav-btn flex flex-col items-center gap-0.5"><span>📈</span>趨勢</button>
+    <button data-tab="calc" class="nav-btn flex flex-col items-center gap-0.5"><span>🧮</span>指標</button>
+    <button data-tab="settings" class="nav-btn flex flex-col items-center gap-0.5"><span>⚙️</span>設定</button>
+  </nav>
+
+  <!-- 彈窗：新增體重紀錄 -->
+  <div id="modal-record" class="hidden fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+    <form id="form-record" class="bg-white w-full max-w-md rounded-2xl p-5 space-y-4">
+      <h3 class="font-bold text-lg">記錄體重</h3>
+      <select id="rec-member" required class="w-full border rounded-lg p-2.5 text-sm bg-white"></select>
+      <input id="rec-weight" type="number" step="0.01" required placeholder="體重 (kg)，例：62.5 或 4.35" class="w-full border rounded-lg p-2.5 text-sm" />
+      <input id="rec-date" type="date" required class="w-full border rounded-lg p-2.5 text-sm" />
+      <input id="rec-note" type="text" placeholder="備註（選填，例：飯後、換飼料）" class="w-full border rounded-lg p-2.5 text-sm" />
+      <div class="flex gap-2">
+        <button type="button" class="btn-close-modal flex-1 py-2.5 bg-slate-100 rounded-xl text-sm">取消</button>
+        <button type="submit" class="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold">儲存</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 彈窗：新增成員 -->
+  <div id="modal-member" class="hidden fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+    <form id="form-member" class="bg-white w-full max-w-md rounded-2xl p-5 space-y-4">
+      <h3 class="font-bold text-lg">新增成員</h3>
+      <input id="mem-name" type="text" required placeholder="名稱（例：爸爸、橘貓咪咪）" class="w-full border rounded-lg p-2.5 text-sm" />
+      <select id="mem-type" class="w-full border rounded-lg p-2.5 text-sm bg-white">
+        <option value="human">👤 家人</option>
+        <option value="cat">🐱 貓咪</option>
+      </select>
+      <input id="mem-height" type="number" step="0.1" placeholder="身高 cm（人類計算 BMI 用，貓咪可留空）" class="w-full border rounded-lg p-2.5 text-sm" />
+      <input id="mem-target" type="number" step="0.01" placeholder="目標體重 kg（選填）" class="w-full border rounded-lg p-2.5 text-sm" />
+      <div class="flex gap-2">
+        <button type="button" class="btn-close-modal flex-1 py-2.5 bg-slate-100 rounded-xl text-sm">取消</button>
+        <button type="submit" class="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold">新增</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 彈窗：個人資訊與編輯 -->
+  <div id="modal-profile" class="hidden fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+    <form id="form-profile" class="bg-white w-full max-w-md rounded-2xl p-5 space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 id="prof-title" class="font-bold text-lg">個人資訊</h3>
+        <button type="button" id="btn-prof-to-chart" class="text-xs bg-teal-50 text-teal-700 px-3 py-1.5 rounded-lg font-medium">
+          📈 查看趨勢
+        </button>
+      </div>
+
+      <div id="prof-summary" class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl text-center text-sm"></div>
+
+      <input type="hidden" id="prof-id" />
+
+      <div id="prof-height-wrap">
+        <label class="text-xs text-slate-500">身高 (cm)</label>
+        <input id="prof-height" type="number" step="0.1" placeholder="例：172.5" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      </div>
+
+      <div>
+        <label class="text-xs text-slate-500">目標體重 (kg)</label>
+        <input id="prof-target" type="number" step="0.01" placeholder="例：65.0" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="button" class="btn-close-modal flex-1 py-2.5 bg-slate-100 rounded-xl text-sm">關閉</button>
+        <button type="submit" class="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold">儲存修改</button>
+      </div>
+    </form>
+  </div>
+
+  <script type="module">
+    import { FamilyAPI } from './api.js';
+
+    let familyCode = localStorage.getItem('familySyncCode') || 'my-family-2026';
+    let appData = { members: [], records: [] };
+    let selectedMemberId = null;
+    let selectedRange = 'day'; // 'day' | 'week' | 'month' | 'year'
+    let chartInstance = null;
+
+    const showLoading = (show) => document.getElementById('loading').classList.toggle('hidden', !show);
+    const showToast = (msg, isError = false) => {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-sm text-white shadow-lg ${isError ? 'bg-rose-600' : 'bg-slate-800'}`;
+      setTimeout(() => el.classList.add('hidden'), 2500);
+    };
+
+    // 依據 日/週/月/年 篩選並計算平均體重
+    function aggregateRecords(recs, range) {
+      const now = new Date();
+      const cutoff = new Date();
+
+      if (range === 'day') cutoff.setDate(now.getDate() - 30);
+      else if (range === 'week') cutoff.setDate(now.getDate() - 84);
+      else if (range === 'month') cutoff.setMonth(now.getMonth() - 12);
+      else if (range === 'year') cutoff.setFullYear(now.getFullYear() - 2);
+
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+      const filtered = recs.filter(r => r.recorded_at >= cutoffStr);
+
+      if (range === 'day') {
+        return {
+          labels: filtered.map(r => r.recorded_at.slice(5)),
+          values: filtered.map(r => Number(r.weight_kg)),
+          filteredRecords: filtered
+        };
+      }
+
+      const groups = {};
+      filtered.forEach(r => {
+        let key;
+        if (range === 'week') {
+          const d = new Date(r.recorded_at + 'T00:00:00');
+          const diff = d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1);
+          d.setDate(diff);
+          key = d.toISOString().split('T')[0].slice(5) + '週';
+        } else {
+          key = r.recorded_at.slice(0, 7);
+        }
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(Number(r.weight_kg));
+      });
+
+      const labels = Object.keys(groups);
+      const values = labels.map(k => {
+        const arr = groups[k];
+        const avg = arr.reduce((sum, v) => sum + v, 0) / arr.length;
+        return Number(avg.toFixed(2));
+      });
+
+      return { labels, values, filteredRecords: filtered };
+    }
+
+    async function syncData() {
+      showLoading(true);
+      try {
+        appData = await FamilyAPI.getAllData(familyCode);
+        if (!selectedMemberId && appData.members.length > 0) {
+          selectedMemberId = appData.members[0].id;
+        }
+        renderAll();
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function renderAll() {
+      document.getElementById('header-family-code').textContent = `同步碼：${familyCode}`;
+      document.getElementById('input-family-code').value = familyCode;
+      renderOverview();
+      renderCharts();
+      renderSettingsMembers();
+    }
+
+    function renderOverview() {
+      const container = document.getElementById('member-cards');
+      if (appData.members.length === 0) {
+        container.innerHTML = `<div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-sm">尚無成員，請先到「⚙️ 設定」新增家人或貓咪。</div>`;
+        return;
+      }
+
+      container.innerHTML = appData.members.map(m => {
+        const recs = appData.records.filter(r => r.member_id === m.id);
+        const latest = recs[recs.length - 1];
+        const prev = recs[recs.length - 2];
+        const diff = latest && prev ? (latest.weight_kg - prev.weight_kg).toFixed(2) : null;
+        const isCat = m.type === 'cat';
+
+        let badge = '';
+        if (!isCat && latest && m.height_cm) {
+          const bmi = (latest.weight_kg / ((m.height_cm / 100) ** 2)).toFixed(1);
+          badge = `<span class="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">BMI ${bmi}</span>`;
+        } else if (m.target_weight) {
+          badge = `<span class="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700">目標 ${m.target_weight} kg</span>`;
+        }
+
+        return `
+          <div data-member-id="${m.id}" class="member-card cursor-pointer active:scale-[0.99] transition bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isCat ? 'border-orange-400' : 'border-teal-500'} flex justify-between items-center">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-base">${isCat ? '🐱' : '👤'} ${m.name}</span>
+                ${badge}
+              </div>
+              <p class="text-xs text-slate-400 mt-1">${latest ? `最後更新：${latest.recorded_at}` : '尚未有體重紀錄'} · 點擊編輯</p>
+            </div>
+            <div class="text-right">
+              <div class="text-2xl font-bold">${latest ? latest.weight_kg : '--'} <span class="text-xs font-normal text-slate-500">kg</span></div>
+              ${diff !== null ? `<div class="text-xs ${diff > 0 ? 'text-rose-500' : 'text-emerald-600'}">${diff > 0 ? '+' : ''}${diff} kg</div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.member-card').forEach(card => {
+        card.onclick = () => openProfileModal(card.dataset.memberId);
+      });
+    }
+
+    function openProfileModal(memberId) {
+      const m = appData.members.find(x => x.id === memberId);
+      if (!m) return;
+      const recs = appData.records.filter(r => r.member_id === m.id);
+      const latest = recs[recs.length - 1];
+      const isCat = m.type === 'cat';
+
+      document.getElementById('prof-id').value = m.id;
+      document.getElementById('prof-title').textContent = `${isCat ? '🐱' : '👤'} ${m.name} 的個人資訊`;
+      document.getElementById('prof-height').value = m.height_cm || '';
+      document.getElementById('prof-target').value = m.target_weight || '';
+      document.getElementById('prof-height-wrap').classList.toggle('hidden', isCat);
+
+      let metricLabel = '目標差距';
+      let metricVal = '--';
+      if (!isCat && latest && m.height_cm) {
+        metricLabel = '目前 BMI';
+        metricVal = (latest.weight_kg / ((m.height_cm / 100) ** 2)).toFixed(1);
+      } else if (latest && m.target_weight) {
+        const gap = (latest.weight_kg - m.target_weight).toFixed(2);
+        metricVal = `${gap > 0 ? '+' : ''}${gap} kg`;
+      }
+
+      document.getElementById('prof-summary').innerHTML = `
+        <div>
+          <div class="text-xs text-slate-400">最新體重</div>
+          <div class="font-bold text-base text-slate-800">${latest ? `${latest.weight_kg} kg` : '--'}</div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400">${metricLabel}</div>
+          <div class="font-bold text-base text-teal-700">${metricVal}</div>
+        </div>
+      `;
+
+      document.getElementById('btn-prof-to-chart').onclick = () => {
+        selectedMemberId = m.id;
+        document.getElementById('modal-profile').classList.add('hidden');
+        document.querySelector('.nav-btn[data-tab="charts"]').click();
+        renderCharts();
+      };
+
+      document.getElementById('modal-profile').classList.remove('hidden');
+    }
+
+    function renderCharts() {
+      const pills = document.getElementById('chart-member-pills');
+      pills.innerHTML = appData.members.map(m => `
+        <button data-id="${m.id}" class="pill-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-medium ${m.id === selectedMemberId ? 'bg-teal-600 text-white' : 'bg-white border text-slate-600'}">
+          ${m.type === 'cat' ? '🐱' : '👤'} ${m.name}
+        </button>
+      `).join('');
+
+      pills.querySelectorAll('.pill-btn').forEach(btn => {
+        btn.onclick = () => { selectedMemberId = btn.dataset.id; renderCharts(); };
+      });
+
+      const member = appData.members.find(m => m.id === selectedMemberId);
+      const recs = appData.records.filter(r => r.member_id === selectedMemberId);
+      const { labels, values, filteredRecords } = aggregateRecords(recs, selectedRange);
+
+      const ctx = document.getElementById('weightChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+      const color = member?.type === 'cat' ? '#f97316' : '#0d9488';
+
+      const datasets = [{
+        label: `${member?.name || ''} 體重 (kg)${selectedRange === 'day' ? '' : '（平均）'}`,
+        data: values,
+        borderColor: color,
+        backgroundColor: color + '20',
+        fill: true,
+        tension: 0.3
+      }];
+
+      if (member?.target_weight && labels.length > 0) {
+        datasets.push({
+          label: `目標體重 (${member.target_weight} kg)`,
+          data: labels.map(() => Number(member.target_weight)),
+          borderColor: '#94a3b8',
+          borderWidth: 2,
+          borderDash: [6, 6],
+          pointRadius: 0,
+          fill: false
+        });
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: { responsive: true, plugins: { legend: { display: true } } }
+      });
+
+      const list = document.getElementById('history-list');
+      list.innerHTML = filteredRecords.slice().reverse().map(r => `
+        <li class="py-2.5 flex justify-between items-center">
+          <div>
+            <span class="font-semibold">${r.weight_kg} kg</span>
+            <span class="text-xs text-slate-400 ml-2">${r.recorded_at}</span>
+            ${r.note ? `<p class="text-xs text-slate-500">${r.note}</p>` : ''}
+          </div>
+          <button data-del-rec="${r.id}" class="text-xs text-rose-500 hover:underline">刪除</button>
+        </li>
+      `).join('') || '<li class="py-3 text-center text-slate-400">此區間尚無紀錄</li>';
+
+      list.querySelectorAll('[data-del-rec]').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm('確定刪除此筆體重紀錄？')) return;
+          await FamilyAPI.deleteRecord(btn.dataset.delRec);
+          showToast('已刪除紀錄');
+          syncData();
+        };
+      });
+    }
+
+    function renderSettingsMembers() {
+      const list = document.getElementById('settings-member-list');
+      list.innerHTML = appData.members.map(m => `
+        <li class="py-2.5 flex justify-between items-center">
+          <span>${m.type === 'cat' ? '🐱' : '👤'} ${m.name}</span>
+          <button data-del-mem="${m.id}" class="text-xs text-rose-500 hover:underline">刪除</button>
+        </li>
+      `).join('') || '<li class="py-3 text-center text-slate-400">尚無成員</li>';
+
+      list.querySelectorAll('[data-del-mem]').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm('刪除成員會連同所有體重紀錄一起刪除，確定嗎？')) return;
+          await FamilyAPI.deleteMember(btn.dataset.delMem);
+          if (selectedMemberId === btn.dataset.delMem) selectedMemberId = null;
+          showToast('已刪除成員');
+          syncData();
+        };
+      });
+    }
+
+    // 綁定 日/週/月/年 按鈕事件
+    document.querySelectorAll('.range-btn').forEach(btn => {
+      btn.onclick = () => {
+        selectedRange = btn.dataset.range;
+        document.querySelectorAll('.range-btn').forEach(b => {
+          b.className = 'range-btn flex-1 py-1.5 rounded-lg text-slate-600';
+        });
+        btn.className = 'range-btn flex-1 py-1.5 rounded-lg bg-white text-teal-700 shadow-sm';
+        renderCharts();
+      };
+    });
+
+    // 分頁切換
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+        document.getElementById(`view-${btn.dataset.tab}`).classList.remove('hidden');
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('tab-active'));
+        btn.classList.add('tab-active');
+      };
+    });
+
+    // 彈窗控制
+    document.querySelectorAll('.btn-close-modal').forEach(btn => {
+      btn.onclick = () => btn.closest('.fixed').classList.add('hidden');
+    });
+
+    // 新增：點擊彈窗外部（深色背景）即可關閉
+    ['modal-record', 'modal-member', 'modal-profile'].forEach(id => {
+      const modal = document.getElementById(id);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.classList.add('hidden');
+        }
+      });
+    });
+
+    document.getElementById('btn-open-record-modal').onclick = () => {
+      if (appData.members.length === 0) return showToast('請先到設定頁新增成員', true);
+      document.getElementById('rec-member').innerHTML = appData.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      document.getElementById('rec-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('modal-record').classList.remove('hidden');
+    };
+
+    document.getElementById('btn-open-member-modal').onclick = () => {
+      document.getElementById('modal-member').classList.remove('hidden');
+    };
+
+    // 表單送出：新增體重
+    document.getElementById('form-record').onsubmit = async (e) => {
+      e.preventDefault();
+      showLoading(true);
+      try {
+        await FamilyAPI.addRecord({
+          family_code: familyCode,
+          member_id: document.getElementById('rec-member').value,
+          weight_kg: parseFloat(document.getElementById('rec-weight').value),
+          recorded_at: document.getElementById('rec-date').value,
+          note: document.getElementById('rec-note').value.trim()
+        });
+        document.getElementById('modal-record').classList.add('hidden');
+        e.target.reset();
+        showToast('體重已同步至雲端');
+        await syncData();
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        showLoading(false);
+      }
+    };
+
+    // 表單送出：新增成員
+    document.getElementById('form-member').onsubmit = async (e) => {
+      e.preventDefault();
+      showLoading(true);
+      try {
+        await FamilyAPI.addMember({
+          family_code: familyCode,
+          name: document.getElementById('mem-name').value.trim(),
+          type: document.getElementById('mem-type').value,
+          height_cm: parseFloat(document.getElementById('mem-height').value) || null,
+          target_weight: parseFloat(document.getElementById('mem-target').value) || null
+        });
+        document.getElementById('modal-member').classList.add('hidden');
+        e.target.reset();
+        showToast('成員已新增');
+        await syncData();
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        showLoading(false);
+      }
+    };
+
+    // 表單送出：更新個人資訊
+    document.getElementById('form-profile').onsubmit = async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('prof-id').value;
+      const heightVal = document.getElementById('prof-height').value;
+      const targetVal = document.getElementById('prof-target').value;
+
+      showLoading(true);
+      try {
+        await FamilyAPI.updateMember(id, {
+          height_cm: heightVal ? parseFloat(heightVal) : null,
+          target_weight: targetVal ? parseFloat(targetVal) : null
+        });
+        document.getElementById('modal-profile').classList.add('hidden');
+        showToast('個人資訊已更新');
+        await syncData();
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        showLoading(false);
+      }
+    };
+
+    // 儲存家庭同步碼
+    document.getElementById('btn-save-settings').onclick = () => {
+      familyCode = document.getElementById('input-family-code').value.trim() || 'my-family-2026';
+      localStorage.setItem('familySyncCode', familyCode);
+      showToast('設定已儲存');
+      syncData();
+    };
+
+    // 計算機邏輯
+    document.getElementById('btn-calc-bmi').onclick = () => {
+      const h = parseFloat(document.getElementById('calc-height').value) / 100;
+      const w = parseFloat(document.getElementById('calc-weight').value);
+      if (!h || !w) return;
+      const bmi = (w / (h * h)).toFixed(1);
+      const status = bmi < 18.5 ? '過輕' : bmi < 24 ? '正常範圍' : bmi < 27 ? '過重' : '肥胖';
+      const el = document.getElementById('bmi-result');
+      el.innerHTML = `BMI：<strong>${bmi}</strong>（${status}）`;
+      el.classList.remove('hidden');
+    };
+
+    document.getElementById('btn-calc-cat').onclick = () => {
+      const w = parseFloat(document.getElementById('calc-cat-weight').value);
+      const f = parseFloat(document.getElementById('calc-cat-factor').value);
+      if (!w) return;
+      const rer = Math.round(70 * Math.pow(w, 0.75));
+      const der = Math.round(rer * f);
+      const el = document.getElementById('cat-result');
+      el.innerHTML = `基礎代謝 RER：<strong>${rer} kcal</strong><br>每日建議攝取 DER：<strong>${der} kcal</strong>`;
+      el.classList.remove('hidden');
+    };
+
+    document.getElementById('btn-refresh').onclick = syncData;
+
+    syncData();
+  </script>
+</body>
+</html>
