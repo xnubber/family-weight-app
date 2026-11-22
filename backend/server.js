@@ -20,21 +20,26 @@ app.use(helmet());
 const allowedOrigins = [
   'https://localhost',       // Android Capacitor 預設 Origin
   'capacitor://localhost',   // iOS Capacitor 預設 Origin
-  'http://localhost:61837',
+  'http://localhost:3000',
   'http://localhost:5000',
   'http://127.0.0.1:5500'
 ];
-app.use(cors({
+const corsOptions = {
   origin: (origin, callback) => {
-    // 允許沒有 origin 的請求（如健康檢查）或在白名單內的來源
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       logger.warn('CORS 阻擋未授權來源', { origin });
       callback(new Error('Not allowed by CORS'));
     }
-  }
-}));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-API-Key']
+};
+
+app.use(cors(corsOptions));
+// 明確處理所有路徑的 OPTIONS 預檢請求
+app.options('*', cors(corsOptions));
 
 // 4. 限制單筆請求大小為 10kb，防止惡意塞入巨量垃圾文字耗盡資料庫空間
 app.use(express.json({ limit: '10kb' }));
@@ -84,8 +89,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// 6. API 金鑰驗證中介層（保護所有 /api/* 路由，健康檢查除外）
+// 6. API 金鑰驗證中介層
 app.use('/api', apiLimiter, (req, res, next) => {
+  // 預檢請求不帶 API Key，直接放行
+  if (req.method === 'OPTIONS') return next();
+
   const clientKey = req.headers['x-api-key'];
   if (!process.env.APP_API_KEY || clientKey !== process.env.APP_API_KEY) {
     logger.warn('無效的 API Key 存取嘗試', { ip: req.ip, path: req.originalUrl });
