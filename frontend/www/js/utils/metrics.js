@@ -150,6 +150,15 @@ export function calculateBmi(weightKg, heightCm) {
   return { bmi, status };
 }
 
+// 台灣衛福部成人健康體重建議區間（BMI 18.5–24.0）
+export function calculateHealthyWeightRange(heightCm) {
+  const h = Number(heightCm) / 100;
+  if (!(h > 0)) return null;
+  const minKg = Number((18.5 * h * h).toFixed(1));
+  const maxKg = Number((24.0 * h * h).toFixed(1));
+  return { minKg, maxKg };
+}
+
 export function calculateCatCalories(weightKg, factor) {
   const w = Number(weightKg);
   const f = Number(factor);
@@ -157,4 +166,70 @@ export function calculateCatCalories(weightKg, factor) {
   const rer = Math.round(70 * Math.pow(w, 0.75));
   const der = Math.round(rer * f);
   return { rer, der };
+}
+
+// 計算選定時間區間內的平均、最低、最高與區間增減幅
+export function calculatePeriodStats(filteredRecords) {
+  if (!Array.isArray(filteredRecords) || filteredRecords.length === 0) return null;
+  const weights = filteredRecords.map((r) => Number(r.weight_kg)).filter(Number.isFinite);
+  if (weights.length === 0) return null;
+
+  const sum = weights.reduce((acc, v) => acc + v, 0);
+  const avg = Number((sum / weights.length).toFixed(2));
+  const min = Number(Math.min(...weights).toFixed(2));
+  const max = Number(Math.max(...weights).toFixed(2));
+  const delta = weights.length >= 2
+    ? Number((weights[weights.length - 1] - weights[0]).toFixed(2))
+    : null;
+
+  return { count: weights.length, avg, min, max, delta };
+}
+
+// 計算從首次紀錄到目前體重朝向目標體重的達成百分比（同時支援減重與增重）
+export function calculateGoalProgress(memberRecords, targetWeight) {
+  if (
+    !Array.isArray(memberRecords) ||
+    memberRecords.length === 0 ||
+    targetWeight === null ||
+    targetWeight === undefined
+  ) {
+    return null;
+  }
+  const target = Number(targetWeight);
+  const start = Number(memberRecords[0].weight_kg);
+  const current = Number(memberRecords[memberRecords.length - 1].weight_kg);
+  if (!Number.isFinite(target) || !Number.isFinite(start) || !Number.isFinite(current)) {
+    return null;
+  }
+
+  let percent;
+  let isAchieved;
+  if (start === target) {
+    isAchieved = current === target;
+    percent = isAchieved ? 100 : 0;
+  } else {
+    const raw = ((start - current) / (start - target)) * 100;
+    percent = Math.round(Math.max(0, Math.min(100, raw)));
+    isAchieved = start > target ? current <= target : current >= target;
+  }
+
+  return {
+    startWeight: start,
+    currentWeight: current,
+    targetWeight: target,
+    percent,
+    isAchieved
+  };
+}
+
+// 計算距離最新一筆體重紀錄已過幾天（以本地日曆日計算）
+export function getDaysSinceLastRecord(memberRecords, todayStr = getLocalTodayDate()) {
+  if (!Array.isArray(memberRecords) || memberRecords.length === 0) return null;
+  const latestDate = String(memberRecords[memberRecords.length - 1].recorded_at || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(latestDate)) return null;
+
+  const [ty, tm, td] = todayStr.split('-').map(Number);
+  const [ly, lm, ld] = latestDate.split('-').map(Number);
+  const diffMs = Date.UTC(ty, tm - 1, td) - Date.UTC(ly, lm - 1, ld);
+  return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
 }

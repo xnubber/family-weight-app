@@ -90,3 +90,39 @@ button:not(:disabled).is-pressed {
     transform: none;
   }
 }
+
+/* 目標達成進度條（使用原生 <progress> 符合嚴格 style-src 'self' CSP） */
+.goal-progress {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  background-color: #e2e8f0;
+}
+
+.goal-progress::-webkit-progress-bar {
+  background-color: #e2e8f0;
+  border-radius: 9999px;
+}
+
+.goal-progress::-webkit-progress-value {
+  background-color: #0d9488;
+  border-radius: 9999px;
+  transition: width 250ms ease;
+}
+
+.goal-progress::-moz-progress-bar {
+  background-color: #0d9488;
+  border-radius: 9999px;
+}
+
+.goal-progress.goal-progress-cat::-webkit-progress-value {
+  background-color: #f97316;
+}
+
+.goal-progress.goal-progress-cat::-moz-progress-bar {
+  background-color: #f97316;
+}

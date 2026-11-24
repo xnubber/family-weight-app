@@ -5,7 +5,6 @@ import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.
 import { renderOverview } from './js/ui/overview.js';
 import { renderCharts, initChartRangeControls } from './js/ui/charts.js';
 import { openProfileModal, openMemberModal, initModals } from './js/ui/modals.js';
-import { initCalculators } from './js/ui/calculators.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
 
 let isFetching = false;
@@ -107,7 +106,6 @@ document.getElementById('btn-refresh').onclick = syncData;
 initTapFeedback();
 initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
-initCalculators();
 initSettings({ onSync: syncData });
 
 // 先渲染本地空畫面讓介面可立即操作，同時背景同步雲端資料
