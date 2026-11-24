@@ -28,7 +28,7 @@ export function validateEnv() {
 
 const configuredOrigins = (process.env.ALLOWED_ORIGINS || 'https://localhost,capacitor://localhost')
   .split(',')
-  .map((o) => o.trim())
+  .map((o) => o.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 
 const devOrigins = isProduction
