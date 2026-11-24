@@ -30,7 +30,7 @@ export function renderSettingsMembers({ onEditMember }) {
       : '';
     nameGroup.append(
       createEl('div', 'font-medium text-ink truncate', String(m.name ?? '')),
-      createEl('div', 'text-[11px] text-ink-400', `${getMemberTypeLabel(m.type)}${privSuffix}`)
+      createEl('div', 'text-[13px] text-ink-400', `${getMemberTypeLabel(m.type)}${privSuffix}`)
     );
     identity.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), nameGroup);
 

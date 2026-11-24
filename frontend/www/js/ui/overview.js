@@ -35,7 +35,7 @@ function getMemberTypeMeta(type) {
 function createMetricCell(labelText, valueText, valueClass = 'text-ink-700') {
   const cell = createEl('div', 'px-1 min-w-0');
   cell.append(
-    createEl('div', 'text-[11px] text-ink-400 truncate tabular-nums', labelText),
+    createEl('div', 'text-[13px] text-ink-400 truncate tabular-nums', labelText),
     createEl('div', `text-xs font-semibold tabular-nums mt-0.5 truncate ${valueClass}`, valueText)
   );
   return cell;
@@ -84,15 +84,15 @@ export function renderOverview({ onSelectMember }) {
     const nameLine = createEl('div', 'flex items-center gap-1.5 min-w-0');
     nameLine.append(
       createEl('span', 'font-semibold text-base text-ink truncate', String(m.name ?? '')),
-      createEl('span', `shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium leading-none ${typeMeta.pillClass}`, typeMeta.label)
+      createEl('span', `shrink-0 text-[12px] px-2 py-0.5 rounded-full font-medium leading-none ${typeMeta.pillClass}`, typeMeta.label)
     );
     if (isPrivacyOn) {
       const privBadge = createEl(
         'span',
-        'shrink-0 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-oat-100 text-ink-500 border border-oat-200 leading-none'
+        'shrink-0 inline-flex items-center gap-0.5 text-[12px] px-1.5 py-0.5 rounded-full bg-oat-100 text-ink-500 border border-oat-200 leading-none'
       );
       privBadge.setAttribute('title', hasPin ? '已開啟密碼隱私保護' : '已開啟體重隱私保護');
-      privBadge.appendChild(createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-2.5 h-2.5'));
+      privBadge.appendChild(createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-3 h-3'));
       nameLine.appendChild(privBadge);
     }
 

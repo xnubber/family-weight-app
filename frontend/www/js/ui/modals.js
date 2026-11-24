@@ -190,7 +190,7 @@ function renderBatchMemberRows() {
 
     labelWrap.append(
       createEl('div', 'font-medium text-sm text-ink truncate', String(m.name ?? '')),
-      createEl('div', 'text-[11px] text-ink-400 tabular-nums', subtitleText)
+      createEl('div', 'text-[13px] text-ink-400 tabular-nums', subtitleText)
     );
     leftGroup.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), labelWrap);
 
@@ -458,12 +458,12 @@ function renderProfileHealthCard(member, latest) {
     if (!res) return;
     const colRer = createEl('div');
     colRer.append(
-      createEl('div', 'text-[11px] text-ink-400', '基礎代謝 RER'),
+      createEl('div', 'text-[13px] text-ink-400', '基礎代謝 RER'),
       createEl('div', 'font-semibold text-ink tabular-nums', `${res.rer} kcal`)
     );
     const colDer = createEl('div');
     colDer.append(
-      createEl('div', 'text-[11px] text-ink-400', '每日建議攝取 DER'),
+      createEl('div', 'text-[13px] text-ink-400', '每日建議攝取 DER'),
       createEl('div', `font-semibold tabular-nums ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, `${res.der} kcal`)
     );
     resultGrid.replaceChildren(colRer, colDer);

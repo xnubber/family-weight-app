@@ -133,14 +133,14 @@ const inspectCrosshairPlugin = {
     // 4. 底部 X 軸日期膠囊標記，明確指出目前檢視的點位
     const tagLabel = String(ctxData.labels[idx] ?? '');
     if (tagLabel) {
-      c.font = '600 10px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
+      c.font = '600 11.5px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
       const textWidth = c.measureText(tagLabel).width;
-      const pillW = textWidth + 12;
-      const pillH = 18;
+      const pillW = textWidth + 14;
+      const pillH = 20;
       const rawX = px - pillW / 2;
       const clampedX = Math.max(chartArea.left, Math.min(rawX, chartArea.right - pillW));
       const pillY = chartArea.bottom - pillH - 2;
-      const radius = 9;
+      const radius = 10;
 
       c.beginPath();
       c.moveTo(clampedX + radius, pillY);
@@ -181,7 +181,7 @@ function renderInspectBar() {
   const idx = inspectState.activeIndex;
 
   if (idx === null || idx < 0 || idx >= ctxData.values.length) {
-    bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] bg-oat-50 border border-oat-200/70 text-ink-400';
+    bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-[13px] bg-oat-50 border border-oat-200/70 text-ink-400';
     const hintText = ctxData.isHidden
       ? '長按圖表並左右拖曳，可檢視各點位變化趨勢'
       : '長按圖表並左右拖曳，可檢視各點位體重';
@@ -217,7 +217,7 @@ function renderInspectBar() {
       relText = `較起點 ${sign}${delta.toFixed(2)} kg`;
     }
     rightWrap.append(
-      createEl('span', 'text-[11px] opacity-80', relText),
+      createEl('span', 'text-[13px] opacity-80', relText),
       createEl('span', 'font-semibold text-sm text-ink-400 inline-flex items-center gap-1', `${MASKED_WEIGHT} kg`)
     );
   } else {
@@ -226,7 +226,7 @@ function renderInspectBar() {
       const sign = stepDelta > 0 ? '+' : '';
       const deltaClass = stepDelta > 0 ? 'text-rosewood-600' : 'text-sage-700';
       rightWrap.appendChild(
-        createEl('span', `text-[11px] font-medium ${deltaClass}`, `${sign}${stepDelta.toFixed(2)}`)
+        createEl('span', `text-[13px] font-medium ${deltaClass}`, `${sign}${stepDelta.toFixed(2)}`)
       );
     }
     rightWrap.appendChild(
@@ -376,7 +376,7 @@ function bindChartLongPressEvents(canvas) {
 function createStatCell(labelText, valueText, valueClass = 'text-ink') {
   const cell = createEl('div', 'px-1 min-w-0 text-center');
   cell.append(
-    createEl('div', 'text-[11px] text-ink-400 truncate', labelText),
+    createEl('div', 'text-[13px] text-ink-400 truncate', labelText),
     createEl('div', `text-xs font-semibold tabular-nums mt-0.5 truncate ${valueClass}`, valueText)
   );
   return cell;
@@ -525,7 +525,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     bar.value = progress.percent;
     bar.max = 100;
 
-    const footRow = createEl('div', 'flex justify-between text-[11px] text-ink-400 tabular-nums');
+    const footRow = createEl('div', 'flex justify-between text-[13px] text-ink-400 tabular-nums');
     if (isHidden) {
       footRow.append(
         createEl('span', '', `起始 ${MASKED_WEIGHT} kg`),
@@ -622,10 +622,10 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
     topRow.append(
       createEl(
         'span',
-        `w-20 shrink-0 font-semibold tabular-nums ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+        `w-24 shrink-0 font-semibold tabular-nums ${isHidden ? 'text-ink-400' : 'text-ink'}`,
         isHidden ? `${MASKED_WEIGHT} kg` : `${r.weight_kg} kg`
       ),
-      createEl('span', 'w-20 shrink-0 text-xs text-ink-400 tabular-nums', String(r.recorded_at ?? ''))
+      createEl('span', 'w-24 shrink-0 text-xs text-ink-400 tabular-nums', String(r.recorded_at ?? ''))
     );
 
     const activeTarget = recordTargetSeries.values[idx];
@@ -828,7 +828,7 @@ export function renderCharts() {
       plugins: {
         legend: {
           display: true,
-          labels: { color: '#494C45', boxWidth: 12, usePointStyle: true }
+          labels: { color: '#494C45', boxWidth: 12, usePointStyle: true, font: { size: 13 } }
         },
         tooltip: {
           filter: () => !inspectState.isInspecting,
@@ -849,13 +849,14 @@ export function renderCharts() {
       },
       scales: {
         x: {
-          ticks: { color: '#727068' },
+          ticks: { color: '#727068', font: { size: 12 } },
           grid: { color: '#EFECE4' }
         },
         y: {
           ticks: {
             display: !isHidden,
-            color: '#727068'
+            color: '#727068',
+            font: { size: 12 }
           },
           grid: { color: '#EFECE4' }
         }

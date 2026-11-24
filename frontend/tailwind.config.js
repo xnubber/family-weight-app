@@ -49,6 +49,13 @@ module.exports = {
           600: '#A3584E'
         }
       },
+      fontSize: {
+        xs: ['0.875rem', { lineHeight: '1.3rem' }],
+        sm: ['0.975rem', { lineHeight: '1.45rem' }],
+        base: ['1.075rem', { lineHeight: '1.55rem' }],
+        lg: ['1.2rem', { lineHeight: '1.7rem' }],
+        '2xl': ['1.65rem', { lineHeight: '2.05rem' }]
+      },
       boxShadow: {
         journal: '0 1px 2px rgba(47, 52, 47, 0.04), 0 6px 18px rgba(47, 52, 47, 0.035)',
         soft: '0 2px 10px rgba(47, 52, 47, 0.06)'

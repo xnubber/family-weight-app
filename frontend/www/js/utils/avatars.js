@@ -363,7 +363,7 @@ export function renderAvatarPicker(container, selectedId, onSelect) {
 
     const badge = createAvatarNode(av.id, 'w-10 h-10');
     const label = document.createElement('span');
-    label.className = `text-[10px] leading-tight truncate max-w-full ${isSelected ? 'text-sage-700 font-semibold' : 'text-ink-500'}`;
+    label.className = `text-[12px] leading-tight truncate max-w-full ${isSelected ? 'text-sage-700 font-semibold' : 'text-ink-500'}`;
     label.textContent = av.label;
 
     btn.append(badge, label);
