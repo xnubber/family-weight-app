@@ -11,3 +11,82 @@ body {
   color: #0d9488;
   font-weight: 600;
 }
+
+/* 全站按鍵與互動卡片的舒適點擊回饋 */
+button,
+.member-card {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 150ms ease,
+    filter 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+.member-card:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  button:not(:disabled):hover {
+    filter: brightness(0.97);
+  }
+
+  .member-card:hover {
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
+}
+
+button:not(:disabled):active,
+button:not(:disabled).is-pressed {
+  transform: scale(0.96);
+  filter: brightness(0.93);
+}
+
+.nav-btn {
+  padding: 4px 14px;
+  border-radius: 12px;
+}
+
+.nav-btn:active,
+.nav-btn.is-pressed {
+  transform: scale(0.93);
+  background-color: rgba(13, 148, 136, 0.09);
+  filter: none;
+}
+
+.member-card:active,
+.member-card.is-pressed {
+  transform: scale(0.985);
+  filter: brightness(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .member-card {
+    transition: background-color 120ms ease, filter 120ms ease, opacity 120ms ease;
+  }
+
+  button:not(:disabled):active,
+  button:not(:disabled).is-pressed,
+  .nav-btn:active,
+  .nav-btn.is-pressed,
+  .member-card:active,
+  .member-card.is-pressed {
+    transform: none;
+  }
+}

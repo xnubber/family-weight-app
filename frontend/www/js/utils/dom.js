@@ -32,3 +32,38 @@ export function showToast(msg, isError = false) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add('hidden'), 2500);
 }
+
+// 統一點擊回饋：確保手機上快速輕點（<50ms）也能呈現完整的按壓縮放與回彈手感
+export function initTapFeedback() {
+  const MIN_PRESS_MS = 110;
+  let activeEl = null;
+  let pressedAt = 0;
+
+  const release = () => {
+    if (!activeEl) return;
+    const el = activeEl;
+    activeEl = null;
+    const elapsed = Date.now() - pressedAt;
+    const remaining = Math.max(0, MIN_PRESS_MS - elapsed);
+    if (remaining === 0) {
+      el.classList.remove('is-pressed');
+    } else {
+      setTimeout(() => el.classList.remove('is-pressed'), remaining);
+    }
+  };
+
+  document.addEventListener('pointerdown', (e) => {
+    const target = e.target?.closest?.('button:not(:disabled), .member-card');
+    if (!target) return;
+    if (activeEl && activeEl !== target) {
+      activeEl.classList.remove('is-pressed');
+    }
+    activeEl = target;
+    pressedAt = Date.now();
+    target.classList.add('is-pressed');
+  });
+
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((evt) => {
+    document.addEventListener(evt, release);
+  });
+}

@@ -110,7 +110,11 @@ export function renderCharts() {
       info.appendChild(createEl('p', 'text-xs text-slate-500 mt-0.5 break-words', String(r.note)));
     }
 
-    const delBtn = createEl('button', 'shrink-0 whitespace-nowrap text-xs text-rose-500 hover:underline px-1', '刪除');
+    const delBtn = createEl(
+      'button',
+      'shrink-0 whitespace-nowrap text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg',
+      '刪除'
+    );
     delBtn.type = 'button';
     delBtn.onclick = () => {
       if (!confirm('確定刪除此筆體重紀錄？')) return;

@@ -15,13 +15,13 @@ export function renderSettingsMembers({ onEditMember }) {
     const li = createEl('li', 'py-2.5 flex justify-between items-center');
     li.appendChild(createEl('span', '', `${m.type === 'cat' ? '🐱' : '👤'} ${m.name ?? ''}`));
 
-    const actions = createEl('div', 'flex items-center gap-3');
+    const actions = createEl('div', 'flex items-center gap-1.5 shrink-0');
 
-    const editBtn = createEl('button', 'text-xs text-teal-600 hover:underline', '編輯');
+    const editBtn = createEl('button', 'text-xs text-teal-600 hover:bg-teal-50 px-2 py-1 rounded-lg', '編輯');
     editBtn.type = 'button';
     editBtn.onclick = () => onEditMember(m);
 
-    const delBtn = createEl('button', 'text-xs text-rose-500 hover:underline', '刪除');
+    const delBtn = createEl('button', 'text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg', '刪除');
     delBtn.type = 'button';
     delBtn.onclick = () => {
       if (!confirm('刪除成員會連同所有體重紀錄一起刪除，確定嗎？')) return;

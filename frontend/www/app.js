@@ -1,7 +1,7 @@
 import { state } from './js/state.js';
 import { FamilyAPI } from './js/services/api.js';
 import { initSyncQueue, flushQueue, getPendingCount } from './js/services/syncQueue.js';
-import { updateSyncIndicator, showToast } from './js/utils/dom.js';
+import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.js';
 import { renderOverview } from './js/ui/overview.js';
 import { renderCharts, initChartRangeControls } from './js/ui/charts.js';
 import { openProfileModal, openMemberModal, initModals } from './js/ui/modals.js';
@@ -104,6 +104,7 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 
 document.getElementById('btn-refresh').onclick = syncData;
 
+initTapFeedback();
 initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
 initCalculators();
