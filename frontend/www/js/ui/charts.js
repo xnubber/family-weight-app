@@ -1,11 +1,11 @@
 import { state } from '../state.js';
-import { FamilyAPI } from '../services/api.js';
-import { createEl, showLoading, showToast } from '../utils/dom.js';
+import { optimisticDeleteRecord } from '../services/syncQueue.js';
+import { createEl, showToast } from '../utils/dom.js';
 import { aggregateRecords, resolveTargetWeightSeries } from '../utils/metrics.js';
 
 let chartInstance = null;
 
-export function renderCharts({ onSync }) {
+export function renderCharts() {
   const pills = document.getElementById('chart-member-pills');
   const pillButtons = state.appData.members.map((m) => {
     const btn = createEl(
@@ -17,7 +17,7 @@ export function renderCharts({ onSync }) {
     btn.dataset.id = String(m.id);
     btn.onclick = () => {
       state.selectedMemberId = m.id;
-      renderCharts({ onSync });
+      renderCharts();
     };
     return btn;
   });
@@ -87,18 +87,10 @@ export function renderCharts({ onSync }) {
 
     const delBtn = createEl('button', 'text-xs text-rose-500 hover:underline', '刪除');
     delBtn.type = 'button';
-    delBtn.onclick = async () => {
+    delBtn.onclick = () => {
       if (!confirm('確定刪除此筆體重紀錄？')) return;
-      showLoading(true);
-      try {
-        await FamilyAPI.deleteRecord(state.familyCode, r.id);
-        showToast('已刪除紀錄');
-        await onSync();
-      } catch (err) {
-        showToast(err.message, true);
-      } finally {
-        showLoading(false);
-      }
+      optimisticDeleteRecord(r.id);
+      showToast('已刪除紀錄');
     };
 
     li.append(info, delBtn);

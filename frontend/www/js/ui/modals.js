@@ -1,8 +1,12 @@
 import { state } from '../state.js';
-import { FamilyAPI } from '../services/api.js';
-import { createEl, showLoading, showToast } from '../utils/dom.js';
+import {
+  optimisticAddMember,
+  optimisticUpdateMember,
+  optimisticAddRecord
+} from '../services/syncQueue.js';
+import { createEl, showToast } from '../utils/dom.js';
 import { calculateBmi, getLocalTodayDate } from '../utils/metrics.js';
-import { UUID_REGEX, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
+import { isValidResourceId, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
 
 // 開啟新增體重彈窗（可指定預選成員）
 export function openRecordModal(preselectedMemberId = null) {
@@ -150,7 +154,7 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   document.getElementById('modal-profile').classList.remove('hidden');
 }
 
-export function initModals({ onSync }) {
+export function initModals() {
   // 關閉按鈕
   document.querySelectorAll('.btn-close-modal').forEach((btn) => {
     btn.onclick = () => btn.closest('.fixed').classList.add('hidden');
@@ -183,8 +187,8 @@ export function initModals({ onSync }) {
     openMemberModal(null);
   };
 
-  // 表單送出：新增體重
-  document.getElementById('form-record').onsubmit = async (e) => {
+  // 表單送出：樂觀新增體重（立即關閉彈窗與更新畫面，背景序列寫入雲端）
+  document.getElementById('form-record').onsubmit = (e) => {
     e.preventDefault();
     const memberId = document.getElementById('rec-member').value.trim();
     const weightParsed = parseStrictNumber(document.getElementById('rec-weight').value, {
@@ -196,32 +200,24 @@ export function initModals({ onSync }) {
     const recordedAt = document.getElementById('rec-date').value.trim();
     const note = document.getElementById('rec-note').value.trim();
 
-    if (!UUID_REGEX.test(memberId)) return showToast('請選擇有效的成員', true);
+    if (!isValidResourceId(memberId)) return showToast('請選擇有效的成員', true);
     if (weightParsed.error) return showToast(weightParsed.error, true);
     if (!isValidRecordedDate(recordedAt)) return showToast('日期格式不正確或超出合理範圍', true);
     if (note.length > 200) return showToast('備註不可超過 200 字元', true);
 
-    showLoading(true);
-    try {
-      await FamilyAPI.addRecord(state.familyCode, {
-        member_id: memberId,
-        weight_kg: weightParsed.value,
-        recorded_at: recordedAt,
-        note
-      });
-      document.getElementById('modal-record').classList.add('hidden');
-      e.target.reset();
-      showToast('體重已同步至雲端');
-      await onSync();
-    } catch (err) {
-      showToast(err.message, true);
-    } finally {
-      showLoading(false);
-    }
+    document.getElementById('modal-record').classList.add('hidden');
+    e.target.reset();
+    optimisticAddRecord({
+      member_id: memberId,
+      weight_kg: weightParsed.value,
+      recorded_at: recordedAt,
+      note
+    });
+    showToast('體重已記錄');
   };
 
-  // 表單送出：新增或編輯成員
-  document.getElementById('form-member').onsubmit = async (e) => {
+  // 表單送出：樂觀新增或編輯成員
+  document.getElementById('form-member').onsubmit = (e) => {
     e.preventDefault();
     const editId = document.getElementById('mem-id').value.trim();
     const name = document.getElementById('mem-name').value.trim();
@@ -247,42 +243,33 @@ export function initModals({ onSync }) {
     if (heightParsed.error) return showToast(heightParsed.error, true);
     if (targetParsed.error) return showToast(targetParsed.error, true);
 
-    showLoading(true);
-    try {
-      if (editId) {
-        if (!UUID_REGEX.test(editId)) {
-          showToast('無效的成員識別碼', true);
-          return;
-        }
-        await FamilyAPI.updateMember(state.familyCode, editId, {
-          name,
-          height_cm: heightParsed.value,
-          target_weight: targetParsed.value,
-          target_effective_date: getLocalTodayDate()
-        });
-        showToast('成員資料已更新');
-      } else {
-        await FamilyAPI.addMember(state.familyCode, {
-          name,
-          type,
-          height_cm: heightParsed.value,
-          target_weight: targetParsed.value,
-          target_effective_date: getLocalTodayDate()
-        });
-        showToast('成員已新增');
-      }
+    if (editId) {
+      if (!isValidResourceId(editId)) return showToast('無效的成員識別碼', true);
       document.getElementById('modal-member').classList.add('hidden');
       e.target.reset();
-      await onSync();
-    } catch (err) {
-      showToast(err.message, true);
-    } finally {
-      showLoading(false);
+      optimisticUpdateMember(editId, {
+        name,
+        height_cm: heightParsed.value,
+        target_weight: targetParsed.value,
+        target_effective_date: getLocalTodayDate()
+      });
+      showToast('成員資料已更新');
+    } else {
+      document.getElementById('modal-member').classList.add('hidden');
+      e.target.reset();
+      optimisticAddMember({
+        name,
+        type,
+        height_cm: heightParsed.value,
+        target_weight: targetParsed.value,
+        target_effective_date: getLocalTodayDate()
+      });
+      showToast('成員已新增');
     }
   };
 
-  // 表單送出：更新個人資訊（含名稱、身高、目標體重）
-  document.getElementById('form-profile').onsubmit = async (e) => {
+  // 表單送出：樂觀更新個人資訊（含名稱、身高、目標體重）
+  document.getElementById('form-profile').onsubmit = (e) => {
     e.preventDefault();
     const id = document.getElementById('prof-id').value.trim();
     const member = state.appData.members.find((x) => x.id === id);
@@ -303,26 +290,18 @@ export function initModals({ onSync }) {
       label: '目標體重 (kg)'
     });
 
-    if (!UUID_REGEX.test(id)) return showToast('無效的成員識別碼', true);
+    if (!isValidResourceId(id)) return showToast('無效的成員識別碼', true);
     if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
     if (targetParsed.error) return showToast(targetParsed.error, true);
 
-    showLoading(true);
-    try {
-      await FamilyAPI.updateMember(state.familyCode, id, {
-        name,
-        height_cm: heightParsed.value,
-        target_weight: targetParsed.value,
-        target_effective_date: getLocalTodayDate()
-      });
-      document.getElementById('modal-profile').classList.add('hidden');
-      showToast('個人資訊已更新');
-      await onSync();
-    } catch (err) {
-      showToast(err.message, true);
-    } finally {
-      showLoading(false);
-    }
+    document.getElementById('modal-profile').classList.add('hidden');
+    optimisticUpdateMember(id, {
+      name,
+      height_cm: heightParsed.value,
+      target_weight: targetParsed.value,
+      target_effective_date: getLocalTodayDate()
+    });
+    showToast('個人資訊已更新');
   };
 }

@@ -1,6 +1,15 @@
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const TEMP_ID_REGEX = /^temp-(mem|rec|th)-[0-9a-z-]+$/i;
 export const FAMILY_CODE_REGEX = /^[A-Za-z0-9_-]{12,64}$/;
 export const FORBIDDEN_FAMILY_CODES = new Set(['my-family-2026']);
+
+export function isTempId(id) {
+  return typeof id === 'string' && TEMP_ID_REGEX.test(id);
+}
+
+export function isValidResourceId(id) {
+  return typeof id === 'string' && (UUID_REGEX.test(id) || isTempId(id));
+}
 
 export function isValidFamilyCode(code) {
   return (

@@ -1,11 +1,19 @@
 import { state } from './js/state.js';
 import { FamilyAPI } from './js/services/api.js';
-import { showLoading, showToast } from './js/utils/dom.js';
+import { initSyncQueue, flushQueue, getPendingCount } from './js/services/syncQueue.js';
+import { updateSyncIndicator, showToast } from './js/utils/dom.js';
 import { renderOverview } from './js/ui/overview.js';
 import { renderCharts, initChartRangeControls } from './js/ui/charts.js';
 import { openProfileModal, openMemberModal, initModals } from './js/ui/modals.js';
 import { initCalculators } from './js/ui/calculators.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
+
+let isFetching = false;
+let syncRequestSeq = 0;
+
+function refreshSyncIndicator() {
+  updateSyncIndicator({ pendingCount: getPendingCount(), isFetching });
+}
 
 function switchTab(tabName) {
   document.querySelectorAll('main > section').forEach((s) => s.classList.add('hidden'));
@@ -23,21 +31,33 @@ function renderAll() {
       openProfileModal(memberId, {
         onNavigateToChart: () => {
           switchTab('charts');
-          renderCharts({ onSync: syncData });
+          renderCharts();
         }
       })
   });
-  renderCharts({ onSync: syncData });
+  renderCharts();
   renderSettingsMembers({
-    onSync: syncData,
     onEditMember: (member) => openMemberModal(member)
   });
 }
 
 async function syncData() {
-  showLoading(true);
+  const reqId = ++syncRequestSeq;
+  const targetFamilyCode = state.familyCode;
+  isFetching = true;
+  refreshSyncIndicator();
+
   try {
-    const data = await FamilyAPI.getAllData(state.familyCode);
+    // 若仍有背景寫入排隊中，先等待送出完成再拉取最新雲端資料，避免舊資料覆蓋樂觀更新
+    await flushQueue();
+    if (reqId !== syncRequestSeq || state.familyCode !== targetFamilyCode) return;
+
+    const data = await FamilyAPI.getAllData(targetFamilyCode);
+    if (reqId !== syncRequestSeq || state.familyCode !== targetFamilyCode) return;
+
+    // 若拉取期間使用者又新增了新的背景寫入，避免直接覆蓋導致畫面閃回舊狀態
+    if (getPendingCount() > 0) return;
+
     state.appData = {
       members: data.members || [],
       records: data.records || [],
@@ -45,15 +65,37 @@ async function syncData() {
     };
     if (!state.selectedMemberId && state.appData.members.length > 0) {
       state.selectedMemberId = state.appData.members[0].id;
+    } else if (
+      state.selectedMemberId &&
+      !state.appData.members.some((m) => m.id === state.selectedMemberId)
+    ) {
+      state.selectedMemberId = state.appData.members[0]?.id ?? null;
     }
     renderAll();
   } catch (err) {
     renderAll();
     showToast(err.message, true);
   } finally {
-    showLoading(false);
+    if (reqId === syncRequestSeq) {
+      isFetching = false;
+      refreshSyncIndicator();
+    }
   }
 }
+
+// 若有尚未送出的背景寫入，關閉分頁前提醒使用者
+window.addEventListener('beforeunload', (e) => {
+  if (getPendingCount() > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+
+// 初始化樂觀更新與背景序列寫入佇列
+initSyncQueue({
+  onRender: renderAll,
+  onPendingChange: () => refreshSyncIndicator()
+});
 
 // 底部導覽列分頁切換
 document.querySelectorAll('.nav-btn').forEach((btn) => {
@@ -62,9 +104,11 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 
 document.getElementById('btn-refresh').onclick = syncData;
 
-initChartRangeControls({ onRangeChange: () => renderCharts({ onSync: syncData }) });
-initModals({ onSync: syncData });
+initChartRangeControls({ onRangeChange: () => renderCharts() });
+initModals();
 initCalculators();
 initSettings({ onSync: syncData });
 
+// 先渲染本地空畫面讓介面可立即操作，同時背景同步雲端資料
+renderAll();
 syncData();

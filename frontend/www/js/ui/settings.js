@@ -1,9 +1,10 @@
 import { state } from '../state.js';
-import { FamilyAPI, hasInjectedApiKey } from '../services/api.js';
-import { createEl, showLoading, showToast } from '../utils/dom.js';
+import { hasInjectedApiKey } from '../services/api.js';
+import { optimisticDeleteMember } from '../services/syncQueue.js';
+import { createEl, showToast } from '../utils/dom.js';
 import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
 
-export function renderSettingsMembers({ onSync, onEditMember }) {
+export function renderSettingsMembers({ onEditMember }) {
   const list = document.getElementById('settings-member-list');
   if (state.appData.members.length === 0) {
     list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '尚無成員'));
@@ -22,19 +23,10 @@ export function renderSettingsMembers({ onSync, onEditMember }) {
 
     const delBtn = createEl('button', 'text-xs text-rose-500 hover:underline', '刪除');
     delBtn.type = 'button';
-    delBtn.onclick = async () => {
+    delBtn.onclick = () => {
       if (!confirm('刪除成員會連同所有體重紀錄一起刪除，確定嗎？')) return;
-      showLoading(true);
-      try {
-        await FamilyAPI.deleteMember(state.familyCode, m.id);
-        if (state.selectedMemberId === m.id) state.selectedMemberId = null;
-        showToast('已刪除成員');
-        await onSync();
-      } catch (err) {
-        showToast(err.message, true);
-      } finally {
-        showLoading(false);
-      }
+      optimisticDeleteMember(m.id);
+      showToast('已刪除成員');
     };
 
     actions.append(editBtn, delBtn);
