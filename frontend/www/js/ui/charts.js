@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 import { optimisticDeleteRecord } from '../services/syncQueue.js';
-import { createEl, showToast } from '../utils/dom.js';
+import { createEl, playSoftFade, showToast } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { requestMemberUnlock } from './modals.js';
@@ -680,6 +680,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   const goToPage = (targetPage) => {
     state.historyPage = targetPage;
     renderHistoryList(member, memberHistory, filteredRecords);
+    playSoftFade(list);
   };
 
   const isFirst = state.historyPage <= 1;
@@ -715,6 +716,10 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   pagerEl.replaceChildren(leftGroup, pageLabel, rightGroup);
 }
 
+export function resizeChart() {
+  chartInstance?.resize?.();
+}
+
 export function renderCharts() {
   const pills = document.getElementById('chart-member-pills');
   const pillButtons = state.appData.members.map((m) => {
@@ -739,6 +744,8 @@ export function renderCharts() {
         state.selectedMemberId = m.id;
         state.historyPage = 1;
         renderCharts();
+        playSoftFade(document.getElementById('chart-stats-summary'));
+        playSoftFade(document.getElementById('history-list'));
       }
     };
     return btn;
@@ -814,6 +821,10 @@ export function renderCharts() {
     plugins: [inspectCrosshairPlugin],
     options: {
       responsive: true,
+      animation: {
+        duration: 340,
+        easing: 'easeOutQuart'
+      },
       plugins: {
         legend: {
           display: true,
@@ -865,6 +876,8 @@ export function initChartRangeControls({ onRangeChange }) {
       });
       btn.className = 'range-btn flex-1 py-1.5 rounded-xl bg-linen text-sage-700 shadow-sm';
       onRangeChange();
+      playSoftFade(document.getElementById('chart-stats-summary'));
+      playSoftFade(document.getElementById('history-list'));
     };
   });
 }

@@ -37,9 +37,150 @@
   font-weight: 600;
 }
 
+.nav-icon-wrap {
+  transition:
+    background-color 220ms ease,
+    color 200ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .tab-active .nav-icon-wrap {
   background-color: #eef3ef;
   color: #456150;
+  transform: translateY(-1px) scale(1.06);
+}
+
+/* 頁面主舞台與方向性絲滑轉場 */
+.page-stage {
+  position: relative;
+  overflow-x: clip;
+}
+
+.page-view {
+  will-change: transform, opacity;
+}
+
+@keyframes pageEnterFromRight {
+  from {
+    opacity: 0;
+    transform: translate3d(20px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes pageEnterFromLeft {
+  from {
+    opacity: 0;
+    transform: translate3d(-20px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes pageLeaveToLeft {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0);
+  }
+}
+
+@keyframes pageLeaveToRight {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0);
+  }
+}
+
+@keyframes softFadeRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.page-enter-from-right {
+  animation: pageEnterFromRight 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-enter-from-left {
+  animation: pageEnterFromLeft 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-leave-to-left,
+.page-leave-to-right {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  pointer-events: none;
+}
+
+.page-leave-to-left {
+  animation: pageLeaveToLeft 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.page-leave-to-right {
+  animation: pageLeaveToRight 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.soft-fade-in {
+  animation: softFadeRise 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* 彈窗柔和漸顯與上浮進出場 */
+.modal-overlay {
+  opacity: 0;
+  transition: opacity 210ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-overlay .modal-sheet {
+  opacity: 0;
+  transform: translate3d(0, 20px, 0) scale(0.985);
+  transition:
+    transform 270ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity;
+}
+
+.modal-overlay.is-open {
+  opacity: 1;
+}
+
+.modal-overlay.is-open .modal-sheet {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+/* 提示氣泡柔和漂浮進出 */
+.toast-banner {
+  opacity: 0;
+  transform: translate3d(-50%, -8px, 0) scale(0.98);
+  transition:
+    opacity 210ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 230ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+.toast-banner.is-visible {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0) scale(1);
 }
 
 /* 紙感卡片與細節層次 */
@@ -152,10 +293,24 @@ button:not(:disabled).is-pressed {
 
 @media (prefers-reduced-motion: reduce) {
   button,
-  .member-card {
-    transition: background-color 120ms ease, filter 120ms ease, opacity 120ms ease;
+  .member-card,
+  .nav-icon-wrap,
+  .modal-overlay,
+  .modal-overlay .modal-sheet,
+  .toast-banner {
+    transition: opacity 120ms ease, background-color 120ms ease;
   }
 
+  .page-enter-from-right,
+  .page-enter-from-left,
+  .page-leave-to-left,
+  .page-leave-to-right,
+  .soft-fade-in {
+    animation: none;
+  }
+
+  .modal-overlay .modal-sheet,
+  .tab-active .nav-icon-wrap,
   button:not(:disabled):active,
   button:not(:disabled).is-pressed,
   .nav-btn:active,

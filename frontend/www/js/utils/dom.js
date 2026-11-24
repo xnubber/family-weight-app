@@ -34,14 +34,93 @@ export function updateSyncIndicator({ pendingCount = 0, isFetching = false } = {
   }
 }
 
-let toastTimer = null;
+// 彈窗平滑進出場控制（使用 token 避免快速重複開關導致閃爍或誤藏）
+const modalCloseTimers = new WeakMap();
+const MODAL_EXIT_MS = 220;
+
+function resolveModalEl(modalOrId) {
+  return typeof modalOrId === 'string' ? document.getElementById(modalOrId) : modalOrId;
+}
+
+export function isModalOpen(modalOrId) {
+  const modal = resolveModalEl(modalOrId);
+  if (!modal) return false;
+  return !modal.classList.contains('hidden') && modal.classList.contains('is-open');
+}
+
+export function openModal(modalOrId) {
+  const modal = resolveModalEl(modalOrId);
+  if (!modal) return;
+  const prevTimer = modalCloseTimers.get(modal);
+  if (prevTimer) {
+    clearTimeout(prevTimer);
+    modalCloseTimers.delete(modal);
+  }
+  const alreadyVisible = !modal.classList.contains('hidden') && modal.classList.contains('is-open');
+  modal.classList.remove('hidden');
+  if (alreadyVisible) return;
+
+  modal.classList.remove('is-open');
+  const nextFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
+  nextFrame(() => {
+    nextFrame(() => {
+      modal.classList.add('is-open');
+    });
+  });
+}
+
+export function closeModal(modalOrId) {
+  const modal = resolveModalEl(modalOrId);
+  if (!modal || modal.classList.contains('hidden')) return;
+  const prevTimer = modalCloseTimers.get(modal);
+  if (prevTimer) clearTimeout(prevTimer);
+
+  modal.classList.remove('is-open');
+  const timer = setTimeout(() => {
+    modalCloseTimers.delete(modal);
+    if (!modal.classList.contains('is-open')) {
+      modal.classList.add('hidden');
+    }
+  }, MODAL_EXIT_MS);
+  modalCloseTimers.set(modal, timer);
+}
+
+// 內容區塊柔和浮現（供分頁翻頁、表單模式切換使用）
+export function playSoftFade(el) {
+  if (!el || !el.classList) return;
+  el.classList.remove('soft-fade-in');
+  if (typeof el.offsetWidth === 'number') {
+    // 觸發重排以重新播放 CSS 動畫
+    void el.offsetWidth;
+  }
+  el.classList.add('soft-fade-in');
+}
+
+let toastHideTimer = null;
+let toastCleanupTimer = null;
 
 export function showToast(msg, isError = false) {
   const el = document.getElementById('toast');
+  if (!el) return;
+  if (toastHideTimer) clearTimeout(toastHideTimer);
+  if (toastCleanupTimer) clearTimeout(toastCleanupTimer);
+
   el.textContent = msg;
-  el.className = `fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-xs font-medium tracking-wide text-linen shadow-soft ${isError ? 'bg-rosewood-600' : 'bg-ink'}`;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
+  el.className = `toast-banner fixed top-16 left-1/2 z-50 px-4 py-2 rounded-full text-xs font-medium tracking-wide text-linen shadow-soft ${isError ? 'bg-rosewood-600' : 'bg-ink'}`;
+
+  const nextFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
+  nextFrame(() => {
+    el.classList.add('is-visible');
+  });
+
+  toastHideTimer = setTimeout(() => {
+    el.classList.remove('is-visible');
+    toastCleanupTimer = setTimeout(() => {
+      if (!el.classList.contains('is-visible')) {
+        el.classList.add('hidden');
+      }
+    }, 240);
+  }, 2400);
 }
 
 // 統一點擊回饋：確保手機上快速輕點（<50ms）也能呈現完整的按壓縮放與回彈手感

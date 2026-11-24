@@ -3,23 +3,99 @@ import { FamilyAPI } from './js/services/api.js';
 import { initSyncQueue, flushQueue, getPendingCount } from './js/services/syncQueue.js';
 import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.js';
 import { renderOverview } from './js/ui/overview.js';
-import { renderCharts, initChartRangeControls } from './js/ui/charts.js';
+import { renderCharts, initChartRangeControls, resizeChart } from './js/ui/charts.js';
 import { openProfileModal, openMemberModal, initModals, refreshOpenProfileModalIfAny } from './js/ui/modals.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
 import { initPrivacyLifecycle } from './js/utils/privacy.js';
 
+const TAB_ORDER = ['overview', 'charts', 'settings'];
+const PAGE_ANIM_CLASSES = [
+  'page-enter-from-right',
+  'page-enter-from-left',
+  'page-leave-to-left',
+  'page-leave-to-right'
+];
+
 let isFetching = false;
 let syncRequestSeq = 0;
+let currentTab = 'overview';
+let tabTransitionSeq = 0;
 
 function refreshSyncIndicator() {
   updateSyncIndicator({ pendingCount: getPendingCount(), isFetching });
 }
 
+function clearPageAnimClasses(section) {
+  if (!section) return;
+  section.classList.remove(...PAGE_ANIM_CLASSES);
+}
+
 function switchTab(tabName) {
-  document.querySelectorAll('main > section').forEach((s) => s.classList.add('hidden'));
-  document.getElementById(`view-${tabName}`).classList.remove('hidden');
+  const nextSection = document.getElementById(`view-${tabName}`);
+  if (!nextSection) return;
+
+  // 重複點擊當前分頁時平順回到頁面頂部
+  if (tabName === currentTab && !nextSection.classList.contains('hidden')) {
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    return;
+  }
+
+  const prevTab = currentTab;
+  const prevSection = document.getElementById(`view-${prevTab}`);
+  const prevIndex = TAB_ORDER.indexOf(prevTab);
+  const nextIndex = TAB_ORDER.indexOf(tabName);
+  const goingForward = nextIndex >= prevIndex;
+  const seq = ++tabTransitionSeq;
+
+  currentTab = tabName;
+
+  // 先更新底部導覽列狀態，給予即時視覺回饋
   document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('tab-active'));
   document.querySelector(`.nav-btn[data-tab="${tabName}"]`)?.classList.add('tab-active');
+
+  // 清除其他非相關分頁的殘留動畫狀態（防止快速連點重疊）
+  document.querySelectorAll('main > section').forEach((sec) => {
+    if (sec !== nextSection && sec !== prevSection) {
+      clearPageAnimClasses(sec);
+      sec.classList.add('hidden');
+    }
+  });
+
+  // 離場頁面：柔和淡出並順方向微移
+  if (prevSection && prevSection !== nextSection && !prevSection.classList.contains('hidden')) {
+    clearPageAnimClasses(prevSection);
+    prevSection.classList.add(goingForward ? 'page-leave-to-left' : 'page-leave-to-right');
+    setTimeout(() => {
+      if (seq !== tabTransitionSeq && currentTab === prevTab) return;
+      clearPageAnimClasses(prevSection);
+      if (currentTab !== prevTab) {
+        prevSection.classList.add('hidden');
+      }
+    }, 185);
+  }
+
+  // 進場頁面：從目標方向輕盈滑入淡顯
+  clearPageAnimClasses(nextSection);
+  nextSection.classList.remove('hidden');
+  void nextSection.offsetWidth;
+  nextSection.classList.add(goingForward ? 'page-enter-from-right' : 'page-enter-from-left');
+
+  if (typeof window !== 'undefined' && typeof window.scrollTo === 'function' && window.scrollY > 12) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  if (tabName === 'charts') {
+    const nextFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
+    nextFrame(() => resizeChart());
+  }
+
+  setTimeout(() => {
+    if (seq === tabTransitionSeq) {
+      clearPageAnimClasses(nextSection);
+    }
+  }, 300);
 }
 
 function renderAll() {

@@ -5,7 +5,7 @@ import {
   optimisticUpdateMember,
   optimisticAddRecord
 } from '../services/syncQueue.js';
-import { createEl, showToast } from '../utils/dom.js';
+import { createEl, openModal, closeModal, isModalOpen, playSoftFade, showToast } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
 import {
   createAvatarNode,
@@ -111,17 +111,16 @@ export function requestMemberUnlock(member, onUnlocked = null) {
   submitBtn.disabled = false;
   submitBtn.textContent = '解鎖檢視';
 
-  document.getElementById('modal-pin').classList.remove('hidden');
+  openModal('modal-pin');
   inputEl.focus();
 }
 
 // 若個人資訊彈窗開啟期間發生自動重新上鎖，立即重繪以確保不殘留體重數字
 export function refreshOpenProfileModalIfAny() {
-  const modal = document.getElementById('modal-profile');
-  if (!modal || modal.classList.contains('hidden') || !activeProfileContext) return;
+  if (!isModalOpen('modal-profile') || !activeProfileContext) return;
   const stillExists = state.appData.members.some((m) => m.id === activeProfileContext.memberId);
   if (!stillExists) {
-    modal.classList.add('hidden');
+    closeModal('modal-profile');
     activeProfileContext = null;
     return;
   }
@@ -148,12 +147,17 @@ function updateSingleWeightInputMask() {
   }
 }
 
-function setRecordModalMode(mode) {
+function setRecordModalMode(mode, animate = false) {
   recordModalMode = mode === 'single' ? 'single' : 'batch';
   const isBatch = recordModalMode === 'batch';
 
-  document.getElementById('rec-batch-fields').classList.toggle('hidden', !isBatch);
-  document.getElementById('rec-single-fields').classList.toggle('hidden', isBatch);
+  const batchFields = document.getElementById('rec-batch-fields');
+  const singleFields = document.getElementById('rec-single-fields');
+  batchFields.classList.toggle('hidden', !isBatch);
+  singleFields.classList.toggle('hidden', isBatch);
+  if (animate) {
+    playSoftFade(isBatch ? batchFields : singleFields);
+  }
 
   const batchBtn = document.getElementById('btn-rec-mode-batch');
   const singleBtn = document.getElementById('btn-rec-mode-single');
@@ -244,7 +248,7 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
   renderBatchMemberRows();
 
   setRecordModalMode(mode);
-  document.getElementById('modal-record').classList.remove('hidden');
+  openModal('modal-record');
 
   if (mode === 'single') {
     document.getElementById('rec-weight').focus();
@@ -345,7 +349,7 @@ export function openMemberModal(member = null) {
     syncPrivacyFormUI('mem', null);
   }
 
-  document.getElementById('modal-member').classList.remove('hidden');
+  openModal('modal-member');
   nameInput.focus();
 }
 
@@ -475,13 +479,19 @@ function renderProfileHealthCard(member, latest) {
   card.replaceChildren(header, resultGrid);
 }
 
-function setProfileEditMode(isEditing) {
-  document.getElementById('prof-view-fields').classList.toggle('hidden', isEditing);
+function setProfileEditMode(isEditing, animate = false) {
+  const viewFields = document.getElementById('prof-view-fields');
+  const editFields = document.getElementById('prof-edit-fields');
+  viewFields.classList.toggle('hidden', isEditing);
   document.getElementById('prof-view-actions').classList.toggle('hidden', isEditing);
   document.getElementById('btn-prof-add-record').classList.toggle('hidden', isEditing);
   document.getElementById('prof-health-card').classList.toggle('hidden', isEditing || !hasProfileHealthCard);
-  document.getElementById('prof-edit-fields').classList.toggle('hidden', !isEditing);
+  editFields.classList.toggle('hidden', !isEditing);
   document.getElementById('prof-edit-actions').classList.toggle('hidden', !isEditing);
+
+  if (animate) {
+    playSoftFade(isEditing ? editFields : viewFields);
+  }
 
   if (isEditing) {
     document.getElementById('prof-name').focus();
@@ -618,26 +628,26 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   document.getElementById('btn-prof-to-chart').onclick = () => {
     state.selectedMemberId = m.id;
     state.historyPage = 1;
-    document.getElementById('modal-profile').classList.add('hidden');
+    closeModal('modal-profile');
     activeProfileContext = null;
     onNavigateToChart();
   };
 
   // 從個人資訊面板直接為該成員開啟「單筆紀錄」模式（可填寫備註）
   document.getElementById('btn-prof-add-record').onclick = () => {
-    document.getElementById('modal-profile').classList.add('hidden');
+    closeModal('modal-profile');
     activeProfileContext = null;
     openRecordModal(m.id, 'single');
   };
 
   // 切換至編輯模式／取消編輯還原原值
-  document.getElementById('btn-prof-edit').onclick = () => setProfileEditMode(true);
+  document.getElementById('btn-prof-edit').onclick = () => setProfileEditMode(true, true);
   document.getElementById('btn-prof-cancel-edit').onclick = () => {
     fillEditInputs();
-    setProfileEditMode(false);
+    setProfileEditMode(false, true);
   };
 
-  document.getElementById('modal-profile').classList.remove('hidden');
+  openModal('modal-profile');
 }
 
 function bindPrivacyControlEvents(prefix) {
@@ -710,21 +720,35 @@ export function initModals() {
   document.querySelectorAll('.btn-close-modal').forEach((btn) => {
     btn.onclick = () => {
       const modal = btn.closest('.fixed');
-      modal.classList.add('hidden');
+      closeModal(modal);
       if (modal.id === 'modal-profile') activeProfileContext = null;
     };
   });
 
-  // 點擊彈窗外部（深色背景）即可關閉
+  // 點擊彈窗外部（深色背景）即可平滑關閉
   ['modal-record', 'modal-member', 'modal-profile', 'modal-pin'].forEach((id) => {
     const modal = document.getElementById(id);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
-        modal.classList.add('hidden');
+        closeModal(modal);
         if (id === 'modal-profile') activeProfileContext = null;
         if (id === 'modal-pin') activePinRequest = null;
       }
     });
+  });
+
+  // 支援 Esc 鍵平滑關閉最上層彈窗
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const stack = ['modal-pin', 'modal-record', 'modal-member', 'modal-profile'];
+    for (const id of stack) {
+      if (isModalOpen(id)) {
+        closeModal(id);
+        if (id === 'modal-profile') activeProfileContext = null;
+        if (id === 'modal-pin') activePinRequest = null;
+        break;
+      }
+    }
   });
 
   // PIN 解鎖彈窗操作
@@ -735,7 +759,7 @@ export function initModals() {
   };
 
   document.getElementById('btn-pin-cancel').onclick = () => {
-    document.getElementById('modal-pin').classList.add('hidden');
+    closeModal('modal-pin');
     activePinRequest = null;
   };
 
@@ -778,7 +802,7 @@ export function initModals() {
         return;
       }
 
-      document.getElementById('modal-pin').classList.add('hidden');
+      closeModal('modal-pin');
       activePinRequest = null;
       unlockMember(member.id, pin);
       showToast('已暫時解鎖真實體重（5 分鐘後自動隱藏）');
@@ -798,8 +822,8 @@ export function initModals() {
   bindPrivacyControlEvents('prof');
 
   // 記錄體重彈窗：批量／單筆模式切換與單筆成員遮蔽輸入切換
-  document.getElementById('btn-rec-mode-batch').onclick = () => setRecordModalMode('batch');
-  document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single');
+  document.getElementById('btn-rec-mode-batch').onclick = () => setRecordModalMode('batch', true);
+  document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single', true);
   document.getElementById('rec-member').onchange = () => updateSingleWeightInputMask();
 
   // 切換成員類型時自動隱藏／顯示身高欄位，並在未手動挑頭像時貼心帶入對應風格頭像
@@ -861,7 +885,7 @@ export function initModals() {
         return showToast('請至少輸入一位成員的體重', true);
       }
 
-      document.getElementById('modal-record').classList.add('hidden');
+      closeModal('modal-record');
       e.target.reset();
       toSubmit.forEach((payload) => optimisticAddRecord(payload));
       showToast(`已記錄 ${toSubmit.length} 筆體重`);
@@ -884,7 +908,7 @@ export function initModals() {
     if (!isValidRecordedDate(recordedAt)) return showToast('日期格式不正確或超出合理範圍', true);
     if (note.length > 200) return showToast('備註不可超過 200 字元', true);
 
-    document.getElementById('modal-record').classList.add('hidden');
+    closeModal('modal-record');
     e.target.reset();
     optimisticAddRecord({
       member_id: memberId,
@@ -946,7 +970,7 @@ export function initModals() {
         if (privacyData.current_pin) updatePayload.current_pin = privacyData.current_pin;
       }
 
-      document.getElementById('modal-member').classList.add('hidden');
+      closeModal('modal-member');
       e.target.reset();
       optimisticUpdateMember(editId, updatePayload);
       showToast('成員資料已更新');
@@ -962,7 +986,7 @@ export function initModals() {
       };
       if (privacyData.privacy_pin) addPayload.privacy_pin = privacyData.privacy_pin;
 
-      document.getElementById('modal-member').classList.add('hidden');
+      closeModal('modal-member');
       e.target.reset();
       optimisticAddMember(addPayload);
       showToast('成員已新增');
@@ -1017,7 +1041,7 @@ export function initModals() {
       if (privacyData.current_pin) updatePayload.current_pin = privacyData.current_pin;
     }
 
-    document.getElementById('modal-profile').classList.add('hidden');
+    closeModal('modal-profile');
     activeProfileContext = null;
     optimisticUpdateMember(id, updatePayload);
     showToast('個人資訊已更新');
