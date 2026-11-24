@@ -38,6 +38,7 @@ export const createMemberSchema = z.strictObject({
 
 export const updateMemberSchema = z
   .strictObject({
+    name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元').optional(),
     height_cm: z
       .number({ message: '身高必須為數字' })
       .finite('身高必須為有效數值')
@@ -54,8 +55,8 @@ export const updateMemberSchema = z
       .optional()
   })
   .refine(
-    (data) => data.height_cm !== undefined || data.target_weight !== undefined,
-    { message: '至少需提供身高或目標體重其中一項欄位' }
+    (data) => data.name !== undefined || data.height_cm !== undefined || data.target_weight !== undefined,
+    { message: '至少需提供名稱、身高或目標體重其中一項欄位' }
   );
 
 export const createRecordSchema = z.strictObject({

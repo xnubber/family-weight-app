@@ -3,7 +3,7 @@ import { FamilyAPI, hasInjectedApiKey } from '../services/api.js';
 import { createEl, showLoading, showToast } from '../utils/dom.js';
 import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
 
-export function renderSettingsMembers({ onSync }) {
+export function renderSettingsMembers({ onSync, onEditMember }) {
   const list = document.getElementById('settings-member-list');
   if (state.appData.members.length === 0) {
     list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '尚無成員'));
@@ -13,6 +13,12 @@ export function renderSettingsMembers({ onSync }) {
   const items = state.appData.members.map((m) => {
     const li = createEl('li', 'py-2.5 flex justify-between items-center');
     li.appendChild(createEl('span', '', `${m.type === 'cat' ? '🐱' : '👤'} ${m.name ?? ''}`));
+
+    const actions = createEl('div', 'flex items-center gap-3');
+
+    const editBtn = createEl('button', 'text-xs text-teal-600 hover:underline', '編輯');
+    editBtn.type = 'button';
+    editBtn.onclick = () => onEditMember(m);
 
     const delBtn = createEl('button', 'text-xs text-rose-500 hover:underline', '刪除');
     delBtn.type = 'button';
@@ -31,7 +37,8 @@ export function renderSettingsMembers({ onSync }) {
       }
     };
 
-    li.appendChild(delBtn);
+    actions.append(editBtn, delBtn);
+    li.appendChild(actions);
     return li;
   });
   list.replaceChildren(...items);

@@ -3,7 +3,7 @@ import { FamilyAPI } from './js/services/api.js';
 import { showLoading, showToast } from './js/utils/dom.js';
 import { renderOverview } from './js/ui/overview.js';
 import { renderCharts, initChartRangeControls } from './js/ui/charts.js';
-import { openProfileModal, initModals } from './js/ui/modals.js';
+import { openProfileModal, openMemberModal, initModals } from './js/ui/modals.js';
 import { initCalculators } from './js/ui/calculators.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
 
@@ -28,7 +28,10 @@ function renderAll() {
       })
   });
   renderCharts({ onSync: syncData });
-  renderSettingsMembers({ onSync: syncData });
+  renderSettingsMembers({
+    onSync: syncData,
+    onEditMember: (member) => openMemberModal(member)
+  });
 }
 
 async function syncData() {

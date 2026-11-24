@@ -147,20 +147,33 @@
     </form>
   </div>
 
-  <!-- 彈窗：新增成員 -->
+  <!-- 彈窗：新增 / 編輯成員 -->
   <div id="modal-member" class="hidden fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
     <form id="form-member" class="bg-white w-full max-w-md rounded-2xl p-5 space-y-4">
-      <h3 class="font-bold text-lg">新增成員</h3>
-      <input id="mem-name" type="text" maxlength="50" required placeholder="名稱（例：爸爸、橘貓咪咪）" class="w-full border rounded-lg p-2.5 text-sm" />
-      <select id="mem-type" class="w-full border rounded-lg p-2.5 text-sm bg-white">
-        <option value="human">👤 家人</option>
-        <option value="cat">🐱 貓咪</option>
-      </select>
-      <input id="mem-height" type="number" min="20" max="300" step="0.1" placeholder="身高 cm（人類計算 BMI 用，貓咪可留空）" class="w-full border rounded-lg p-2.5 text-sm" />
-      <input id="mem-target" type="number" min="0.1" max="500" step="0.01" placeholder="目標體重 kg（選填）" class="w-full border rounded-lg p-2.5 text-sm" />
+      <h3 id="mem-modal-title" class="font-bold text-lg">新增成員</h3>
+      <input type="hidden" id="mem-id" />
+      <div>
+        <label class="text-xs text-slate-500">成員名稱</label>
+        <input id="mem-name" type="text" maxlength="50" required placeholder="名稱（例：爸爸、橘貓咪咪）" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">成員類型</label>
+        <select id="mem-type" class="w-full border rounded-lg p-2.5 text-sm bg-white mt-1">
+          <option value="human">👤 家人</option>
+          <option value="cat">🐱 貓咪</option>
+        </select>
+      </div>
+      <div id="mem-height-wrap">
+        <label class="text-xs text-slate-500">身高 (cm)</label>
+        <input id="mem-height" type="number" min="20" max="300" step="0.1" placeholder="人類計算 BMI 用，貓咪可留空" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-500">目標體重 (kg)</label>
+        <input id="mem-target" type="number" min="0.1" max="500" step="0.01" placeholder="選填" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      </div>
       <div class="flex gap-2">
         <button type="button" class="btn-close-modal flex-1 py-2.5 bg-slate-100 rounded-xl text-sm">取消</button>
-        <button type="submit" class="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold">新增</button>
+        <button id="btn-mem-submit" type="submit" class="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold">新增</button>
       </div>
     </form>
   </div>
@@ -177,7 +190,16 @@
 
       <div id="prof-summary" class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl text-center text-sm"></div>
 
+      <button type="button" id="btn-prof-add-record" class="w-full py-2.5 bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold rounded-xl text-sm border border-teal-200">
+        ＋ 為此成員新增體重
+      </button>
+
       <input type="hidden" id="prof-id" />
+
+      <div>
+        <label class="text-xs text-slate-500">成員名稱</label>
+        <input id="prof-name" type="text" maxlength="50" required placeholder="例：爸爸、橘貓咪咪" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      </div>
 
       <div id="prof-height-wrap">
         <label class="text-xs text-slate-500">身高 (cm)</label>

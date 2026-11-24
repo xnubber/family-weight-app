@@ -4,6 +4,67 @@ import { createEl, showLoading, showToast } from '../utils/dom.js';
 import { calculateBmi } from '../utils/metrics.js';
 import { UUID_REGEX, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
 
+// 開啟新增體重彈窗（可指定預選成員）
+export function openRecordModal(preselectedMemberId = null) {
+  if (state.appData.members.length === 0) return showToast('請先到設定頁新增成員', true);
+  const select = document.getElementById('rec-member');
+  const options = state.appData.members.map((m) => {
+    const opt = document.createElement('option');
+    opt.value = String(m.id);
+    opt.textContent = String(m.name ?? '');
+    return opt;
+  });
+  select.replaceChildren(...options);
+
+  if (preselectedMemberId && state.appData.members.some((m) => m.id === preselectedMemberId)) {
+    select.value = String(preselectedMemberId);
+  }
+
+  document.getElementById('rec-weight').value = '';
+  document.getElementById('rec-note').value = '';
+  document.getElementById('rec-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-record').classList.remove('hidden');
+  document.getElementById('rec-weight').focus();
+}
+
+// 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、身高與目標體重）
+export function openMemberModal(member = null) {
+  const form = document.getElementById('form-member');
+  const titleEl = document.getElementById('mem-modal-title');
+  const submitBtn = document.getElementById('btn-mem-submit');
+  const idInput = document.getElementById('mem-id');
+  const nameInput = document.getElementById('mem-name');
+  const typeSelect = document.getElementById('mem-type');
+  const heightWrap = document.getElementById('mem-height-wrap');
+  const heightInput = document.getElementById('mem-height');
+  const targetInput = document.getElementById('mem-target');
+
+  form.reset();
+
+  if (member) {
+    const isCat = member.type === 'cat';
+    titleEl.textContent = '編輯成員';
+    submitBtn.textContent = '儲存修改';
+    idInput.value = member.id;
+    nameInput.value = member.name || '';
+    typeSelect.value = member.type || 'human';
+    typeSelect.disabled = true;
+    heightWrap.classList.toggle('hidden', isCat);
+    heightInput.value = isCat ? '' : (member.height_cm ?? '');
+    targetInput.value = member.target_weight ?? '';
+  } else {
+    titleEl.textContent = '新增成員';
+    submitBtn.textContent = '新增';
+    idInput.value = '';
+    typeSelect.value = 'human';
+    typeSelect.disabled = false;
+    heightWrap.classList.remove('hidden');
+  }
+
+  document.getElementById('modal-member').classList.remove('hidden');
+  nameInput.focus();
+}
+
 export function openProfileModal(memberId, { onNavigateToChart }) {
   const m = state.appData.members.find((x) => x.id === memberId);
   if (!m) return;
@@ -13,8 +74,9 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
 
   document.getElementById('prof-id').value = m.id;
   document.getElementById('prof-title').textContent = `${isCat ? '🐱' : '👤'} ${m.name} 的個人資訊`;
-  document.getElementById('prof-height').value = m.height_cm || '';
-  document.getElementById('prof-target').value = m.target_weight || '';
+  document.getElementById('prof-name').value = m.name || '';
+  document.getElementById('prof-height').value = isCat ? '' : (m.height_cm ?? '');
+  document.getElementById('prof-target').value = m.target_weight ?? '';
   document.getElementById('prof-height-wrap').classList.toggle('hidden', isCat);
 
   let metricLabel = '目標差距';
@@ -47,6 +109,12 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
     onNavigateToChart();
   };
 
+  // 從個人資訊面板直接為該成員新增體重
+  document.getElementById('btn-prof-add-record').onclick = () => {
+    document.getElementById('modal-profile').classList.add('hidden');
+    openRecordModal(m.id);
+  };
+
   document.getElementById('modal-profile').classList.remove('hidden');
 }
 
@@ -66,24 +134,21 @@ export function initModals({ onSync }) {
     });
   });
 
+  // 切換成員類型時自動隱藏／顯示身高欄位
+  document.getElementById('mem-type').onchange = (e) => {
+    const isCat = e.target.value === 'cat';
+    document.getElementById('mem-height-wrap').classList.toggle('hidden', isCat);
+    if (isCat) document.getElementById('mem-height').value = '';
+  };
+
   // 開啟新增體重彈窗
   document.getElementById('btn-open-record-modal').onclick = () => {
-    if (state.appData.members.length === 0) return showToast('請先到設定頁新增成員', true);
-    const select = document.getElementById('rec-member');
-    const options = state.appData.members.map((m) => {
-      const opt = document.createElement('option');
-      opt.value = String(m.id);
-      opt.textContent = String(m.name ?? '');
-      return opt;
-    });
-    select.replaceChildren(...options);
-    document.getElementById('rec-date').value = new Date().toISOString().split('T')[0];
-    document.getElementById('modal-record').classList.remove('hidden');
+    openRecordModal(state.selectedMemberId);
   };
 
   // 開啟新增成員彈窗
   document.getElementById('btn-open-member-modal').onclick = () => {
-    document.getElementById('modal-member').classList.remove('hidden');
+    openMemberModal(null);
   };
 
   // 表單送出：新增體重
@@ -123,17 +188,21 @@ export function initModals({ onSync }) {
     }
   };
 
-  // 表單送出：新增成員
+  // 表單送出：新增或編輯成員
   document.getElementById('form-member').onsubmit = async (e) => {
     e.preventDefault();
+    const editId = document.getElementById('mem-id').value.trim();
     const name = document.getElementById('mem-name').value.trim();
     const type = document.getElementById('mem-type').value;
-    const heightParsed = parseStrictNumber(document.getElementById('mem-height').value, {
-      required: false,
-      min: 20,
-      max: 300,
-      label: '身高 (cm)'
-    });
+    const isCat = type === 'cat';
+    const heightParsed = isCat
+      ? { value: null }
+      : parseStrictNumber(document.getElementById('mem-height').value, {
+          required: false,
+          min: 20,
+          max: 300,
+          label: '身高 (cm)'
+        });
     const targetParsed = parseStrictNumber(document.getElementById('mem-target').value, {
       required: false,
       min: 0.1,
@@ -148,15 +217,28 @@ export function initModals({ onSync }) {
 
     showLoading(true);
     try {
-      await FamilyAPI.addMember(state.familyCode, {
-        name,
-        type,
-        height_cm: type === 'cat' ? null : heightParsed.value,
-        target_weight: targetParsed.value
-      });
+      if (editId) {
+        if (!UUID_REGEX.test(editId)) {
+          showToast('無效的成員識別碼', true);
+          return;
+        }
+        await FamilyAPI.updateMember(state.familyCode, editId, {
+          name,
+          height_cm: heightParsed.value,
+          target_weight: targetParsed.value
+        });
+        showToast('成員資料已更新');
+      } else {
+        await FamilyAPI.addMember(state.familyCode, {
+          name,
+          type,
+          height_cm: heightParsed.value,
+          target_weight: targetParsed.value
+        });
+        showToast('成員已新增');
+      }
       document.getElementById('modal-member').classList.add('hidden');
       e.target.reset();
-      showToast('成員已新增');
       await onSync();
     } catch (err) {
       showToast(err.message, true);
@@ -165,16 +247,21 @@ export function initModals({ onSync }) {
     }
   };
 
-  // 表單送出：更新個人資訊
+  // 表單送出：更新個人資訊（含名稱、身高、目標體重）
   document.getElementById('form-profile').onsubmit = async (e) => {
     e.preventDefault();
     const id = document.getElementById('prof-id').value.trim();
-    const heightParsed = parseStrictNumber(document.getElementById('prof-height').value, {
-      required: false,
-      min: 20,
-      max: 300,
-      label: '身高 (cm)'
-    });
+    const member = state.appData.members.find((x) => x.id === id);
+    const isCat = member?.type === 'cat';
+    const name = document.getElementById('prof-name').value.trim();
+    const heightParsed = isCat
+      ? { value: null }
+      : parseStrictNumber(document.getElementById('prof-height').value, {
+          required: false,
+          min: 20,
+          max: 300,
+          label: '身高 (cm)'
+        });
     const targetParsed = parseStrictNumber(document.getElementById('prof-target').value, {
       required: false,
       min: 0.1,
@@ -183,12 +270,14 @@ export function initModals({ onSync }) {
     });
 
     if (!UUID_REGEX.test(id)) return showToast('無效的成員識別碼', true);
+    if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
     if (targetParsed.error) return showToast(targetParsed.error, true);
 
     showLoading(true);
     try {
       await FamilyAPI.updateMember(state.familyCode, id, {
+        name,
         height_cm: heightParsed.value,
         target_weight: targetParsed.value
       });

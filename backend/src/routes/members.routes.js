@@ -48,7 +48,7 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(data);
 }));
 
-// 更新成員資料（身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
+// 更新成員資料（名稱、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
 router.put('/:id', asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
@@ -68,6 +68,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const { familyCode } = resolved;
 
   const updatePayload = {};
+  if (bodyParsed.data.name !== undefined) updatePayload.name = bodyParsed.data.name;
   if (bodyParsed.data.height_cm !== undefined) updatePayload.height_cm = bodyParsed.data.height_cm;
   if (bodyParsed.data.target_weight !== undefined) updatePayload.target_weight = bodyParsed.data.target_weight;
 
