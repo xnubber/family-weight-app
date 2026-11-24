@@ -1,0 +1,29 @@
+{
+  "name": "家與毛孩體重誌 · Kin & Paws Weight",
+  "short_name": "家與毛孩體重誌",
+  "description": "溫潤樸素的家庭與毛孩體重紀錄日誌（Kin & Paws Weight），支援家人、貓咪與狗狗體重趨勢、健康指標、隱私密碼鎖與雲端同步。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F6F4EE",
+  "theme_color": "#F6F4EE",
+  "icons": [
+    {
+      "src": "./icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

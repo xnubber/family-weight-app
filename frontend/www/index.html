@@ -8,8 +8,14 @@
     http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:3000 http://127.0.0.1:3000; object-src 'none'; base-uri 'self'; form-action 'self';"
   />
-  <meta name="description" content="溫潤樸素的家庭與毛孩體重紀錄日誌，支援家人、貓咪與狗狗體重趨勢、健康指標與雲端同步。" />
-  <title>家與毛孩體重誌</title>
+  <meta name="description" content="溫潤樸素的家庭與毛孩體重紀錄日誌（Kin &amp; Paws Weight），支援家人、貓咪與狗狗體重趨勢、健康指標、隱私密碼鎖與雲端同步。" />
+  <meta name="theme-color" content="#F6F4EE" />
+  <meta name="apple-mobile-web-app-title" content="家與毛孩體重誌" />
+  <title>家與毛孩體重誌 · Kin &amp; Paws Weight</title>
+  <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./styles.css" />
   <script src="./vendor/chart.umd.min.js" defer></script>
   <script src="./config.js" defer></script>
@@ -20,15 +26,16 @@
   <!-- 頂部導覽列 -->
   <header class="sticky top-0 z-20 bg-paper/90 backdrop-blur border-b border-oat-200 px-4 py-3 flex justify-between items-center gap-3">
     <div class="flex items-center gap-2.5 min-w-0">
-      <div class="w-9 h-9 rounded-full bg-sage-50 border border-sage-200 text-sage-700 flex items-center justify-center shrink-0" aria-hidden="true">
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5.5 19.5C5.5 11.5 11 6.5 18.5 5.5c-.5 7.5-5.5 13-13 14Z" />
-          <path d="M5.5 19.5L12 13" />
-          <circle cx="9.2" cy="8.5" r="1.1" fill="currentColor" stroke="none" />
-        </svg>
-      </div>
+      <img
+        src="./icons/app-icon.svg"
+        alt="家與毛孩體重誌圖示"
+        class="w-10 h-10 rounded-xl border border-oat-200 shadow-sm shrink-0"
+      />
       <div class="min-w-0">
-        <h1 class="text-base font-semibold tracking-wider text-ink truncate">家與毛孩體重誌</h1>
+        <div class="flex items-baseline gap-1.5 min-w-0">
+          <h1 class="text-base font-semibold tracking-wider text-ink truncate">家與毛孩體重誌</h1>
+          <span class="hidden sm:inline text-[11px] font-medium tracking-wide text-sage-700/80 shrink-0">Kin &amp; Paws Weight</span>
+        </div>
         <p id="header-family-code" class="text-[11px] text-ink-400 font-mono truncate">同步碼：載入中...</p>
       </div>
     </div>

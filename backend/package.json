@@ -1,6 +1,7 @@
 {
   "name": "family-weight-backend",
-  "version": "2.3.0",
+  "version": "2.4.0",
+  "description": "家與毛孩體重誌 (Kin & Paws Weight) — Express + Supabase 後端 API",
   "type": "module",
   "scripts": {
     "start": "node server.js",
