@@ -1,6 +1,6 @@
 {
   "name": "family-weight-backend",
-  "version": "1.0.0",
+  "version": "2.3.0",
   "type": "module",
   "scripts": {
     "start": "node server.js",
