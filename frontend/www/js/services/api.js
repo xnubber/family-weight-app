@@ -53,9 +53,15 @@ async function request(endpoint, familyCode, options = {}) {
     throw new Error(body?.error || '請求資料格式不正確');
   }
   if (res.status === 401) throw new Error('驗證失敗，請確認 API 金鑰或 APP 版本是否正確');
-  if (res.status === 403) throw new Error('無權限存取或修改此家庭資料');
+  if (res.status === 403) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || '無權限存取或修改此家庭資料');
+  }
   if (res.status === 404) throw new Error('找不到目標資料或無權限操作');
-  if (res.status === 429) throw new Error('操作過於頻繁，請稍候幾分鐘再試');
+  if (res.status === 429) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || '操作過於頻繁，請稍候幾分鐘再試');
+  }
   if (!res.ok) throw new Error('伺服器連線異常，請稍後再試');
 
   return res.status === 204 ? null : res.json();
@@ -68,6 +74,8 @@ export const FamilyAPI = {
     request('/members', familyCode, { method: 'POST', body: JSON.stringify({ ...payload, family_code: familyCode }) }),
   updateMember: (familyCode, id, payload) =>
     request(`/members/${encodeURIComponent(id)}`, familyCode, { method: 'PUT', body: JSON.stringify(payload) }),
+  verifyMemberPin: (familyCode, id, pin) =>
+    request(`/members/${encodeURIComponent(id)}/verify-pin`, familyCode, { method: 'POST', body: JSON.stringify({ pin }) }),
   deleteMember: (familyCode, id) =>
     request(`/members/${encodeURIComponent(id)}`, familyCode, { method: 'DELETE' }),
   addRecord: (familyCode, payload) =>

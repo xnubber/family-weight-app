@@ -3,6 +3,7 @@ import { getSupabaseClient } from '../config/supabase.js';
 import { resolveFamilyCode } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getTwoYearsAgoDate } from '../utils/date.js';
+import { sanitizeMember } from '../utils/security.js';
 import logger from '../utils/logger.js';
 
 const router = Router();
@@ -59,7 +60,7 @@ router.get('/:familyCode/data', asyncHandler(async (req, res) => {
     targetHistoryCount: targetHistory.length
   });
   res.json({
-    members: membersRes.data,
+    members: membersRes.data.map(sanitizeMember),
     records: recordsRes.data,
     targetHistory
   });

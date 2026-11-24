@@ -1,7 +1,14 @@
 import { state } from '../state.js';
 import { createEl } from '../utils/dom.js';
-import { calculateBmi, calculateTargetGap } from '../utils/metrics.js';
+import { createIcon } from '../utils/icons.js';
+import { calculateBmi, calculateGoalProgress, calculateTargetGap } from '../utils/metrics.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
+import {
+  MASKED_WEIGHT,
+  isMemberPrivacyEnabled,
+  isMemberWeightHidden,
+  memberHasPrivacyPin
+} from '../utils/privacy.js';
 
 function getMemberTypeMeta(type) {
   if (type === 'cat') {
@@ -53,9 +60,13 @@ export function renderOverview({ onSelectMember }) {
     const diffNum = latest && prev ? Number((latest.weight_kg - prev.weight_kg).toFixed(2)) : null;
     const diffStr = diffNum !== null ? `${diffNum > 0 ? '+' : ''}${diffNum.toFixed(2)} kg` : '--';
     const targetGap = latest ? calculateTargetGap(latest.weight_kg, m.target_weight) : null;
+    const goalProgress = calculateGoalProgress(recs, m.target_weight);
     const isHuman = m.type === 'human';
     const typeMeta = getMemberTypeMeta(m.type);
     const bmiRes = isHuman && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
+    const isPrivacyOn = isMemberPrivacyEnabled(m);
+    const isHidden = isMemberWeightHidden(m);
+    const hasPin = memberHasPrivacyPin(m);
 
     const card = createEl(
       'div',
@@ -64,7 +75,7 @@ export function renderOverview({ onSelectMember }) {
     card.dataset.memberId = String(m.id);
     card.onclick = () => onSelectMember(m.id);
 
-    // 上排：左為頭像與名稱／更新日，右為當前體重（各卡片左右完全對齊）
+    // 上排：左為頭像與名稱／更新日，右為當前體重（隱私模式自動遮蔽）
     const topRow = createEl('div', 'flex justify-between items-center gap-3');
     const identityWrap = createEl('div', 'flex items-center gap-3 min-w-0 flex-1');
     const avatarNode = createAvatarNode(resolveMemberAvatar(m), 'w-11 h-11');
@@ -75,6 +86,15 @@ export function renderOverview({ onSelectMember }) {
       createEl('span', 'font-semibold text-base text-ink truncate', String(m.name ?? '')),
       createEl('span', `shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium leading-none ${typeMeta.pillClass}`, typeMeta.label)
     );
+    if (isPrivacyOn) {
+      const privBadge = createEl(
+        'span',
+        'shrink-0 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-oat-100 text-ink-500 border border-oat-200 leading-none'
+      );
+      privBadge.setAttribute('title', hasPin ? '已開啟密碼隱私保護' : '已開啟體重隱私保護');
+      privBadge.appendChild(createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-2.5 h-2.5'));
+      nameLine.appendChild(privBadge);
+    }
 
     textWrap.append(
       nameLine,
@@ -87,38 +107,64 @@ export function renderOverview({ onSelectMember }) {
     identityWrap.append(avatarNode, textWrap);
 
     const weightRow = createEl('div', 'text-2xl font-semibold text-ink tabular-nums shrink-0 text-right');
-    weightRow.append(
-      document.createTextNode(`${latest ? latest.weight_kg : '--'} `),
-      createEl('span', 'text-xs font-normal text-ink-400', 'kg')
-    );
+    if (isHidden) {
+      weightRow.append(
+        createEl('span', 'text-ink-400 tracking-wider', latest ? MASKED_WEIGHT : '--'),
+        createEl('span', 'text-xs font-normal text-ink-400 ml-1', 'kg')
+      );
+    } else {
+      weightRow.append(
+        document.createTextNode(`${latest ? latest.weight_kg : '--'} `),
+        createEl('span', 'text-xs font-normal text-ink-400', 'kg')
+      );
+    }
 
     topRow.append(identityWrap, weightRow);
 
-    // 下排：三欄等寬對齊指標列（較前次 / 距目標 / BMI 或類別）
+    // 下排：三欄等寬對齊指標列（較前次 / 距目標或進度 / BMI 狀態或類別）
     const diffColor = diffNum === null
       ? 'text-ink-400'
       : diffNum > 0
         ? 'text-rosewood-600'
         : 'text-sage-600';
 
-    const targetLabel = m.target_weight !== null && m.target_weight !== undefined
-      ? `距目標 (${m.target_weight}kg)`
-      : '距目標';
-    const targetValue = targetGap
-      ? (targetGap.isAchieved ? '已達標' : `${targetGap.signedText} kg`)
-      : '--';
-    const targetColor = !targetGap
-      ? 'text-ink-400'
-      : targetGap.isAchieved
-        ? 'text-sage-600'
-        : targetGap.gap > 0
-          ? 'text-ochre-600'
-          : 'text-sage-700';
+    let targetLabel;
+    let targetValue;
+    let targetColor;
+    if (isHidden) {
+      targetLabel = '目標進度';
+      if (goalProgress) {
+        targetValue = goalProgress.isAchieved ? '已達標' : `${goalProgress.percent}%`;
+        targetColor = goalProgress.isAchieved ? 'text-sage-600' : 'text-sage-700';
+      } else {
+        targetValue = '--';
+        targetColor = 'text-ink-400';
+      }
+    } else {
+      targetLabel = m.target_weight !== null && m.target_weight !== undefined
+        ? `距目標 (${m.target_weight}kg)`
+        : '距目標';
+      targetValue = targetGap
+        ? (targetGap.isAchieved ? '已達標' : `${targetGap.signedText} kg`)
+        : '--';
+      targetColor = !targetGap
+        ? 'text-ink-400'
+        : targetGap.isAchieved
+          ? 'text-sage-600'
+          : targetGap.gap > 0
+            ? 'text-ochre-600'
+            : 'text-sage-700';
+    }
 
-    const thirdLabel = isHuman ? 'BMI' : '類別';
-    const thirdValue = isHuman ? (bmiRes ? bmiRes.bmi.toFixed(1) : '--') : typeMeta.label;
+    // 隱私模式下不顯示精確 BMI 數值（避免透過 BMI × 身高² 反推體重），僅顯示衛福部健康狀態
+    const thirdLabel = isHuman ? (isHidden ? '體位狀態' : 'BMI') : '類別';
+    const thirdValue = isHuman
+      ? (bmiRes ? (isHidden ? bmiRes.status : bmiRes.bmi.toFixed(1)) : '--')
+      : typeMeta.label;
     const thirdColor = isHuman
-      ? (bmiRes ? 'text-sage-700' : 'text-ink-400')
+      ? (bmiRes
+          ? (bmiRes.status === '正常範圍' ? 'text-sage-700' : 'text-ochre-600')
+          : 'text-ink-400')
       : typeMeta.accentClass;
 
     const metricsGrid = createEl(

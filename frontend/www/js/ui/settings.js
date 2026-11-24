@@ -3,6 +3,7 @@ import { hasInjectedApiKey } from '../services/api.js';
 import { optimisticDeleteMember } from '../services/syncQueue.js';
 import { createEl, showToast } from '../utils/dom.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
+import { isMemberPrivacyEnabled, lockAllMembers, memberHasPrivacyPin } from '../utils/privacy.js';
 import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
 
 function getMemberTypeLabel(type) {
@@ -23,9 +24,12 @@ export function renderSettingsMembers({ onEditMember }) {
 
     const identity = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
     const nameGroup = createEl('div', 'min-w-0');
+    const privSuffix = isMemberPrivacyEnabled(m)
+      ? (memberHasPrivacyPin(m) ? ' · 密碼隱私' : ' · 體重隱私')
+      : '';
     nameGroup.append(
       createEl('div', 'font-medium text-ink truncate', String(m.name ?? '')),
-      createEl('div', 'text-[11px] text-ink-400', getMemberTypeLabel(m.type))
+      createEl('div', 'text-[11px] text-ink-400', `${getMemberTypeLabel(m.type)}${privSuffix}`)
     );
     identity.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), nameGroup);
 
@@ -80,6 +84,7 @@ export function initSettings({ onSync }) {
       }
     }
 
+    lockAllMembers(false);
     state.familyCode = nextCode;
     state.selectedMemberId = null;
     state.historyPage = 1;

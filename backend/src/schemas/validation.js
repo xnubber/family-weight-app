@@ -35,6 +35,13 @@ const avatarSchema = z
   .nullable()
   .optional();
 
+const privacyPinSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}$/, '隱私密碼須為 4 位數字')
+  .nullable()
+  .optional();
+
 // Zod 嚴格輸入驗證 Schema（z.strictObject 拒絕任何未定義的額外欄位，防止 Mass Assignment）
 export const uuidSchema = z.uuid('無效的資源識別碼');
 
@@ -43,6 +50,8 @@ export const createMemberSchema = z.strictObject({
   name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元'),
   type: z.enum(MEMBER_TYPES, { message: '成員類型必須為 human、cat 或 dog' }),
   avatar: avatarSchema,
+  hide_weight: z.boolean({ message: '隱私設定必須為布林值' }).optional(),
+  privacy_pin: privacyPinSchema,
   height_cm: z
     .number({ message: '身高必須為數字' })
     .finite('身高必須為有效數值')
@@ -68,6 +77,13 @@ export const updateMemberSchema = z
   .strictObject({
     name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元').optional(),
     avatar: avatarSchema,
+    hide_weight: z.boolean({ message: '隱私設定必須為布林值' }).optional(),
+    privacy_pin: privacyPinSchema,
+    current_pin: z
+      .string()
+      .trim()
+      .regex(/^\d{4}$/, '目前密碼須為 4 位數字')
+      .optional(),
     height_cm: z
       .number({ message: '身高必須為數字' })
       .finite('身高必須為有效數值')
@@ -92,10 +108,16 @@ export const updateMemberSchema = z
     (data) =>
       data.name !== undefined ||
       data.avatar !== undefined ||
+      data.hide_weight !== undefined ||
+      data.privacy_pin !== undefined ||
       data.height_cm !== undefined ||
       data.target_weight !== undefined,
-    { message: '至少需提供名稱、頭像、身高或目標體重其中一項欄位' }
+    { message: '至少需提供名稱、頭像、隱私設定、身高或目標體重其中一項欄位' }
   );
+
+export const verifyPinSchema = z.strictObject({
+  pin: z.string().trim().regex(/^\d{4}$/, '請輸入 4 位數字密碼')
+});
 
 export const createRecordSchema = z.strictObject({
   family_code: z.string().optional(),

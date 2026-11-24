@@ -4,6 +4,12 @@ import { showToast } from '../utils/dom.js';
 import { getLocalTodayDate } from '../utils/metrics.js';
 import { isTempId } from '../utils/validation.js';
 import { saveLocalAvatar, migrateLocalAvatar, removeLocalAvatar } from '../utils/avatars.js';
+import {
+  saveLocalPrivacy,
+  migrateLocalPrivacy,
+  removeLocalPrivacy,
+  unlockMember
+} from '../utils/privacy.js';
 
 let tempSeq = 0;
 const idMap = new Map(); // tempId -> 後端回傳之正式 UUID
@@ -100,12 +106,13 @@ async function processQueue() {
   resolveFlushWaiters();
 }
 
-function replaceMemberTempId(tempId, realMember) {
+function replaceMemberTempId(tempId, realMember, knownPin = null) {
   idMap.set(tempId, realMember.id);
   migrateLocalAvatar(tempId, realMember.id);
+  migrateLocalPrivacy(tempId, realMember.id, knownPin);
   const idx = state.appData.members.findIndex((m) => m.id === tempId);
   if (idx !== -1) {
-    // 保留在等待期間使用者可能又做的本地編輯（含頭像設定），並補回正式 id 與伺服器預設欄位
+    // 保留在等待期間使用者可能又做的本地編輯（含頭像與隱私設定），並補回正式 id 與伺服器預設欄位
     state.appData.members[idx] = { ...realMember, ...state.appData.members[idx], id: realMember.id };
   }
   state.appData.records.forEach((r) => {
@@ -125,6 +132,8 @@ export function optimisticAddMember(payload) {
   const tempId = createTempId('mem');
   const nowIso = new Date().toISOString();
   const effectiveDate = payload.target_effective_date || getLocalTodayDate();
+  const hideWeight = Boolean(payload.hide_weight);
+  const hasPrivacyPin = Boolean(hideWeight && payload.privacy_pin);
 
   const optimisticMember = {
     id: tempId,
@@ -132,12 +141,17 @@ export function optimisticAddMember(payload) {
     name: payload.name,
     type: payload.type,
     avatar: payload.avatar ?? null,
+    hide_weight: hideWeight,
+    has_privacy_pin: hasPrivacyPin,
     height_cm: payload.height_cm ?? null,
     target_weight: payload.target_weight ?? null,
     created_at: nowIso
   };
   if (optimisticMember.avatar) {
     saveLocalAvatar(tempId, optimisticMember.avatar);
+  }
+  if (hideWeight) {
+    saveLocalPrivacy(tempId, { hideWeight: true, pin: payload.privacy_pin || null });
   }
 
   let tempHistoryId = null;
@@ -165,15 +179,17 @@ export function optimisticAddMember(payload) {
     run: async () => {
       const created = await FamilyAPI.addMember(targetFamilyCode, payload);
       if (state.familyCode === targetFamilyCode) {
-        replaceMemberTempId(tempId, created);
+        replaceMemberTempId(tempId, created, payload.privacy_pin || null);
         onRenderCallback();
       } else {
         idMap.set(tempId, created.id);
         migrateLocalAvatar(tempId, created.id);
+        migrateLocalPrivacy(tempId, created.id, payload.privacy_pin || null);
       }
     },
     rollback: () => {
       removeLocalAvatar(tempId);
+      removeLocalPrivacy(tempId);
       if (state.familyCode !== targetFamilyCode) return;
       state.appData.members = state.appData.members.filter((m) => m.id !== tempId);
       state.appData.records = state.appData.records.filter((r) => r.member_id !== tempId);
@@ -187,7 +203,7 @@ export function optimisticAddMember(payload) {
   });
 }
 
-// 2. 樂觀更新成員（名稱、頭像、身高、目標體重）
+// 2. 樂觀更新成員（名稱、頭像、隱私設定、身高、目標體重）
 export function optimisticUpdateMember(rawMemberId, payload) {
   const targetFamilyCode = state.familyCode;
   const currentId = resolveId(rawMemberId);
@@ -207,6 +223,28 @@ export function optimisticUpdateMember(rawMemberId, payload) {
   }
   if (payload.height_cm !== undefined) member.height_cm = payload.height_cm;
   if (payload.target_weight !== undefined) member.target_weight = payload.target_weight;
+
+  if (payload.hide_weight !== undefined || payload.privacy_pin !== undefined) {
+    const nextHide = payload.hide_weight !== undefined
+      ? Boolean(payload.hide_weight)
+      : Boolean(member.hide_weight);
+    member.hide_weight = nextHide;
+
+    if (!nextHide) {
+      member.has_privacy_pin = false;
+      saveLocalPrivacy(member.id, { hideWeight: false });
+    } else if (payload.privacy_pin === null) {
+      member.has_privacy_pin = false;
+      saveLocalPrivacy(member.id, { hideWeight: true, pin: null });
+    } else if (typeof payload.privacy_pin === 'string' && payload.privacy_pin) {
+      member.has_privacy_pin = true;
+      saveLocalPrivacy(member.id, { hideWeight: true, pin: payload.privacy_pin });
+      // 更新新密碼時同步更新目前解鎖階段持有的 PIN，避免再次編輯被拒絕
+      unlockMember(member.id, payload.privacy_pin);
+    } else {
+      saveLocalPrivacy(member.id, { hideWeight: true, keepExistingPin: true });
+    }
+  }
 
   let tempHistoryId = null;
   if (payload.target_weight !== undefined && prevTarget !== nextTarget) {
@@ -234,10 +272,14 @@ export function optimisticUpdateMember(rawMemberId, payload) {
       if (state.familyCode === targetFamilyCode) {
         const idx = state.appData.members.findIndex((m) => m.id === realId);
         if (idx !== -1) {
-          // 若資料庫尚未遷移 avatar 欄位，保留本地剛選好的頭像
+          // 若資料庫尚未遷移 avatar / hide_weight 欄位，保留本地剛設定的欄位值
           const merged = { ...state.appData.members[idx], ...updated };
           if (payload.avatar && !updated.avatar) {
             merged.avatar = payload.avatar;
+          }
+          if (payload.hide_weight === true && !updated.hide_weight) {
+            merged.hide_weight = true;
+            if (payload.privacy_pin) merged.has_privacy_pin = true;
           }
           state.appData.members[idx] = merged;
         }
@@ -246,6 +288,12 @@ export function optimisticUpdateMember(rawMemberId, payload) {
     },
     rollback: () => {
       if (snapshot.avatar) saveLocalAvatar(snapshot.id, snapshot.avatar);
+      if (payload.hide_weight !== undefined || payload.privacy_pin !== undefined) {
+        saveLocalPrivacy(snapshot.id, {
+          hideWeight: Boolean(snapshot.hide_weight),
+          keepExistingPin: Boolean(snapshot.has_privacy_pin)
+        });
+      }
       if (state.familyCode !== targetFamilyCode) return;
       const realId = resolveId(rawMemberId);
       const idx = state.appData.members.findIndex((m) => m.id === realId || m.id === rawMemberId);
@@ -276,6 +324,7 @@ export function optimisticDeleteMember(rawMemberId) {
   const prevSelectedId = state.selectedMemberId;
 
   removeLocalAvatar(member.id);
+  removeLocalPrivacy(member.id);
   state.appData.members = state.appData.members.filter((m) => m.id !== member.id && m.id !== rawMemberId);
   state.appData.records = state.appData.records.filter((r) => r.member_id !== member.id && r.member_id !== rawMemberId);
   state.appData.targetHistory = state.appData.targetHistory.filter(

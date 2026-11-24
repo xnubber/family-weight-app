@@ -4,8 +4,9 @@ import { initSyncQueue, flushQueue, getPendingCount } from './js/services/syncQu
 import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.js';
 import { renderOverview } from './js/ui/overview.js';
 import { renderCharts, initChartRangeControls } from './js/ui/charts.js';
-import { openProfileModal, openMemberModal, initModals } from './js/ui/modals.js';
+import { openProfileModal, openMemberModal, initModals, refreshOpenProfileModalIfAny } from './js/ui/modals.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
+import { initPrivacyLifecycle } from './js/utils/privacy.js';
 
 let isFetching = false;
 let syncRequestSeq = 0;
@@ -38,6 +39,7 @@ function renderAll() {
   renderSettingsMembers({
     onEditMember: (member) => openMemberModal(member)
   });
+  refreshOpenProfileModalIfAny();
 }
 
 async function syncData() {
@@ -91,6 +93,9 @@ window.addEventListener('beforeunload', (e) => {
     e.returnValue = '';
   }
 });
+
+// 初始化隱私自動上鎖生命週期（逾時 5 分鐘或切換畫面時自動重新遮蔽體重）
+initPrivacyLifecycle({ onLockChange: renderAll });
 
 // 初始化樂觀更新與背景序列寫入佇列
 initSyncQueue({

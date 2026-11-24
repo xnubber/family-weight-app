@@ -40,3 +40,17 @@ export const authFailLimiter = rateLimit({
     res.status(429).json({ error: '錯誤嘗試過於頻繁，請稍後再試' });
   }
 });
+
+// 個人隱私 PIN 驗證專用限流：防止 4 位數密碼暴力猜測（每 15 分鐘最多 10 次失敗嘗試）
+export const pinVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: (req) => req.method === 'OPTIONS',
+  handler: (req, res) => {
+    logger.warn('觸發個人 PIN 驗證限流 (429)', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
+    res.status(429).json({ error: 'PIN 密碼嘗試次數過多，請 15 分鐘後再試' });
+  }
+});

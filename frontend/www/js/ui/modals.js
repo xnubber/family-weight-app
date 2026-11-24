@@ -1,4 +1,5 @@
 import { state } from '../state.js';
+import { FamilyAPI } from '../services/api.js';
 import {
   optimisticAddMember,
   optimisticUpdateMember,
@@ -14,12 +15,25 @@ import {
   resolveMemberAvatar
 } from '../utils/avatars.js';
 import {
+  MASKED_WEIGHT,
+  getUnlockedPin,
+  isMemberPrivacyEnabled,
+  isMemberUnlocked,
+  isMemberWeightHidden,
+  isValidPinFormat,
+  lockMember,
+  memberHasPrivacyPin,
+  unlockMember,
+  verifyLocalPin
+} from '../utils/privacy.js';
+import {
   calculateBmi,
+  calculateGoalProgress,
   calculateHealthyWeightRange,
   calculatePetCalories,
   getLocalTodayDate
 } from '../utils/metrics.js';
-import { isValidResourceId, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
+import { isTempId, isValidResourceId, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
 
 const CAT_FACTORS = [
   { value: '1.2', label: '已結紮成貓 (1.2x)' },
@@ -41,6 +55,8 @@ const VALID_MEMBER_TYPES = new Set(['human', 'cat', 'dog']);
 let recordModalMode = 'batch'; // 'batch' | 'single'
 let hasProfileHealthCard = false;
 let memberAvatarManuallyPicked = false;
+let activePinRequest = null; // { member, onUnlocked }
+let activeProfileContext = null; // { memberId, onNavigateToChart }
 
 function getMemberTypeLabel(type) {
   if (type === 'cat') return '貓咪';
@@ -65,6 +81,73 @@ function getSavedPetFactor(memberId, type) {
   return factors.some((f) => f.value === saved) ? saved : defaultFactor;
 }
 
+// 請求解鎖受隱私保護的成員（無 PIN 直接暫時顯示；有 PIN 則彈出 4 位數驗證視窗）
+export function requestMemberUnlock(member, onUnlocked = null) {
+  if (!member) return;
+  if (!isMemberPrivacyEnabled(member) || isMemberUnlocked(member.id)) {
+    if (onUnlocked) onUnlocked();
+    return;
+  }
+
+  if (!memberHasPrivacyPin(member)) {
+    unlockMember(member.id, null);
+    showToast('已暫時顯示真實體重');
+    if (onUnlocked) onUnlocked();
+    return;
+  }
+
+  activePinRequest = { member, onUnlocked };
+  const titleEl = document.getElementById('pin-modal-title');
+  const descEl = document.getElementById('pin-modal-desc');
+  const inputEl = document.getElementById('input-pin-verify');
+  const errEl = document.getElementById('pin-modal-error');
+  const submitBtn = document.getElementById('btn-pin-submit');
+
+  titleEl.textContent = `解鎖 ${member.name || '成員'} 的體重`;
+  descEl.textContent = '請輸入 4 位數個人密碼，驗證後將暫時顯示 5 分鐘（離開畫面即自動隱藏）。';
+  inputEl.value = '';
+  errEl.textContent = '';
+  errEl.classList.add('hidden');
+  submitBtn.disabled = false;
+  submitBtn.textContent = '解鎖檢視';
+
+  document.getElementById('modal-pin').classList.remove('hidden');
+  inputEl.focus();
+}
+
+// 若個人資訊彈窗開啟期間發生自動重新上鎖，立即重繪以確保不殘留體重數字
+export function refreshOpenProfileModalIfAny() {
+  const modal = document.getElementById('modal-profile');
+  if (!modal || modal.classList.contains('hidden') || !activeProfileContext) return;
+  const stillExists = state.appData.members.some((m) => m.id === activeProfileContext.memberId);
+  if (!stillExists) {
+    modal.classList.add('hidden');
+    activeProfileContext = null;
+    return;
+  }
+  openProfileModal(activeProfileContext.memberId, {
+    onNavigateToChart: activeProfileContext.onNavigateToChart
+  });
+}
+
+function updateSingleWeightInputMask() {
+  const select = document.getElementById('rec-member');
+  const weightInput = document.getElementById('rec-weight');
+  if (!select || !weightInput) return;
+  const member = state.appData.members.find((m) => m.id === select.value);
+  const masked = isMemberWeightHidden(member);
+  if (masked) {
+    weightInput.type = 'password';
+    weightInput.inputMode = 'decimal';
+    weightInput.autocomplete = 'off';
+    weightInput.placeholder = '輸入體重 (kg)（隱私遮蔽輸入）';
+  } else {
+    weightInput.type = 'number';
+    weightInput.inputMode = 'decimal';
+    weightInput.placeholder = '體重 (kg)，例：62.5 或 4.35';
+  }
+}
+
 function setRecordModalMode(mode) {
   recordModalMode = mode === 'single' ? 'single' : 'batch';
   const isBatch = recordModalMode === 'batch';
@@ -82,6 +165,9 @@ function setRecordModalMode(mode) {
     : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-ink-500';
 
   document.getElementById('btn-rec-submit').textContent = isBatch ? '一次儲存' : '儲存';
+  if (!isBatch) {
+    updateSingleWeightInputMask();
+  }
 }
 
 function renderBatchMemberRows() {
@@ -89,27 +175,35 @@ function renderBatchMemberRows() {
   const rows = state.appData.members.map((m) => {
     const recs = state.appData.records.filter((r) => r.member_id === m.id);
     const latest = recs[recs.length - 1];
+    const isHidden = isMemberWeightHidden(m);
 
     const row = createEl('div', 'py-2.5 flex items-center justify-between gap-3');
     const leftGroup = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
     const labelWrap = createEl('div', 'min-w-0 flex-1');
+    const subtitleText = isHidden
+      ? (latest ? `已隱藏上次體重（${latest.recorded_at}）` : '隱私模式 · 尚未有紀錄')
+      : (latest ? `上次 ${latest.weight_kg} kg（${latest.recorded_at}）` : '尚未有紀錄');
+
     labelWrap.append(
       createEl('div', 'font-medium text-sm text-ink truncate', String(m.name ?? '')),
-      createEl(
-        'div',
-        'text-[11px] text-ink-400 tabular-nums',
-        latest ? `上次 ${latest.weight_kg} kg（${latest.recorded_at}）` : '尚未有紀錄'
-      )
+      createEl('div', 'text-[11px] text-ink-400 tabular-nums', subtitleText)
     );
     leftGroup.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), labelWrap);
 
     const inputWrap = createEl('div', 'flex items-center gap-1.5 shrink-0');
     const input = document.createElement('input');
-    input.type = 'number';
-    input.min = '0.1';
-    input.max = '500';
-    input.step = '0.01';
-    input.placeholder = latest ? String(latest.weight_kg) : '體重';
+    if (isHidden) {
+      input.type = 'password';
+      input.inputMode = 'decimal';
+      input.autocomplete = 'off';
+      input.placeholder = '隱私輸入';
+    } else {
+      input.type = 'number';
+      input.min = '0.1';
+      input.max = '500';
+      input.step = '0.01';
+      input.placeholder = latest ? String(latest.weight_kg) : '體重';
+    }
     input.dataset.memberId = String(m.id);
     input.dataset.memberName = String(m.name ?? '');
     input.className = 'batch-weight-input w-24 border rounded-xl px-2.5 py-1.5 text-sm text-right tabular-nums';
@@ -170,7 +264,40 @@ function setMemberModalAvatar(avatarId) {
   });
 }
 
-// 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、頭像、身高與目標體重）
+function syncPrivacyFormUI(prefix, member) {
+  const isLockedWithPin = Boolean(member && memberHasPrivacyPin(member) && !isMemberUnlocked(member.id));
+  const hideEnabled = member ? isMemberPrivacyEnabled(member) : false;
+  const hasPin = member ? memberHasPrivacyPin(member) : false;
+
+  const targetWrap = document.getElementById(`${prefix}-target-wrap`);
+  const lockedBox = document.getElementById(`${prefix}-privacy-locked-box`);
+  const controls = document.getElementById(`${prefix}-privacy-controls`);
+  const hideCheckbox = document.getElementById(`${prefix}-hide-weight`);
+  const pinWrap = document.getElementById(`${prefix}-pin-wrap`);
+  const pinLabel = document.getElementById(`${prefix}-pin-label`);
+  const pinInput = document.getElementById(`${prefix}-pin`);
+  const clearWrap = document.getElementById(`${prefix}-clear-pin-wrap`);
+  const clearCheckbox = document.getElementById(`${prefix}-clear-pin`);
+
+  if (targetWrap) targetWrap.classList.toggle('hidden', isLockedWithPin);
+  lockedBox.classList.toggle('hidden', !isLockedWithPin);
+  controls.classList.toggle('hidden', isLockedWithPin);
+
+  hideCheckbox.checked = hideEnabled;
+  pinInput.value = '';
+  clearCheckbox.checked = false;
+  pinInput.disabled = false;
+
+  pinLabel.textContent = hasPin
+    ? '變更 4 位數個人密碼（留空表示維持現有密碼）'
+    : '個人 4 位數密碼（選填，建議共用同步碼時設定）';
+  pinInput.placeholder = hasPin ? '輸入新 4 位數字，或留空維持不變' : '留空表示不設密碼，或輸入 4 位數字';
+
+  pinWrap.classList.toggle('hidden', !hideEnabled);
+  clearWrap.classList.toggle('hidden', !hideEnabled || !hasPin);
+}
+
+// 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、頭像、隱私設定、身高與目標體重）
 export function openMemberModal(member = null) {
   const form = document.getElementById('form-member');
   const titleEl = document.getElementById('mem-modal-title');
@@ -186,6 +313,7 @@ export function openMemberModal(member = null) {
 
   if (member) {
     const isPet = isPetType(member.type);
+    const isLockedWithPin = memberHasPrivacyPin(member) && !isMemberUnlocked(member.id);
     memberAvatarManuallyPicked = true;
     titleEl.textContent = '編輯成員';
     submitBtn.textContent = '儲存修改';
@@ -195,8 +323,16 @@ export function openMemberModal(member = null) {
     typeSelect.disabled = true;
     heightWrap.classList.toggle('hidden', isPet);
     heightInput.value = isPet ? '' : (member.height_cm ?? '');
-    targetInput.value = member.target_weight ?? '';
+    targetInput.value = isLockedWithPin ? '' : (member.target_weight ?? '');
     setMemberModalAvatar(resolveMemberAvatar(member));
+    syncPrivacyFormUI('mem', member);
+
+    document.getElementById('btn-mem-unlock').onclick = () => {
+      requestMemberUnlock(member, () => {
+        targetInput.value = member.target_weight ?? '';
+        syncPrivacyFormUI('mem', member);
+      });
+    };
   } else {
     memberAvatarManuallyPicked = false;
     titleEl.textContent = '新增成員';
@@ -206,16 +342,18 @@ export function openMemberModal(member = null) {
     typeSelect.disabled = false;
     heightWrap.classList.remove('hidden');
     setMemberModalAvatar(getDefaultAvatarForType('human'));
+    syncPrivacyFormUI('mem', null);
   }
 
   document.getElementById('modal-member').classList.remove('hidden');
   nameInput.focus();
 }
 
-// 繪製個人資訊面板中的「自動健康指標卡」（家人 BMI / 區間、貓咪與狗狗 RER / DER）
+// 繪製個人資訊面板中的「自動健康指標卡」（家人 BMI / 區間、貓咪與狗狗 RER / DER，隱私模式防反推）
 function renderProfileHealthCard(member, latest) {
   const card = document.getElementById('prof-health-card');
   const isHuman = member.type === 'human';
+  const isHidden = isMemberWeightHidden(member);
 
   if (isHuman) {
     const bmiRes = latest && member.height_cm ? calculateBmi(latest.weight_kg, member.height_cm) : null;
@@ -245,8 +383,12 @@ function renderProfileHealthCard(member, latest) {
         : bmiRes.status === '過輕'
           ? 'bg-oat-100 text-ink-700 border border-oat-200'
           : 'bg-ochre-100 text-ochre-700 border border-ochre-200';
+      // 隱私模式下僅呈現衛福部狀態（如「正常範圍」），遮蔽精確 BMI 數值防止反推體重
+      const badgeText = isHidden
+        ? bmiRes.status
+        : `BMI ${bmiRes.bmi.toFixed(1)} · ${bmiRes.status}`;
       header.appendChild(
-        createEl('span', `text-xs font-medium px-2 py-0.5 rounded-full tabular-nums ${badgeClass}`, `BMI ${bmiRes.bmi.toFixed(1)} · ${bmiRes.status}`)
+        createEl('span', `text-xs font-medium px-2 py-0.5 rounded-full tabular-nums ${badgeClass}`, badgeText)
       );
     }
 
@@ -273,7 +415,6 @@ function renderProfileHealthCard(member, latest) {
   }
 
   const isDog = member.type === 'dog';
-  const factors = getPetFactors(member.type);
   hasProfileHealthCard = true;
   card.className = isDog
     ? 'rounded-2xl p-3.5 text-sm space-y-2.5 border bg-ochre-50/80 border-ochre-200'
@@ -290,6 +431,13 @@ function renderProfileHealthCard(member, latest) {
   );
   header.appendChild(titleWrap);
 
+  if (isHidden) {
+    const hiddenNote = createEl('p', 'text-xs text-ink-500', '已開啟體重隱私保護，解鎖後可檢視每日熱量建議（RER / DER）。');
+    card.replaceChildren(header, hiddenNote);
+    return;
+  }
+
+  const factors = getPetFactors(member.type);
   const factorSelect = document.createElement('select');
   factorSelect.className = `border rounded-lg px-2 py-1 text-xs bg-linen text-ink-700 ${isDog ? 'border-ochre-200' : 'border-clay-200'}`;
   factors.forEach((optCfg) => {
@@ -343,10 +491,16 @@ function setProfileEditMode(isEditing) {
 export function openProfileModal(memberId, { onNavigateToChart }) {
   const m = state.appData.members.find((x) => x.id === memberId);
   if (!m) return;
+  activeProfileContext = { memberId, onNavigateToChart };
+
   const recs = state.appData.records.filter((r) => r.member_id === m.id);
   const latest = recs[recs.length - 1];
   const isPet = isPetType(m.type);
   const initialAvatar = resolveMemberAvatar(m);
+  const isPrivacyOn = isMemberPrivacyEnabled(m);
+  const isHidden = isMemberWeightHidden(m);
+  const hasPin = memberHasPrivacyPin(m);
+  const isLockedWithPin = hasPin && !isMemberUnlocked(m.id);
 
   const renderProfileAvatarPreview = (avatarId) => {
     const slot = document.getElementById('prof-avatar-slot');
@@ -358,27 +512,55 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   const fillEditInputs = () => {
     document.getElementById('prof-name').value = m.name || '';
     document.getElementById('prof-height').value = isPet ? '' : (m.height_cm ?? '');
-    document.getElementById('prof-target').value = m.target_weight ?? '';
+    document.getElementById('prof-target').value = isLockedWithPin ? '' : (m.target_weight ?? '');
     document.getElementById('prof-avatar').value = initialAvatar;
     renderProfileAvatarPreview(initialAvatar);
     renderAvatarPicker(document.getElementById('prof-avatar-picker'), initialAvatar, (picked) => {
       document.getElementById('prof-avatar').value = picked;
       renderProfileAvatarPreview(picked);
     });
+    syncPrivacyFormUI('prof', m);
   };
 
   document.getElementById('prof-id').value = m.id;
   document.getElementById('prof-title').textContent = m.name || '個人資訊';
   document.getElementById('prof-subtitle').textContent = `${getMemberTypeLabel(m.type)}檔案`;
 
+  // 頂部快速解鎖／隱藏按鈕
+  const toggleBtn = document.getElementById('btn-prof-privacy-toggle');
+  if (isPrivacyOn) {
+    toggleBtn.classList.remove('hidden');
+    toggleBtn.replaceChildren(
+      createIcon(isHidden ? (hasPin ? 'lock' : 'eye') : 'eyeOff', 'w-3.5 h-3.5 shrink-0'),
+      createEl('span', '', isHidden ? '檢視' : '隱藏')
+    );
+    toggleBtn.onclick = () => {
+      if (isHidden) {
+        requestMemberUnlock(m, () => openProfileModal(m.id, { onNavigateToChart }));
+      } else {
+        lockMember(m.id);
+        showToast('已重新隱藏真實體重');
+        openProfileModal(m.id, { onNavigateToChart });
+      }
+    };
+  } else {
+    toggleBtn.classList.add('hidden');
+    toggleBtn.replaceChildren();
+  }
+
   // 檢視模式文字
   document.getElementById('prof-view-name').textContent = m.name || '--';
   document.getElementById('prof-view-type').textContent = getMemberTypeLabel(m.type);
   document.getElementById('prof-view-height-row').classList.toggle('hidden', isPet);
   document.getElementById('prof-view-height').textContent = m.height_cm ? `${m.height_cm} cm` : '未設定';
-  document.getElementById('prof-view-target').textContent = m.target_weight ? `${m.target_weight} kg` : '未設定';
+  document.getElementById('prof-view-target').textContent = isHidden
+    ? (m.target_weight ? '已隱藏' : '未設定')
+    : (m.target_weight ? `${m.target_weight} kg` : '未設定');
+  document.getElementById('prof-view-privacy').textContent = !isPrivacyOn
+    ? '公開顯示'
+    : (hasPin ? '已隱藏（密碼保護）' : '已隱藏（點擊可檢視）');
 
-  // 自動健康指標卡（家人 BMI / 健康區間、貓咪與狗狗 RER / DER）
+  // 自動健康指標卡
   renderProfileHealthCard(m, latest);
 
   // 編輯模式欄位初始值
@@ -386,10 +568,29 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   fillEditInputs();
   setProfileEditMode(false);
 
+  document.getElementById('btn-prof-unlock-edit').onclick = () => {
+    requestMemberUnlock(m, () => {
+      document.getElementById('prof-target').value = m.target_weight ?? '';
+      syncPrivacyFormUI('prof', m);
+    });
+  };
+
   let metricLabel = '目標差距';
   let metricVal = '--';
   const bmiRes = !isPet && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
-  if (bmiRes) {
+  const goalProgress = calculateGoalProgress(recs, m.target_weight);
+  if (isHidden) {
+    if (bmiRes) {
+      metricLabel = '體位狀態';
+      metricVal = bmiRes.status;
+    } else if (goalProgress) {
+      metricLabel = '目標進度';
+      metricVal = goalProgress.isAchieved ? '已達標' : `${goalProgress.percent}%`;
+    } else {
+      metricLabel = '目標進度';
+      metricVal = '--';
+    }
+  } else if (bmiRes) {
     metricLabel = '目前 BMI';
     metricVal = bmiRes.bmi.toFixed(1);
   } else if (latest && m.target_weight) {
@@ -401,7 +602,11 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   const col1 = createEl('div');
   col1.append(
     createEl('div', 'text-xs text-ink-400', '最新體重'),
-    createEl('div', 'font-semibold text-base text-ink tabular-nums mt-0.5', latest ? `${latest.weight_kg} kg` : '--')
+    createEl(
+      'div',
+      `font-semibold text-base tabular-nums mt-0.5 ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+      latest ? (isHidden ? `${MASKED_WEIGHT} kg` : `${latest.weight_kg} kg`) : '--'
+    )
   );
   const col2 = createEl('div');
   col2.append(
@@ -414,12 +619,14 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
     state.selectedMemberId = m.id;
     state.historyPage = 1;
     document.getElementById('modal-profile').classList.add('hidden');
+    activeProfileContext = null;
     onNavigateToChart();
   };
 
   // 從個人資訊面板直接為該成員開啟「單筆紀錄」模式（可填寫備註）
   document.getElementById('btn-prof-add-record').onclick = () => {
     document.getElementById('modal-profile').classList.add('hidden');
+    activeProfileContext = null;
     openRecordModal(m.id, 'single');
   };
 
@@ -433,25 +640,167 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   document.getElementById('modal-profile').classList.remove('hidden');
 }
 
+function bindPrivacyControlEvents(prefix) {
+  const hideCheckbox = document.getElementById(`${prefix}-hide-weight`);
+  const pinWrap = document.getElementById(`${prefix}-pin-wrap`);
+  const pinInput = document.getElementById(`${prefix}-pin`);
+  const clearCheckbox = document.getElementById(`${prefix}-clear-pin`);
+
+  hideCheckbox.onchange = () => {
+    pinWrap.classList.toggle('hidden', !hideCheckbox.checked);
+    if (!hideCheckbox.checked) {
+      pinInput.value = '';
+      clearCheckbox.checked = false;
+      pinInput.disabled = false;
+    }
+  };
+
+  clearCheckbox.onchange = () => {
+    pinInput.disabled = clearCheckbox.checked;
+    if (clearCheckbox.checked) pinInput.value = '';
+  };
+
+  // 僅保留數字鍵入
+  pinInput.oninput = () => {
+    pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
+  };
+}
+
+function extractPrivacySubmitPayload(prefix, existingMember) {
+  const isLockedWithPin = Boolean(
+    existingMember && memberHasPrivacyPin(existingMember) && !isMemberUnlocked(existingMember.id)
+  );
+  if (isLockedWithPin) {
+    return { locked: true };
+  }
+
+  const hideWeight = document.getElementById(`${prefix}-hide-weight`).checked;
+  const rawPin = document.getElementById(`${prefix}-pin`).value.trim();
+  const clearPin = document.getElementById(`${prefix}-clear-pin`).checked;
+
+  if (hideWeight && !clearPin && rawPin !== '' && !isValidPinFormat(rawPin)) {
+    return { error: '個人隱私密碼須為 4 位數字（例如 1234）' };
+  }
+
+  const result = {
+    locked: false,
+    hide_weight: hideWeight
+  };
+
+  if (!hideWeight) {
+    if (existingMember && memberHasPrivacyPin(existingMember)) {
+      result.privacy_pin = null;
+    }
+  } else if (clearPin) {
+    result.privacy_pin = null;
+  } else if (rawPin !== '') {
+    result.privacy_pin = rawPin;
+  }
+
+  if (existingMember && memberHasPrivacyPin(existingMember)) {
+    const currentPin = getUnlockedPin(existingMember.id);
+    if (currentPin) result.current_pin = currentPin;
+  }
+
+  return result;
+}
+
 export function initModals() {
   // 關閉按鈕
   document.querySelectorAll('.btn-close-modal').forEach((btn) => {
-    btn.onclick = () => btn.closest('.fixed').classList.add('hidden');
+    btn.onclick = () => {
+      const modal = btn.closest('.fixed');
+      modal.classList.add('hidden');
+      if (modal.id === 'modal-profile') activeProfileContext = null;
+    };
   });
 
   // 點擊彈窗外部（深色背景）即可關閉
-  ['modal-record', 'modal-member', 'modal-profile'].forEach((id) => {
+  ['modal-record', 'modal-member', 'modal-profile', 'modal-pin'].forEach((id) => {
     const modal = document.getElementById(id);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         modal.classList.add('hidden');
+        if (id === 'modal-profile') activeProfileContext = null;
+        if (id === 'modal-pin') activePinRequest = null;
       }
     });
   });
 
-  // 記錄體重彈窗：批量／單筆模式切換
+  // PIN 解鎖彈窗操作
+  const pinInput = document.getElementById('input-pin-verify');
+  pinInput.oninput = () => {
+    pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
+    document.getElementById('pin-modal-error').classList.add('hidden');
+  };
+
+  document.getElementById('btn-pin-cancel').onclick = () => {
+    document.getElementById('modal-pin').classList.add('hidden');
+    activePinRequest = null;
+  };
+
+  document.getElementById('form-pin').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!activePinRequest) return;
+    const { member, onUnlocked } = activePinRequest;
+    const pin = pinInput.value.trim();
+    const errEl = document.getElementById('pin-modal-error');
+    const submitBtn = document.getElementById('btn-pin-submit');
+
+    if (!isValidPinFormat(pin)) {
+      errEl.textContent = '請輸入 4 位數字密碼';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = '驗證中...';
+
+    try {
+      let verified = false;
+      if (isTempId(member.id)) {
+        verified = await verifyLocalPin(member.id, pin);
+      } else {
+        const res = await FamilyAPI.verifyMemberPin(state.familyCode, member.id, pin);
+        if (res?.has_privacy_pin === false) {
+          // 若資料庫尚未執行 003 遷移，改以本機雜湊驗證
+          verified = await verifyLocalPin(member.id, pin);
+        } else {
+          verified = Boolean(res?.verified);
+        }
+      }
+
+      if (!verified) {
+        errEl.textContent = '個人密碼不正確，請再試一次';
+        errEl.classList.remove('hidden');
+        pinInput.value = '';
+        pinInput.focus();
+        return;
+      }
+
+      document.getElementById('modal-pin').classList.add('hidden');
+      activePinRequest = null;
+      unlockMember(member.id, pin);
+      showToast('已暫時解鎖真實體重（5 分鐘後自動隱藏）');
+      if (onUnlocked) onUnlocked();
+    } catch (err) {
+      errEl.textContent = err.message || '驗證失敗，請稍後再試';
+      errEl.classList.remove('hidden');
+      pinInput.value = '';
+      pinInput.focus();
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '解鎖檢視';
+    }
+  };
+
+  bindPrivacyControlEvents('mem');
+  bindPrivacyControlEvents('prof');
+
+  // 記錄體重彈窗：批量／單筆模式切換與單筆成員遮蔽輸入切換
   document.getElementById('btn-rec-mode-batch').onclick = () => setRecordModalMode('batch');
   document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single');
+  document.getElementById('rec-member').onchange = () => updateSingleWeightInputMask();
 
   // 切換成員類型時自動隱藏／顯示身高欄位，並在未手動挑頭像時貼心帶入對應風格頭像
   document.getElementById('mem-type').onchange = (e) => {
@@ -546,10 +895,11 @@ export function initModals() {
     showToast('體重已記錄');
   };
 
-  // 表單送出：樂觀新增或編輯成員（含自訂頭像與狗狗類型）
+  // 表單送出：樂觀新增或編輯成員（含自訂頭像、狗狗類型與隱私設定）
   document.getElementById('form-member').onsubmit = (e) => {
     e.preventDefault();
     const editId = document.getElementById('mem-id').value.trim();
+    const existingMember = editId ? state.appData.members.find((x) => x.id === editId) : null;
     const name = document.getElementById('mem-name').value.trim();
     const type = document.getElementById('mem-type').value;
     const rawAvatar = document.getElementById('mem-avatar').value.trim();
@@ -563,12 +913,18 @@ export function initModals() {
           max: 300,
           label: '身高 (cm)'
         });
-    const targetParsed = parseStrictNumber(document.getElementById('mem-target').value, {
-      required: false,
-      min: 0.1,
-      max: 500,
-      label: '目標體重 (kg)'
-    });
+
+    const privacyData = extractPrivacySubmitPayload('mem', existingMember);
+    if (privacyData.error) return showToast(privacyData.error, true);
+
+    const targetParsed = privacyData.locked
+      ? { value: undefined }
+      : parseStrictNumber(document.getElementById('mem-target').value, {
+          required: false,
+          min: 0.1,
+          max: 500,
+          label: '目標體重 (kg)'
+        });
 
     if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
     if (!VALID_MEMBER_TYPES.has(type)) return showToast('成員類型不正確', true);
@@ -577,32 +933,43 @@ export function initModals() {
 
     if (editId) {
       if (!isValidResourceId(editId)) return showToast('無效的成員識別碼', true);
-      document.getElementById('modal-member').classList.add('hidden');
-      e.target.reset();
-      optimisticUpdateMember(editId, {
+      const updatePayload = {
         name,
         avatar,
-        height_cm: heightParsed.value,
-        target_weight: targetParsed.value,
-        target_effective_date: getLocalTodayDate()
-      });
-      showToast('成員資料已更新');
-    } else {
+        height_cm: heightParsed.value
+      };
+      if (!privacyData.locked) {
+        updatePayload.target_weight = targetParsed.value;
+        updatePayload.target_effective_date = getLocalTodayDate();
+        updatePayload.hide_weight = privacyData.hide_weight;
+        if (privacyData.privacy_pin !== undefined) updatePayload.privacy_pin = privacyData.privacy_pin;
+        if (privacyData.current_pin) updatePayload.current_pin = privacyData.current_pin;
+      }
+
       document.getElementById('modal-member').classList.add('hidden');
       e.target.reset();
-      optimisticAddMember({
+      optimisticUpdateMember(editId, updatePayload);
+      showToast('成員資料已更新');
+    } else {
+      const addPayload = {
         name,
         type,
         avatar,
+        hide_weight: privacyData.hide_weight,
         height_cm: heightParsed.value,
         target_weight: targetParsed.value,
         target_effective_date: getLocalTodayDate()
-      });
+      };
+      if (privacyData.privacy_pin) addPayload.privacy_pin = privacyData.privacy_pin;
+
+      document.getElementById('modal-member').classList.add('hidden');
+      e.target.reset();
+      optimisticAddMember(addPayload);
       showToast('成員已新增');
     }
   };
 
-  // 表單送出：樂觀更新個人資訊（含名稱、頭像、身高、目標體重）
+  // 表單送出：樂觀更新個人資訊（含名稱、頭像、隱私設定、身高、目標體重）
   document.getElementById('form-profile').onsubmit = (e) => {
     e.preventDefault();
     const id = document.getElementById('prof-id').value.trim();
@@ -619,26 +986,40 @@ export function initModals() {
           max: 300,
           label: '身高 (cm)'
         });
-    const targetParsed = parseStrictNumber(document.getElementById('prof-target').value, {
-      required: false,
-      min: 0.1,
-      max: 500,
-      label: '目標體重 (kg)'
-    });
+
+    const privacyData = extractPrivacySubmitPayload('prof', member);
+    if (privacyData.error) return showToast(privacyData.error, true);
+
+    const targetParsed = privacyData.locked
+      ? { value: undefined }
+      : parseStrictNumber(document.getElementById('prof-target').value, {
+          required: false,
+          min: 0.1,
+          max: 500,
+          label: '目標體重 (kg)'
+        });
 
     if (!isValidResourceId(id)) return showToast('無效的成員識別碼', true);
     if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
     if (targetParsed.error) return showToast(targetParsed.error, true);
 
-    document.getElementById('modal-profile').classList.add('hidden');
-    optimisticUpdateMember(id, {
+    const updatePayload = {
       name,
       avatar,
-      height_cm: heightParsed.value,
-      target_weight: targetParsed.value,
-      target_effective_date: getLocalTodayDate()
-    });
+      height_cm: heightParsed.value
+    };
+    if (!privacyData.locked) {
+      updatePayload.target_weight = targetParsed.value;
+      updatePayload.target_effective_date = getLocalTodayDate();
+      updatePayload.hide_weight = privacyData.hide_weight;
+      if (privacyData.privacy_pin !== undefined) updatePayload.privacy_pin = privacyData.privacy_pin;
+      if (privacyData.current_pin) updatePayload.current_pin = privacyData.current_pin;
+    }
+
+    document.getElementById('modal-profile').classList.add('hidden');
+    activeProfileContext = null;
+    optimisticUpdateMember(id, updatePayload);
     showToast('個人資訊已更新');
   };
 }

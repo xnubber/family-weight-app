@@ -22,3 +22,39 @@ export function maskSensitiveUrl(rawUrl) {
     return `${prefix}${masked}`;
   });
 }
+
+// 4 位數個人隱私 PIN 雜湊（scrypt + 隨機 16-byte 鹽值，嚴禁明碼儲存）
+export function hashPrivacyPin(pin) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derived = crypto.scryptSync(String(pin), salt, 32).toString('hex');
+  return `scrypt$${salt}$${derived}`;
+}
+
+// 常數時間比對個人隱私 PIN
+export function verifyPrivacyPin(pin, storedHash) {
+  if (typeof pin !== 'string' || typeof storedHash !== 'string') return false;
+  const parts = storedHash.split('$');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+  const [, salt, expectedHex] = parts;
+  if (!salt || !expectedHex) return false;
+
+  try {
+    const derived = crypto.scryptSync(pin, salt, 32);
+    const expected = Buffer.from(expectedHex, 'hex');
+    if (derived.length !== expected.length) return false;
+    return crypto.timingSafeEqual(derived, expected);
+  } catch {
+    return false;
+  }
+}
+
+// 清理回傳給前端的成員物件，絕不洩漏 privacy_pin_hash，改回傳布林值 has_privacy_pin
+export function sanitizeMember(row) {
+  if (!row || typeof row !== 'object') return row;
+  const { privacy_pin_hash, ...rest } = row;
+  return {
+    ...rest,
+    hide_weight: Boolean(row.hide_weight),
+    has_privacy_pin: Boolean(privacy_pin_hash)
+  };
+}

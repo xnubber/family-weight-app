@@ -3,6 +3,14 @@ import { optimisticDeleteRecord } from '../services/syncQueue.js';
 import { createEl, showToast } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
+import { requestMemberUnlock } from './modals.js';
+import {
+  MASKED_WEIGHT,
+  isMemberPrivacyEnabled,
+  isMemberWeightHidden,
+  lockMember,
+  memberHasPrivacyPin
+} from '../utils/privacy.js';
 import {
   aggregateRecords,
   resolveTargetWeightSeries,
@@ -60,6 +68,53 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
 
   const blocks = [];
   const theme = getMemberTheme(member.type);
+  const isPrivacyOn = isMemberPrivacyEnabled(member);
+  const isHidden = isMemberWeightHidden(member);
+  const hasPin = memberHasPrivacyPin(member);
+
+  // 0. 隱私保護狀態列（提供一鍵解鎖檢視或立即重新隱藏）
+  if (isPrivacyOn) {
+    const privBanner = createEl(
+      'div',
+      isHidden
+        ? 'bg-oat-100 border border-oat-200 text-ink-700 rounded-2xl px-3.5 py-2.5 text-xs flex items-center justify-between gap-2'
+        : 'bg-sage-50 border border-sage-200 text-sage-700 rounded-2xl px-3.5 py-2.5 text-xs flex items-center justify-between gap-2'
+    );
+    const leftText = createEl('div', 'flex items-center gap-2 min-w-0');
+    leftText.append(
+      createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-4 h-4 shrink-0'),
+      createEl(
+        'span',
+        'leading-snug',
+        isHidden
+          ? '隱私模式：已遮蔽真實體重與圖表刻度，僅呈現變化趨勢'
+          : '已暫時顯示真實體重（5 分鐘或離開畫面將自動隱藏）'
+      )
+    );
+
+    const toggleBtn = createEl(
+      'button',
+      isHidden
+        ? 'shrink-0 bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-xl font-medium inline-flex items-center gap-1'
+        : 'shrink-0 bg-linen border border-sage-200 text-sage-700 px-2.5 py-1 rounded-xl font-medium inline-flex items-center gap-1'
+    );
+    toggleBtn.type = 'button';
+    toggleBtn.append(
+      createIcon(isHidden ? 'eye' : 'eyeOff', 'w-3.5 h-3.5 shrink-0'),
+      createEl('span', '', isHidden ? (hasPin ? '密碼解鎖' : '暫時顯示') : '立即隱藏')
+    );
+    toggleBtn.onclick = () => {
+      if (isHidden) {
+        requestMemberUnlock(member, () => renderCharts());
+      } else {
+        lockMember(member.id);
+        showToast('已重新隱藏真實體重');
+      }
+    };
+
+    privBanner.append(leftText, toggleBtn);
+    blocks.push(privBanner);
+  }
 
   // 1. 超過 7 天未量測提醒（或尚無任何紀錄）
   const daysSince = getDaysSinceLastRecord(allMemberRecs);
@@ -81,7 +136,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     blocks.push(notice);
   }
 
-  // 2. 區間統計摘要（平均 / 最低 / 最高 / 區間變化）
+  // 2. 區間統計摘要（隱私模式遮蔽平均／最低／最高，保留區間變化）
   const stats = calculatePeriodStats(filteredRecords);
   const statsCard = createEl(
     'div',
@@ -98,9 +153,9 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
         : 'text-sage-600';
 
     statsCard.append(
-      createStatCell('區間平均', `${stats.avg} kg`),
-      createStatCell('區間最低', `${stats.min} kg`),
-      createStatCell('區間最高', `${stats.max} kg`),
+      createStatCell('區間平均', isHidden ? MASKED_WEIGHT : `${stats.avg} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
+      createStatCell('區間最低', isHidden ? MASKED_WEIGHT : `${stats.min} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
+      createStatCell('區間最高', isHidden ? MASKED_WEIGHT : `${stats.max} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
       createStatCell('區間變化', deltaText === '--' ? '--' : `${deltaText} kg`, deltaColor)
     );
   } else {
@@ -113,7 +168,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
   }
   blocks.push(statsCard);
 
-  // 3. 目標體重達成進度條
+  // 3. 目標體重達成進度條（隱私模式保留百分比，隱藏絕對公斤數）
   const progress = calculateGoalProgress(allMemberRecs, member.target_weight);
   if (progress) {
     const progCard = createEl('div', 'journal-card p-3.5 rounded-2xl space-y-2');
@@ -146,11 +201,19 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     bar.max = 100;
 
     const footRow = createEl('div', 'flex justify-between text-[11px] text-ink-400 tabular-nums');
-    footRow.append(
-      createEl('span', '', `起始 ${progress.startWeight} kg`),
-      createEl('span', 'text-ink-700 font-medium', `目前 ${progress.currentWeight} kg`),
-      createEl('span', '', `目標 ${progress.targetWeight} kg`)
-    );
+    if (isHidden) {
+      footRow.append(
+        createEl('span', '', `起始 ${MASKED_WEIGHT} kg`),
+        createEl('span', 'text-ink-500 font-medium', `目前 ${MASKED_WEIGHT} kg`),
+        createEl('span', '', `目標 ${MASKED_WEIGHT} kg`)
+      );
+    } else {
+      footRow.append(
+        createEl('span', '', `起始 ${progress.startWeight} kg`),
+        createEl('span', 'text-ink-700 font-medium', `目前 ${progress.currentWeight} kg`),
+        createEl('span', '', `目標 ${progress.targetWeight} kg`)
+      );
+    }
 
     progCard.append(headRow, bar, footRow);
     blocks.push(progCard);
@@ -205,6 +268,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
     return;
   }
 
+  const isHidden = isMemberWeightHidden(member);
   const totalPages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
   state.historyPage = Math.min(Math.max(1, Number(state.historyPage) || 1), totalPages);
 
@@ -231,21 +295,31 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
     const topRow = createEl('div', 'flex items-baseline flex-wrap gap-x-2 gap-y-0.5');
     topRow.append(
-      createEl('span', 'w-20 shrink-0 font-semibold text-ink tabular-nums', `${r.weight_kg} kg`),
+      createEl(
+        'span',
+        `w-20 shrink-0 font-semibold tabular-nums ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+        isHidden ? `${MASKED_WEIGHT} kg` : `${r.weight_kg} kg`
+      ),
       createEl('span', 'w-20 shrink-0 text-xs text-ink-400 tabular-nums', String(r.recorded_at ?? ''))
     );
 
     const activeTarget = recordTargetSeries.values[idx];
     const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
     if (targetGap) {
-      const gapColor = targetGap.isAchieved
-        ? 'text-sage-600'
-        : targetGap.gap > 0
-          ? 'text-ochre-600'
-          : 'text-sage-700';
-      topRow.appendChild(
-        createEl('span', `text-xs font-medium tabular-nums shrink-0 ${gapColor}`, targetGap.compactLabel)
-      );
+      if (isHidden) {
+        if (targetGap.isAchieved) {
+          topRow.appendChild(createEl('span', 'text-xs font-medium shrink-0 text-sage-600', '已達標'));
+        }
+      } else {
+        const gapColor = targetGap.isAchieved
+          ? 'text-sage-600'
+          : targetGap.gap > 0
+            ? 'text-ochre-600'
+            : 'text-sage-700';
+        topRow.appendChild(
+          createEl('span', `text-xs font-medium tabular-nums shrink-0 ${gapColor}`, targetGap.compactLabel)
+        );
+      }
     }
 
     info.appendChild(topRow);
@@ -330,6 +404,11 @@ export function renderCharts() {
       createAvatarNode(resolveMemberAvatar(m), 'w-5 h-5'),
       createEl('span', '', String(m.name ?? ''))
     );
+    if (isMemberWeightHidden(m)) {
+      btn.appendChild(
+        createIcon(memberHasPrivacyPin(m) ? 'lock' : 'eyeOff', `w-3 h-3 shrink-0 ${isActive ? 'text-linen/85' : 'text-ink-400'}`)
+      );
+    }
     btn.onclick = () => {
       if (state.selectedMemberId !== m.id) {
         state.selectedMemberId = m.id;
@@ -345,15 +424,19 @@ export function renderCharts() {
   const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
   const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
   const { labels, values, pointDates, filteredRecords } = aggregateRecords(recs, state.selectedRange);
+  const isHidden = isMemberWeightHidden(member);
 
   renderStatsSummary(member, recs, filteredRecords);
 
   const ctx = document.getElementById('weightChart').getContext('2d');
   if (chartInstance) chartInstance.destroy();
   const theme = getMemberTheme(member?.type);
+  const baselineWeight = values.length > 0 ? Number(values[0]) : null;
 
   const datasets = [{
-    label: `${member?.name || ''} 體重 (kg)${state.selectedRange === 'day' ? '' : '（平均）'}`,
+    label: isHidden
+      ? `${member?.name || ''} 體重趨勢（已隱藏數值）`
+      : `${member?.name || ''} 體重 (kg)${state.selectedRange === 'day' ? '' : '（平均）'}`,
     data: values,
     borderColor: theme.lineColor,
     backgroundColor: theme.fillColor,
@@ -366,9 +449,11 @@ export function renderCharts() {
 
   const targetSeries = resolveTargetWeightSeries(pointDates, memberHistory, member);
   if (targetSeries.hasAnyTarget && labels.length > 0) {
-    const targetLabel = member?.target_weight
-      ? `目標體重（目前 ${member.target_weight} kg）`
-      : '歷史目標體重 (kg)';
+    const targetLabel = isHidden
+      ? '目標線（已隱藏數值）'
+      : member?.target_weight
+        ? `目標體重（目前 ${member.target_weight} kg）`
+        : '歷史目標體重 (kg)';
     datasets.push({
       label: targetLabel,
       data: targetSeries.values,
@@ -393,6 +478,21 @@ export function renderCharts() {
         legend: {
           display: true,
           labels: { color: '#494C45', boxWidth: 12, usePointStyle: true }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctxItem) => {
+              if (!isHidden) {
+                return `${ctxItem.dataset.label}: ${ctxItem.parsed.y} kg`;
+              }
+              if (ctxItem.datasetIndex === 0 && baselineWeight !== null && Number.isFinite(ctxItem.parsed.y)) {
+                const delta = Number((ctxItem.parsed.y - baselineWeight).toFixed(2));
+                const sign = delta > 0 ? '+' : '';
+                return `較區間起點：${sign}${delta.toFixed(2)} kg`;
+              }
+              return '目標體重：已隱藏';
+            }
+          }
         }
       },
       scales: {
@@ -401,7 +501,10 @@ export function renderCharts() {
           grid: { color: '#EFECE4' }
         },
         y: {
-          ticks: { color: '#727068' },
+          ticks: {
+            display: !isHidden,
+            color: '#727068'
+          },
           grid: { color: '#EFECE4' }
         }
       }

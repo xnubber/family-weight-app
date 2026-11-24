@@ -1,14 +1,17 @@
 import { Router } from 'express';
 import { getSupabaseClient } from '../config/supabase.js';
 import { resolveFamilyCode } from '../middleware/auth.js';
+import { pinVerifyLimiter } from '../middleware/rateLimit.js';
 import {
   uuidSchema,
   createMemberSchema,
   updateMemberSchema,
+  verifyPinSchema,
   formatZodError
 } from '../schemas/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getTodayDate } from '../utils/date.js';
+import { hashPrivacyPin, verifyPrivacyPin, sanitizeMember } from '../utils/security.js';
 import logger from '../utils/logger.js';
 
 const router = Router();
@@ -35,10 +38,61 @@ async function appendTargetHistory(supabase, { familyCode, memberId, targetWeigh
   }
 }
 
-function isMissingAvatarColumnError(error) {
-  const msg = String(error?.message || '');
-  return (error?.code === '42703' || error?.code === 'PGRST204') && msg.toLowerCase().includes('avatar');
+const OPTIONAL_MEMBER_COLUMNS = ['avatar', 'hide_weight', 'privacy_pin_hash'];
+
+function detectMissingOptionalColumn(error) {
+  if (error?.code !== '42703' && error?.code !== 'PGRST204') return null;
+  const msg = String(error?.message || '').toLowerCase();
+  return OPTIONAL_MEMBER_COLUMNS.find((col) => msg.includes(col)) || null;
 }
+
+// 驗證個別成員的 4 位數個人隱私 PIN 密碼（套用嚴格防暴力破解限流）
+router.post('/:id/verify-pin', pinVerifyLimiter, asyncHandler(async (req, res) => {
+  const idParsed = uuidSchema.safeParse(req.params.id);
+  if (!idParsed.success) {
+    return res.status(400).json({ error: '無效的成員識別碼' });
+  }
+  const id = idParsed.data;
+
+  const bodyParsed = verifyPinSchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    return res.status(400).json({ error: formatZodError(bodyParsed.error) });
+  }
+
+  const resolved = resolveFamilyCode(req);
+  if (resolved.errorStatus) {
+    return res.status(resolved.errorStatus).json({ error: resolved.errorMessage });
+  }
+  const { familyCode } = resolved;
+
+  const supabase = getSupabaseClient();
+  const { data: member, error } = await supabase
+    .from('members')
+    .select('*')
+    .eq('id', id)
+    .eq('family_code', familyCode)
+    .maybeSingle();
+
+  if (error) {
+    logger.error('讀取成員隱私密碼失敗', { id, error: error.message });
+    return res.status(500).json({ error: '驗證失敗，請稍後再試' });
+  }
+  if (!member) {
+    return res.status(404).json({ error: '找不到成員或無權限存取' });
+  }
+
+  if (!member.privacy_pin_hash) {
+    return res.json({ verified: true, has_privacy_pin: false });
+  }
+
+  const ok = verifyPrivacyPin(bodyParsed.data.pin, member.privacy_pin_hash);
+  if (!ok) {
+    logger.warn('個人隱私 PIN 驗證失敗', { id, ip: req.ip });
+    return res.status(403).json({ error: '個人密碼不正確' });
+  }
+
+  return res.json({ verified: true, has_privacy_pin: true });
+}));
 
 // 新增成員
 router.post('/', asyncHandler(async (req, res) => {
@@ -47,7 +101,17 @@ router.post('/', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: formatZodError(parsed.error) });
   }
 
-  const { family_code, name, type, avatar, height_cm, target_weight, target_effective_date } = parsed.data;
+  const {
+    family_code,
+    name,
+    type,
+    avatar,
+    hide_weight,
+    privacy_pin,
+    height_cm,
+    target_weight,
+    target_effective_date
+  } = parsed.data;
   const resolved = resolveFamilyCode(req, family_code);
   if (resolved.errorStatus) {
     return res.status(resolved.errorStatus).json({ error: resolved.errorMessage });
@@ -62,27 +126,28 @@ router.post('/', asyncHandler(async (req, res) => {
     height_cm: height_cm ?? null,
     target_weight: target_weight ?? null
   };
-  if (avatar !== undefined) {
-    insertPayload.avatar = avatar;
+  if (avatar !== undefined) insertPayload.avatar = avatar;
+  if (hide_weight !== undefined) insertPayload.hide_weight = Boolean(hide_weight);
+  if (hide_weight && privacy_pin) {
+    insertPayload.privacy_pin_hash = hashPrivacyPin(privacy_pin);
   }
 
-  let { data, error } = await supabase
-    .from('members')
-    .insert(insertPayload)
-    .select()
-    .single();
-
-  // 相容尚未執行 002_dog_and_avatar.sql 遷移的資料庫：略過 avatar 欄位重試
-  if (error && isMissingAvatarColumnError(error)) {
-    logger.warn('members 表尚未新增 avatar 欄位，請執行 backend/sql/002_dog_and_avatar.sql');
-    delete insertPayload.avatar;
-    const retry = await supabase
+  let data = null;
+  let error = null;
+  for (let attempt = 0; attempt <= OPTIONAL_MEMBER_COLUMNS.length; attempt++) {
+    const resInsert = await supabase
       .from('members')
       .insert(insertPayload)
       .select()
       .single();
-    data = retry.data;
-    error = retry.error;
+    data = resInsert.data;
+    error = resInsert.error;
+    if (!error) break;
+
+    const missingCol = detectMissingOptionalColumn(error);
+    if (!missingCol || !(missingCol in insertPayload)) break;
+    logger.warn(`members 表尚未新增 ${missingCol} 欄位，略過該欄位寫入（請執行對應 SQL 遷移）`);
+    delete insertPayload[missingCol];
   }
 
   if (error) {
@@ -107,10 +172,10 @@ router.post('/', asyncHandler(async (req, res) => {
   }
 
   logger.info('新增成員成功', { id: data.id, type });
-  res.status(201).json(data);
+  res.status(201).json(sanitizeMember(data));
 }));
 
-// 更新成員資料（名稱、頭像、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
+// 更新成員資料（名稱、頭像、隱私設定、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
 router.put('/:id', asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
@@ -130,7 +195,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const { familyCode } = resolved;
 
   const supabase = getSupabaseClient();
-  // 先讀取原成員資料，僅在目標體重實際變更時才新增歷史紀錄
+  // 先讀取原成員資料，供 PIN 保護驗證與目標體重變更比對
   const { data: existing, error: fetchErr } = await supabase
     .from('members')
     .select('*')
@@ -147,38 +212,68 @@ router.put('/:id', asyncHandler(async (req, res) => {
     return res.status(404).json({ error: '找不到成員或無權限修改' });
   }
 
+  // 若此成員已設定個人隱私 PIN，修改隱私設定、變更/清除 PIN 或修改目標體重前必須驗證原 PIN
+  if (existing.privacy_pin_hash) {
+    const wantsDisableHide = bodyParsed.data.hide_weight === false && Boolean(existing.hide_weight);
+    const wantsChangePin = bodyParsed.data.privacy_pin !== undefined;
+    const prevTarget = normalizeTargetWeight(existing.target_weight);
+    const nextTarget = bodyParsed.data.target_weight === undefined
+      ? prevTarget
+      : normalizeTargetWeight(bodyParsed.data.target_weight);
+    const wantsChangeTarget = bodyParsed.data.target_weight !== undefined && prevTarget !== nextTarget;
+
+    if (wantsDisableHide || wantsChangePin || wantsChangeTarget) {
+      if (!bodyParsed.data.current_pin || !verifyPrivacyPin(bodyParsed.data.current_pin, existing.privacy_pin_hash)) {
+        logger.warn('修改受 PIN 保護的成員設定遭拒', { id, ip: req.ip });
+        return res.status(403).json({ error: '請先驗證個人 4 位數密碼後再修改隱私設定或目標體重' });
+      }
+    }
+  }
+
   const updatePayload = {};
   if (bodyParsed.data.name !== undefined) updatePayload.name = bodyParsed.data.name;
   if (bodyParsed.data.avatar !== undefined) updatePayload.avatar = bodyParsed.data.avatar;
   if (bodyParsed.data.height_cm !== undefined) updatePayload.height_cm = bodyParsed.data.height_cm;
   if (bodyParsed.data.target_weight !== undefined) updatePayload.target_weight = bodyParsed.data.target_weight;
+  if (bodyParsed.data.hide_weight !== undefined) {
+    updatePayload.hide_weight = Boolean(bodyParsed.data.hide_weight);
+    // 關閉隱私模式時一併清除舊 PIN，避免下次開啟產生困惑
+    if (!bodyParsed.data.hide_weight && bodyParsed.data.privacy_pin === undefined) {
+      updatePayload.privacy_pin_hash = null;
+    }
+  }
+  if (bodyParsed.data.privacy_pin !== undefined) {
+    const effectiveHide = bodyParsed.data.hide_weight !== undefined
+      ? Boolean(bodyParsed.data.hide_weight)
+      : Boolean(existing.hide_weight);
+    updatePayload.privacy_pin_hash = effectiveHide && bodyParsed.data.privacy_pin
+      ? hashPrivacyPin(bodyParsed.data.privacy_pin)
+      : null;
+  }
 
-  let { data, error } = await supabase
-    .from('members')
-    .update(updatePayload)
-    .eq('id', id)
-    .eq('family_code', familyCode)
-    .select()
-    .maybeSingle();
-
-  // 相容尚未執行 002_dog_and_avatar.sql 遷移的資料庫：略過 avatar 欄位重試
-  if (error && isMissingAvatarColumnError(error)) {
-    logger.warn('members 表尚未新增 avatar 欄位，請執行 backend/sql/002_dog_and_avatar.sql');
-    delete updatePayload.avatar;
+  let data = null;
+  let error = null;
+  for (let attempt = 0; attempt <= OPTIONAL_MEMBER_COLUMNS.length; attempt++) {
     if (Object.keys(updatePayload).length === 0) {
       data = existing;
       error = null;
-    } else {
-      const retry = await supabase
-        .from('members')
-        .update(updatePayload)
-        .eq('id', id)
-        .eq('family_code', familyCode)
-        .select()
-        .maybeSingle();
-      data = retry.data;
-      error = retry.error;
+      break;
     }
+    const resUpdate = await supabase
+      .from('members')
+      .update(updatePayload)
+      .eq('id', id)
+      .eq('family_code', familyCode)
+      .select()
+      .maybeSingle();
+    data = resUpdate.data;
+    error = resUpdate.error;
+    if (!error) break;
+
+    const missingCol = detectMissingOptionalColumn(error);
+    if (!missingCol || !(missingCol in updatePayload)) break;
+    logger.warn(`members 表尚未新增 ${missingCol} 欄位，略過該欄位更新（請執行對應 SQL 遷移）`);
+    delete updatePayload[missingCol];
   }
 
   if (error) {
@@ -204,7 +299,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
   }
 
   logger.info('更新成員資料成功', { id });
-  res.json(data);
+  res.json(sanitizeMember(data));
 }));
 
 // 刪除成員 — 強制驗證 UUID 與所屬家庭同步碼

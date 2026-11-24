@@ -252,10 +252,38 @@
         <label class="text-xs text-ink-500">身高 (cm)</label>
         <input id="mem-height" type="number" min="20" max="300" step="0.1" placeholder="家人計算 BMI 用，毛孩可留空" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
-      <div>
+      <div id="mem-target-wrap">
         <label class="text-xs text-ink-500">目標體重 (kg)</label>
         <input id="mem-target" type="number" min="0.1" max="500" step="0.01" placeholder="選填" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
+
+      <!-- 隱私保護設定（可選配個人 4 位數 PIN 密碼） -->
+      <div class="bg-oat-50 border border-oat-200 rounded-2xl p-3.5 space-y-2.5">
+        <div id="mem-privacy-locked-box" class="hidden flex items-center justify-between gap-2 text-xs text-ink-500">
+          <span>已啟用密碼保護，解鎖後可修改目標體重與隱私設定</span>
+          <button type="button" id="btn-mem-unlock" class="shrink-0 bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
+        </div>
+        <div id="mem-privacy-controls" class="space-y-2.5">
+          <label class="flex items-start gap-2.5 cursor-pointer select-none">
+            <input id="mem-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
+            <span class="text-xs leading-relaxed">
+              <span class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
+              <span class="text-ink-400">遮蔽公斤數與精確 BMI，只顯示變化趨勢與達標進度</span>
+            </span>
+          </label>
+          <div id="mem-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
+            <div>
+              <label id="mem-pin-label" for="mem-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
+              <input id="mem-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+            </div>
+            <label id="mem-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
+              <input id="mem-clear-pin" type="checkbox" class="rounded border-oat-300" />
+              <span>清除現有密碼（改為無密碼點擊暫時檢視）</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div class="flex gap-2 pt-1">
         <button type="button" class="btn-close-modal flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
         <button id="btn-mem-submit" type="submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">新增</button>
@@ -263,7 +291,7 @@
     </form>
   </div>
 
-  <!-- 彈窗：個人資訊與編輯（內建自動健康指標與頭像更換） -->
+  <!-- 彈窗：個人資訊與編輯（內建自動健康指標、頭像更換與隱私鎖） -->
   <div id="modal-profile" class="hidden fixed inset-0 bg-ink/35 backdrop-blur-[2px] z-50 flex items-end sm:items-center justify-center p-4">
     <form id="form-profile" class="bg-linen border border-oat-200 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
       <div class="flex justify-between items-center gap-2 border-b border-oat-200 pb-3">
@@ -274,13 +302,16 @@
             <p id="prof-subtitle" class="text-[11px] text-ink-400">成員檔案</p>
           </div>
         </div>
-        <button type="button" id="btn-prof-to-chart" class="shrink-0 inline-flex items-center gap-1 text-xs bg-sage-50 text-sage-700 border border-sage-200 px-3 py-1.5 rounded-xl font-medium">
-          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 19h16" />
-            <path d="M5.5 14.5l4-4 3.2 2.5L18.5 7" />
-          </svg>
-          <span>查看統計</span>
-        </button>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" id="btn-prof-privacy-toggle" class="hidden inline-flex items-center gap-1 text-xs bg-oat-100 text-ink-700 border border-oat-200 px-2.5 py-1.5 rounded-xl font-medium"></button>
+          <button type="button" id="btn-prof-to-chart" class="inline-flex items-center gap-1 text-xs bg-sage-50 text-sage-700 border border-sage-200 px-2.5 py-1.5 rounded-xl font-medium">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 19h16" />
+              <path d="M5.5 14.5l4-4 3.2 2.5L18.5 7" />
+            </svg>
+            <span>統計</span>
+          </button>
+        </div>
       </div>
 
       <div id="prof-summary" class="grid grid-cols-2 gap-2 bg-oat-50 border border-oat-200/70 p-3 rounded-2xl text-center text-sm"></div>
@@ -313,6 +344,10 @@
           <span class="text-ink-500">目標體重</span>
           <span id="prof-view-target" class="font-medium text-ink">--</span>
         </div>
+        <div class="py-2.5 flex justify-between items-center">
+          <span class="text-ink-500">體重隱私</span>
+          <span id="prof-view-privacy" class="font-medium text-ink">--</span>
+        </div>
       </div>
 
       <!-- 檢視模式：自動健康指標卡（家人顯示 BMI 判定與健康體重區間；貓狗顯示 RER / DER 熱量） -->
@@ -335,9 +370,36 @@
           <input id="prof-height" type="number" min="20" max="300" step="0.1" placeholder="例：172.5" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
 
-        <div>
+        <div id="prof-target-wrap">
           <label class="text-xs text-ink-500">目標體重 (kg)</label>
           <input id="prof-target" type="number" min="0.1" max="500" step="0.01" placeholder="例：65.0" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        </div>
+
+        <!-- 編輯模式：隱私保護設定 -->
+        <div class="bg-oat-50 border border-oat-200 rounded-2xl p-3.5 space-y-2.5">
+          <div id="prof-privacy-locked-box" class="hidden flex items-center justify-between gap-2 text-xs text-ink-500">
+            <span>已啟用密碼保護，解鎖後可修改目標體重與隱私設定</span>
+            <button type="button" id="btn-prof-unlock-edit" class="shrink-0 bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
+          </div>
+          <div id="prof-privacy-controls" class="space-y-2.5">
+            <label class="flex items-start gap-2.5 cursor-pointer select-none">
+              <input id="prof-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
+              <span class="text-xs leading-relaxed">
+                <span class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
+                <span class="text-ink-400">遮蔽公斤數與精確 BMI，只顯示變化趨勢與達標進度</span>
+              </span>
+            </label>
+            <div id="prof-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
+              <div>
+                <label id="prof-pin-label" for="prof-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填）</label>
+                <input id="prof-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              </div>
+              <label id="prof-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
+                <input id="prof-clear-pin" type="checkbox" class="rounded border-oat-300" />
+                <span>清除現有密碼（改為無密碼點擊暫時檢視）</span>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -356,6 +418,32 @@
       <div id="prof-edit-actions" class="hidden flex gap-2 pt-1">
         <button type="button" id="btn-prof-cancel-edit" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消編輯</button>
         <button type="submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存修改</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 彈窗：個人 4 位數 PIN 隱私解鎖 -->
+  <div id="modal-pin" class="hidden fixed inset-0 bg-ink/45 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4">
+    <form id="form-pin" class="bg-linen border border-oat-200 w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-soft">
+      <div class="flex flex-col items-center text-center space-y-2">
+        <div class="w-11 h-11 rounded-full bg-sage-50 border border-sage-200 text-sage-700 flex items-center justify-center" aria-hidden="true">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="11" width="14" height="9" rx="2.5" />
+            <path d="M8.5 11V8.2a3.5 3.5 0 0 1 7 0V11" />
+          </svg>
+        </div>
+        <h3 id="pin-modal-title" class="font-semibold text-base text-ink">輸入個人密碼</h3>
+        <p id="pin-modal-desc" class="text-xs text-ink-500 leading-relaxed">驗證後可暫時檢視真實體重，5 分鐘或離開畫面將自動重新隱藏。</p>
+      </div>
+
+      <div class="space-y-2">
+        <input id="input-pin-verify" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" class="w-full border rounded-2xl py-3 px-4 text-center text-2xl tracking-[0.5em] font-mono" />
+        <p id="pin-modal-error" class="hidden text-xs text-rosewood-600 text-center"></p>
+      </div>
+
+      <div class="flex gap-2">
+        <button type="button" id="btn-pin-cancel" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
+        <button type="submit" id="btn-pin-submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">解鎖檢視</button>
       </div>
     </form>
   </div>
