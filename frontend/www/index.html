@@ -98,8 +98,15 @@
       <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-3">
         <h2 class="font-bold text-slate-700">☁️ 雲端同步設定</h2>
         <div>
-          <label class="text-xs text-slate-500">家庭同步碼（輸入相同代碼即可同步）</label>
-          <input id="input-family-code" type="text" class="w-full border rounded-lg p-2 text-sm mt-1" />
+          <label class="text-xs text-slate-500">家庭同步碼（12-64 字元英數字、- 或 _，輸入相同代碼即可同步）</label>
+          <div class="flex gap-2 mt-1">
+            <input id="input-family-code" type="text" autocomplete="off" class="flex-1 border rounded-lg p-2 text-sm font-mono" />
+            <button id="btn-generate-code" type="button" class="shrink-0 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg font-medium">🎲 產生</button>
+          </div>
+        </div>
+        <div id="api-key-setting-wrap" class="hidden">
+          <label class="text-xs text-slate-500">API 金鑰（若未透過 config.js 注入，請在此填入）</label>
+          <input id="input-api-key" type="password" autocomplete="off" placeholder="請輸入與後端 APP_API_KEY 相符的金鑰" class="w-full border rounded-lg p-2 text-sm mt-1" />
         </div>
         <button id="btn-save-settings" class="w-full py-2 bg-slate-800 text-white rounded-lg text-sm font-medium">儲存並重新同步</button>
       </div>
@@ -186,10 +193,45 @@
     </form>
   </div>
 
+  <script src="./config.js" onerror="window.__APP_CONFIG__ = window.__APP_CONFIG__ || {}"></script>
   <script type="module">
-    import { FamilyAPI } from './api.js';
+    import { FamilyAPI, hasInjectedApiKey } from './api.js';
 
-    let familyCode = localStorage.getItem('familySyncCode') || 'my-family-2026';
+    const FAMILY_CODE_REGEX = /^[A-Za-z0-9_-]{12,64}$/;
+    const FORBIDDEN_FAMILY_CODES = new Set(['my-family-2026']);
+
+    function isValidFamilyCode(code) {
+      return (
+        typeof code === 'string' &&
+        FAMILY_CODE_REGEX.test(code) &&
+        !FORBIDDEN_FAMILY_CODES.has(code)
+      );
+    }
+
+    function generateFamilyCode() {
+      const bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      return `fam-${hex}`;
+    }
+
+    function initFamilyCode() {
+      const saved = (localStorage.getItem('familySyncCode') || '').trim();
+      if (isValidFamilyCode(saved)) return saved;
+      const generated = generateFamilyCode();
+      localStorage.setItem('familySyncCode', generated);
+      return generated;
+    }
+
+    // 建立純文字 DOM 元素的共用輔助函式，徹底避免使用 innerHTML 導致 XSS
+    function createEl(tag, className = '', text = '') {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== '') node.textContent = text;
+      return node;
+    }
+
+    let familyCode = initFamilyCode();
     let appData = { members: [], records: [] };
     let selectedMemberId = null;
     let selectedRange = 'day'; // 'day' | 'week' | 'month' | 'year'
@@ -202,6 +244,16 @@
       el.className = `fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-sm text-white shadow-lg ${isError ? 'bg-rose-600' : 'bg-slate-800'}`;
       setTimeout(() => el.classList.add('hidden'), 2500);
     };
+
+    // 若未透過 config.js 注入 API Key，顯示設定頁的金鑰輸入欄位
+    function initApiKeySettingUI() {
+      const wrap = document.getElementById('api-key-setting-wrap');
+      const input = document.getElementById('input-api-key');
+      if (!hasInjectedApiKey()) {
+        wrap.classList.remove('hidden');
+        input.value = localStorage.getItem('appApiKey') || '';
+      }
+    }
 
     // 依據 日/週/月/年 篩選並計算平均體重
     function aggregateRecords(recs, range) {
@@ -258,6 +310,7 @@
         }
         renderAll();
       } catch (err) {
+        renderAll();
         showToast(err.message, true);
       } finally {
         showLoading(false);
@@ -275,45 +328,71 @@
     function renderOverview() {
       const container = document.getElementById('member-cards');
       if (appData.members.length === 0) {
-        container.innerHTML = `<div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-sm">尚無成員，請先到「⚙️ 設定」新增家人或貓咪。</div>`;
+        const emptyBox = createEl(
+          'div',
+          'bg-white p-6 rounded-2xl text-center text-slate-400 text-sm',
+          '尚無成員，請先到「⚙️ 設定」新增家人或貓咪。'
+        );
+        container.replaceChildren(emptyBox);
         return;
       }
 
-      container.innerHTML = appData.members.map(m => {
+      const cards = appData.members.map(m => {
         const recs = appData.records.filter(r => r.member_id === m.id);
         const latest = recs[recs.length - 1];
         const prev = recs[recs.length - 2];
-        const diff = latest && prev ? (latest.weight_kg - prev.weight_kg).toFixed(2) : null;
+        const diffNum = latest && prev ? Number((latest.weight_kg - prev.weight_kg).toFixed(2)) : null;
+        const diffStr = diffNum !== null ? diffNum.toFixed(2) : null;
         const isCat = m.type === 'cat';
 
-        let badge = '';
-        if (!isCat && latest && m.height_cm) {
-          const bmi = (latest.weight_kg / ((m.height_cm / 100) ** 2)).toFixed(1);
-          badge = `<span class="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">BMI ${bmi}</span>`;
+        const card = createEl(
+          'div',
+          `member-card cursor-pointer active:scale-[0.99] transition bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isCat ? 'border-orange-400' : 'border-teal-500'} flex justify-between items-center`
+        );
+        card.dataset.memberId = String(m.id);
+        card.onclick = () => openProfileModal(m.id);
+
+        const leftWrap = createEl('div');
+        const titleRow = createEl('div', 'flex items-center gap-2');
+        titleRow.appendChild(createEl('span', 'font-bold text-base', `${isCat ? '🐱' : '👤'} ${m.name ?? ''}`));
+
+        if (!isCat && latest && m.height_cm && Number(m.height_cm) > 0) {
+          const bmi = (Number(latest.weight_kg) / ((Number(m.height_cm) / 100) ** 2)).toFixed(1);
+          titleRow.appendChild(createEl('span', 'text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700', `BMI ${bmi}`));
         } else if (m.target_weight) {
-          badge = `<span class="text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700">目標 ${m.target_weight} kg</span>`;
+          titleRow.appendChild(createEl('span', 'text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700', `目標 ${m.target_weight} kg`));
         }
 
-        return `
-          <div data-member-id="${m.id}" class="member-card cursor-pointer active:scale-[0.99] transition bg-white p-4 rounded-2xl shadow-sm border-l-4 ${isCat ? 'border-orange-400' : 'border-teal-500'} flex justify-between items-center">
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="font-bold text-base">${isCat ? '🐱' : '👤'} ${m.name}</span>
-                ${badge}
-              </div>
-              <p class="text-xs text-slate-400 mt-1">${latest ? `最後更新：${latest.recorded_at}` : '尚未有體重紀錄'} · 點擊編輯</p>
-            </div>
-            <div class="text-right">
-              <div class="text-2xl font-bold">${latest ? latest.weight_kg : '--'} <span class="text-xs font-normal text-slate-500">kg</span></div>
-              ${diff !== null ? `<div class="text-xs ${diff > 0 ? 'text-rose-500' : 'text-emerald-600'}">${diff > 0 ? '+' : ''}${diff} kg</div>` : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
+        const subText = createEl(
+          'p',
+          'text-xs text-slate-400 mt-1',
+          `${latest ? `最後更新：${latest.recorded_at}` : '尚未有體重紀錄'} · 點擊編輯`
+        );
+        leftWrap.append(titleRow, subText);
 
-      container.querySelectorAll('.member-card').forEach(card => {
-        card.onclick = () => openProfileModal(card.dataset.memberId);
+        const rightWrap = createEl('div', 'text-right');
+        const weightRow = createEl('div', 'text-2xl font-bold');
+        weightRow.append(
+          document.createTextNode(`${latest ? latest.weight_kg : '--'} `),
+          createEl('span', 'text-xs font-normal text-slate-500', 'kg')
+        );
+        rightWrap.appendChild(weightRow);
+
+        if (diffStr !== null) {
+          rightWrap.appendChild(
+            createEl(
+              'div',
+              `text-xs ${diffNum > 0 ? 'text-rose-500' : 'text-emerald-600'}`,
+              `${diffNum > 0 ? '+' : ''}${diffStr} kg`
+            )
+          );
+        }
+
+        card.append(leftWrap, rightWrap);
+        return card;
       });
+
+      container.replaceChildren(...cards);
     }
 
     function openProfileModal(memberId) {
@@ -331,24 +410,26 @@
 
       let metricLabel = '目標差距';
       let metricVal = '--';
-      if (!isCat && latest && m.height_cm) {
+      if (!isCat && latest && m.height_cm && Number(m.height_cm) > 0) {
         metricLabel = '目前 BMI';
-        metricVal = (latest.weight_kg / ((m.height_cm / 100) ** 2)).toFixed(1);
+        metricVal = (Number(latest.weight_kg) / ((Number(m.height_cm) / 100) ** 2)).toFixed(1);
       } else if (latest && m.target_weight) {
-        const gap = (latest.weight_kg - m.target_weight).toFixed(2);
-        metricVal = `${gap > 0 ? '+' : ''}${gap} kg`;
+        const gapNum = Number((Number(latest.weight_kg) - Number(m.target_weight)).toFixed(2));
+        metricVal = `${gapNum > 0 ? '+' : ''}${gapNum.toFixed(2)} kg`;
       }
 
-      document.getElementById('prof-summary').innerHTML = `
-        <div>
-          <div class="text-xs text-slate-400">最新體重</div>
-          <div class="font-bold text-base text-slate-800">${latest ? `${latest.weight_kg} kg` : '--'}</div>
-        </div>
-        <div>
-          <div class="text-xs text-slate-400">${metricLabel}</div>
-          <div class="font-bold text-base text-teal-700">${metricVal}</div>
-        </div>
-      `;
+      const summary = document.getElementById('prof-summary');
+      const col1 = createEl('div');
+      col1.append(
+        createEl('div', 'text-xs text-slate-400', '最新體重'),
+        createEl('div', 'font-bold text-base text-slate-800', latest ? `${latest.weight_kg} kg` : '--')
+      );
+      const col2 = createEl('div');
+      col2.append(
+        createEl('div', 'text-xs text-slate-400', metricLabel),
+        createEl('div', 'font-bold text-base text-teal-700', metricVal)
+      );
+      summary.replaceChildren(col1, col2);
 
       document.getElementById('btn-prof-to-chart').onclick = () => {
         selectedMemberId = m.id;
@@ -362,15 +443,18 @@
 
     function renderCharts() {
       const pills = document.getElementById('chart-member-pills');
-      pills.innerHTML = appData.members.map(m => `
-        <button data-id="${m.id}" class="pill-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-medium ${m.id === selectedMemberId ? 'bg-teal-600 text-white' : 'bg-white border text-slate-600'}">
-          ${m.type === 'cat' ? '🐱' : '👤'} ${m.name}
-        </button>
-      `).join('');
-
-      pills.querySelectorAll('.pill-btn').forEach(btn => {
-        btn.onclick = () => { selectedMemberId = btn.dataset.id; renderCharts(); };
+      const pillButtons = appData.members.map(m => {
+        const btn = createEl(
+          'button',
+          `pill-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-medium ${m.id === selectedMemberId ? 'bg-teal-600 text-white' : 'bg-white border text-slate-600'}`,
+          `${m.type === 'cat' ? '🐱' : '👤'} ${m.name ?? ''}`
+        );
+        btn.type = 'button';
+        btn.dataset.id = String(m.id);
+        btn.onclick = () => { selectedMemberId = m.id; renderCharts(); };
+        return btn;
       });
+      pills.replaceChildren(...pillButtons);
 
       const member = appData.members.find(m => m.id === selectedMemberId);
       const recs = appData.records.filter(r => r.member_id === selectedMemberId);
@@ -408,45 +492,77 @@
       });
 
       const list = document.getElementById('history-list');
-      list.innerHTML = filteredRecords.slice().reverse().map(r => `
-        <li class="py-2.5 flex justify-between items-center">
-          <div>
-            <span class="font-semibold">${r.weight_kg} kg</span>
-            <span class="text-xs text-slate-400 ml-2">${r.recorded_at}</span>
-            ${r.note ? `<p class="text-xs text-slate-500">${r.note}</p>` : ''}
-          </div>
-          <button data-del-rec="${r.id}" class="text-xs text-rose-500 hover:underline">刪除</button>
-        </li>
-      `).join('') || '<li class="py-3 text-center text-slate-400">此區間尚無紀錄</li>';
+      const reversed = filteredRecords.slice().reverse();
+      if (reversed.length === 0) {
+        list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '此區間尚無紀錄'));
+        return;
+      }
 
-      list.querySelectorAll('[data-del-rec]').forEach(btn => {
-        btn.onclick = async () => {
+      const items = reversed.map(r => {
+        const li = createEl('li', 'py-2.5 flex justify-between items-center');
+        const info = createEl('div');
+        info.append(
+          createEl('span', 'font-semibold', `${r.weight_kg} kg`),
+          createEl('span', 'text-xs text-slate-400 ml-2', String(r.recorded_at ?? ''))
+        );
+        if (r.note) {
+          info.appendChild(createEl('p', 'text-xs text-slate-500', String(r.note)));
+        }
+
+        const delBtn = createEl('button', 'text-xs text-rose-500 hover:underline', '刪除');
+        delBtn.type = 'button';
+        delBtn.onclick = async () => {
           if (!confirm('確定刪除此筆體重紀錄？')) return;
-          await FamilyAPI.deleteRecord(btn.dataset.delRec);
-          showToast('已刪除紀錄');
-          syncData();
+          showLoading(true);
+          try {
+            await FamilyAPI.deleteRecord(familyCode, r.id);
+            showToast('已刪除紀錄');
+            await syncData();
+          } catch (err) {
+            showToast(err.message, true);
+          } finally {
+            showLoading(false);
+          }
         };
+
+        li.append(info, delBtn);
+        return li;
       });
+      list.replaceChildren(...items);
     }
 
     function renderSettingsMembers() {
       const list = document.getElementById('settings-member-list');
-      list.innerHTML = appData.members.map(m => `
-        <li class="py-2.5 flex justify-between items-center">
-          <span>${m.type === 'cat' ? '🐱' : '👤'} ${m.name}</span>
-          <button data-del-mem="${m.id}" class="text-xs text-rose-500 hover:underline">刪除</button>
-        </li>
-      `).join('') || '<li class="py-3 text-center text-slate-400">尚無成員</li>';
+      if (appData.members.length === 0) {
+        list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '尚無成員'));
+        return;
+      }
 
-      list.querySelectorAll('[data-del-mem]').forEach(btn => {
-        btn.onclick = async () => {
+      const items = appData.members.map(m => {
+        const li = createEl('li', 'py-2.5 flex justify-between items-center');
+        li.appendChild(createEl('span', '', `${m.type === 'cat' ? '🐱' : '👤'} ${m.name ?? ''}`));
+
+        const delBtn = createEl('button', 'text-xs text-rose-500 hover:underline', '刪除');
+        delBtn.type = 'button';
+        delBtn.onclick = async () => {
           if (!confirm('刪除成員會連同所有體重紀錄一起刪除，確定嗎？')) return;
-          await FamilyAPI.deleteMember(btn.dataset.delMem);
-          if (selectedMemberId === btn.dataset.delMem) selectedMemberId = null;
-          showToast('已刪除成員');
-          syncData();
+          showLoading(true);
+          try {
+            await FamilyAPI.deleteMember(familyCode, m.id);
+            if (selectedMemberId === m.id) selectedMemberId = null;
+            showToast('已刪除成員');
+            await syncData();
+          } catch (err) {
+            showToast(err.message, true);
+          } finally {
+            showLoading(false);
+          }
         };
+
+        li.appendChild(delBtn);
+        return li;
       });
+      list.replaceChildren(...items);
     }
 
     // 綁定 日/週/月/年 按鈕事件
@@ -488,7 +604,14 @@
 
     document.getElementById('btn-open-record-modal').onclick = () => {
       if (appData.members.length === 0) return showToast('請先到設定頁新增成員', true);
-      document.getElementById('rec-member').innerHTML = appData.members.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+      const select = document.getElementById('rec-member');
+      const options = appData.members.map(m => {
+        const opt = document.createElement('option');
+        opt.value = String(m.id);
+        opt.textContent = String(m.name ?? '');
+        return opt;
+      });
+      select.replaceChildren(...options);
       document.getElementById('rec-date').value = new Date().toISOString().split('T')[0];
       document.getElementById('modal-record').classList.remove('hidden');
     };
@@ -502,8 +625,7 @@
       e.preventDefault();
       showLoading(true);
       try {
-        await FamilyAPI.addRecord({
-          family_code: familyCode,
+        await FamilyAPI.addRecord(familyCode, {
           member_id: document.getElementById('rec-member').value,
           weight_kg: parseFloat(document.getElementById('rec-weight').value),
           recorded_at: document.getElementById('rec-date').value,
@@ -525,8 +647,7 @@
       e.preventDefault();
       showLoading(true);
       try {
-        await FamilyAPI.addMember({
-          family_code: familyCode,
+        await FamilyAPI.addMember(familyCode, {
           name: document.getElementById('mem-name').value.trim(),
           type: document.getElementById('mem-type').value,
           height_cm: parseFloat(document.getElementById('mem-height').value) || null,
@@ -552,7 +673,7 @@
 
       showLoading(true);
       try {
-        await FamilyAPI.updateMember(id, {
+        await FamilyAPI.updateMember(familyCode, id, {
           height_cm: heightVal ? parseFloat(heightVal) : null,
           target_weight: targetVal ? parseFloat(targetVal) : null
         });
@@ -566,9 +687,29 @@
       }
     };
 
-    // 儲存家庭同步碼
+    // 隨機產生新的高強度同步碼
+    document.getElementById('btn-generate-code').onclick = () => {
+      document.getElementById('input-family-code').value = generateFamilyCode();
+      showToast('已產生新同步碼，請點擊儲存生效');
+    };
+
+    // 儲存家庭同步碼（與本機 API 金鑰設定）
     document.getElementById('btn-save-settings').onclick = () => {
-      familyCode = document.getElementById('input-family-code').value.trim() || 'my-family-2026';
+      const nextCode = document.getElementById('input-family-code').value.trim();
+      if (!isValidFamilyCode(nextCode)) {
+        showToast('同步碼需為 12-64 字元英數字、- 或 _，且不可使用舊預設碼', true);
+        return;
+      }
+
+      if (!hasInjectedApiKey()) {
+        const apiKeyVal = document.getElementById('input-api-key').value.trim();
+        if (apiKeyVal) {
+          localStorage.setItem('appApiKey', apiKeyVal);
+        }
+      }
+
+      familyCode = nextCode;
+      selectedMemberId = null;
       localStorage.setItem('familySyncCode', familyCode);
       showToast('設定已儲存');
       syncData();
@@ -578,27 +719,38 @@
     document.getElementById('btn-calc-bmi').onclick = () => {
       const h = parseFloat(document.getElementById('calc-height').value) / 100;
       const w = parseFloat(document.getElementById('calc-weight').value);
-      if (!h || !w) return;
-      const bmi = (w / (h * h)).toFixed(1);
+      if (!(h > 0) || !(w > 0)) return;
+      const bmi = Number((w / (h * h)).toFixed(1));
       const status = bmi < 18.5 ? '過輕' : bmi < 24 ? '正常範圍' : bmi < 27 ? '過重' : '肥胖';
       const el = document.getElementById('bmi-result');
-      el.innerHTML = `BMI：<strong>${bmi}</strong>（${status}）`;
+      el.replaceChildren(
+        document.createTextNode('BMI：'),
+        createEl('strong', '', bmi.toFixed(1)),
+        document.createTextNode(`（${status}）`)
+      );
       el.classList.remove('hidden');
     };
 
     document.getElementById('btn-calc-cat').onclick = () => {
       const w = parseFloat(document.getElementById('calc-cat-weight').value);
       const f = parseFloat(document.getElementById('calc-cat-factor').value);
-      if (!w) return;
+      if (!(w > 0) || !(f > 0)) return;
       const rer = Math.round(70 * Math.pow(w, 0.75));
       const der = Math.round(rer * f);
       const el = document.getElementById('cat-result');
-      el.innerHTML = `基礎代謝 RER：<strong>${rer} kcal</strong><br>每日建議攝取 DER：<strong>${der} kcal</strong>`;
+      el.replaceChildren(
+        document.createTextNode('基礎代謝 RER：'),
+        createEl('strong', '', `${rer} kcal`),
+        document.createElement('br'),
+        document.createTextNode('每日建議攝取 DER：'),
+        createEl('strong', '', `${der} kcal`)
+      );
       el.classList.remove('hidden');
     };
 
     document.getElementById('btn-refresh').onclick = syncData;
 
+    initApiKeySettingUI();
     syncData();
   </script>
 </body>

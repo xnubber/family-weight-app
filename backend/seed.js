@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
@@ -8,8 +9,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 可從指令參數指定同步碼，預設為 my-family-2026
-const FAMILY_CODE = process.argv[2] || 'my-family-2026';
+// 可從指令參數指定同步碼；未指定時自動產生高強度隨機同步碼（禁止使用舊弱預設碼 my-family-2026）
+const FAMILY_CODE_REGEX = /^[A-Za-z0-9_-]{12,64}$/;
+const FAMILY_CODE = process.argv[2] || `fam-${crypto.randomBytes(12).toString('hex')}`;
+if (!FAMILY_CODE_REGEX.test(FAMILY_CODE) || FAMILY_CODE === 'my-family-2026') {
+  console.error('❌ 同步碼格式不符（需為 12-64 字元英數字、- 或 _，且不可使用 my-family-2026）');
+  process.exit(1);
+}
 
 // 預設測試成員與體重趨勢設定
 const MOCK_MEMBERS = [
