@@ -7,6 +7,7 @@ import { renderCharts, initChartRangeControls, resizeChart } from './js/ui/chart
 import { openProfileModal, openMemberModal, initModals, refreshOpenProfileModalIfAny } from './js/ui/modals.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
 import { initPrivacyLifecycle } from './js/utils/privacy.js';
+import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 
 const TAB_ORDER = ['overview', 'charts', 'settings'];
 const PAGE_ANIM_CLASSES = [
@@ -118,6 +119,21 @@ function renderAll() {
   refreshOpenProfileModalIfAny();
 }
 
+function hydrateFromCache() {
+  const cached = loadFamilyCache(state.familyCode);
+  if (!cached) return false;
+  state.appData = {
+    members: cached.members,
+    records: cached.records,
+    targetHistory: cached.targetHistory
+  };
+  if (!state.selectedMemberId && state.appData.members.length > 0) {
+    state.selectedMemberId = state.appData.members[0].id;
+    state.historyPage = 1;
+  }
+  return true;
+}
+
 async function syncData() {
   const reqId = ++syncRequestSeq;
   const targetFamilyCode = state.familyCode;
@@ -140,6 +156,8 @@ async function syncData() {
       records: data.records || [],
       targetHistory: data.targetHistory || []
     };
+    saveFamilyCache(targetFamilyCode, state.appData);
+
     if (!state.selectedMemberId && state.appData.members.length > 0) {
       state.selectedMemberId = state.appData.members[0].id;
       state.historyPage = 1;
@@ -153,7 +171,8 @@ async function syncData() {
     renderAll();
   } catch (err) {
     renderAll();
-    showToast(err.message, true);
+    const hasCachedData = state.appData.members.length > 0;
+    showToast(hasCachedData ? `暫時無法連線雲端，目前顯示本機快取（${err.message}）` : err.message, true);
   } finally {
     if (reqId === syncRequestSeq) {
       isFetching = false;
@@ -173,10 +192,15 @@ window.addEventListener('beforeunload', (e) => {
 // 初始化隱私自動上鎖生命週期（逾時 5 分鐘或切換畫面時自動重新遮蔽體重）
 initPrivacyLifecycle({ onLockChange: renderAll });
 
-// 初始化樂觀更新與背景序列寫入佇列
+// 初始化樂觀更新與背景序列寫入佇列（所有背景寫入完成後同步更新本機快取）
 initSyncQueue({
   onRender: renderAll,
-  onPendingChange: () => refreshSyncIndicator()
+  onPendingChange: (pendingCount) => {
+    refreshSyncIndicator();
+    if (pendingCount === 0) {
+      saveFamilyCache(state.familyCode, state.appData);
+    }
+  }
 });
 
 // 底部導覽列分頁切換
@@ -191,6 +215,7 @@ initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
 initSettings({ onSync: syncData });
 
-// 先渲染本地空畫面讓介面可立即操作，同時背景同步雲端資料
+// Stale-While-Revalidate：先立即載入本機快取秒開畫面，同時背景向雲端拉取最新資料
+hydrateFromCache();
 renderAll();
 syncData();

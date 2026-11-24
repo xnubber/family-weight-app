@@ -4,6 +4,7 @@ import { optimisticDeleteMember } from '../services/syncQueue.js';
 import { createEl, showToast } from '../utils/dom.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { isMemberPrivacyEnabled, lockAllMembers, memberHasPrivacyPin } from '../utils/privacy.js';
+import { clearFamilyCache } from '../utils/cache.js';
 import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
 
 function getMemberTypeLabel(type) {
@@ -84,7 +85,12 @@ export function initSettings({ onSync }) {
       }
     }
 
+    const familyChanged = nextCode !== state.familyCode;
     lockAllMembers(false);
+    if (familyChanged) {
+      clearFamilyCache();
+      state.appData = { members: [], records: [], targetHistory: [] };
+    }
     state.familyCode = nextCode;
     state.selectedMemberId = null;
     state.historyPage = 1;

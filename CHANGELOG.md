@@ -11,7 +11,8 @@
 
 | 日期 | 版本號 | 對應 Commit | 修改內容摘要 |
 | :--- | :--- | :--- | :--- |
-| 2026-11-24 | **v2.4.0** | `v2.4.0` | 正式定名為「**家與毛孩體重誌 · Kin & Paws Weight**」；整合原創「晨露輕秤」品牌圖示（SVG、PWA 192/512px、Apple Touch Icon、Capacitor 自適應圖示母檔與 Web Manifest）並完善 `README.md` |
+| 2026-11-24 | **v2.5.0** | `v2.5.0` | 新增前端本機快取（Stale-While-Revalidate，開 APP 秒開與離線瀏覽、切換同步碼自動清除）與 Supabase 查詢效能複合索引遷移腳本（`004_performance_indexes.sql`） |
+| 2026-11-24 | **v2.4.0** | `fddec7a` | 正式定名為「**家與毛孩體重誌 · Kin & Paws Weight**」；整合原創「晨露輕秤」品牌圖示（SVG、PWA 192/512px、Apple Touch Icon、Capacitor 自適應圖示母檔與 Web Manifest）並完善 `README.md` |
 | 2026-11-24 | **v2.3.0** | `84ad3cd` | 升級全站絲滑轉場體驗：分頁方向性交叉滑動、彈窗上浮漸顯（含 `Esc` 關閉）、提示條漂浮進出與子區塊柔和切換 |
 | 2026-11-24 | **v2.2.0** | `646094d` | 統計折線圖新增長按 260ms＋左右拖曳檢視點位體重（含十字引導線、焦點圓點、X 軸日期標籤與上方即時資訊列），並維持隱私遮蔽 |
 | 2026-11-24 | **v2.1.0** | `77c406c` | 新增個別成員體重隱私遮罩模式與選配個人 4 位數 PIN 密碼鎖（防反推遮罩、`scrypt` 雜湊、限流與自動重新上鎖） |
@@ -31,7 +32,13 @@
 
 ## 各版本詳細變更紀錄
 
+### v2.5.0（2026-11-24）
+- **修改內容**：
+  - 新增前端本機快取模組（`frontend/www/js/utils/cache.js`）採 Stale-While-Revalidate 策略：開啟 APP 立即顯示上次同步資料、背景自動拉取雲端最新資料並更新快取；離線時仍可檢視快取資料，切換家庭同步碼時自動清除舊快取。
+  - 新增 `backend/sql/004_performance_indexes.sql` 複合索引遷移腳本，加速 `members` 與 `weight_records` 查詢與過期資料清理。
+
 ### v2.4.0（2026-11-24）
+- **對應 Commit**：`fddec7a`
 - **修改內容**：
   - 正式定名專案中英文名稱為 **「家與毛孩體重誌 · Kin & Paws Weight」**，同步更新網頁標題、頂部導覽列品牌識別、`manifest.webmanifest`、`package.json` 與 `README.md`。
   - 設計並整合原創「晨露輕秤」品牌圖示：提供主向量圖 `frontend/www/icons/app-icon.svg`、Web/PWA/iOS PNG（180px / 192px / 512px），以及 Capacitor Android/iOS 原生自適應圖示母檔（`frontend/resources/icon-only.png`、`icon-foreground.png`、`icon-background.png`）。
