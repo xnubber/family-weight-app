@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import { isValidFamilyCode } from './src/schemas/validation.js';
+import { FAMILY_CODE_REGEX, isValidFamilyCode } from './src/schemas/validation.js';
 import { getSupabaseClient } from './src/config/supabase.js';
 
 dotenv.config();
@@ -17,22 +17,45 @@ if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
-// 3. 解析參數：要求顯式傳入 --confirm 才會執行清除與寫入
+// 3. 解析參數：支援建立測試資料與 --clean 一鍵清除模式，兩者皆需顯式 --confirm
 const args = process.argv.slice(2);
+const isCleanMode = args.includes('--clean');
 const hasConfirm = args.includes('--confirm');
 const customCode = args.find((arg) => !arg.startsWith('-'));
 
-// 可從指令參數指定同步碼；未指定時自動產生高強度隨機同步碼（禁止使用舊弱預設碼 my-family-2026）
-const FAMILY_CODE = customCode || `fam-${crypto.randomBytes(12).toString('hex')}`;
-if (!isValidFamilyCode(FAMILY_CODE)) {
+if (isCleanMode) {
+  if (!customCode) {
+    console.error('❌ 清除模式必須明確指定要刪除的家庭同步碼，例如：');
+    console.error('   npm run seed:clean -- --confirm my-family-2026');
+    process.exit(1);
+  }
+  // 清除模式允許刪除舊預設碼 my-family-2026，僅檢核基本格式
+  if (!FAMILY_CODE_REGEX.test(customCode)) {
+    console.error('❌ 同步碼格式不符（需為 12-64 字元英數字、- 或 _）');
+    process.exit(1);
+  }
+}
+
+// 建立模式可從指令參數指定同步碼；未指定時自動產生高強度隨機同步碼（禁止新建舊弱預設碼 my-family-2026）
+const FAMILY_CODE = isCleanMode
+  ? customCode
+  : (customCode || `fam-${crypto.randomBytes(12).toString('hex')}`);
+
+if (!isCleanMode && !isValidFamilyCode(FAMILY_CODE)) {
   console.error('❌ 同步碼格式不符（需為 12-64 字元英數字、- 或 _，且不可使用 my-family-2026）');
   process.exit(1);
 }
 
 if (!hasConfirm) {
-  console.warn('⚠️  此腳本會清除指定家庭同步碼下的所有成員與體重紀錄，再寫入測試資料。');
-  console.warn('   若確認執行，請加上 --confirm 參數：');
-  console.warn(`   npm run seed -- --confirm${customCode ? ` ${customCode}` : ''}`);
+  if (isCleanMode) {
+    console.warn(`⚠️  此指令將永久刪除家庭同步碼 [${FAMILY_CODE}] 下的所有成員、體重紀錄與目標體重歷史。`);
+    console.warn('   若確認刪除，請加上 --confirm 參數：');
+    console.warn(`   npm run seed:clean -- --confirm ${FAMILY_CODE}`);
+  } else {
+    console.warn('⚠️  此腳本會清除指定家庭同步碼下的所有成員與體重紀錄，再寫入測試資料。');
+    console.warn('   若確認執行，請加上 --confirm 參數：');
+    console.warn(`   npm run seed -- --confirm${customCode ? ` ${customCode}` : ''}`);
+  }
   process.exit(1);
 }
 
@@ -121,19 +144,66 @@ function generateRecords(memberId, config) {
   return records;
 }
 
+// 徹底清除指定家庭同步碼下的目標體重歷史、體重紀錄與成員資料
+async function clearFamilyData(familyCode) {
+  let deletedHistoryCount = 0;
+  const { data: delHistory, error: histErr } = await supabase
+    .from('target_weight_history')
+    .delete()
+    .eq('family_code', familyCode)
+    .select('id');
+
+  if (histErr) {
+    if (histErr.code !== '42P01' && histErr.code !== 'PGRST205') {
+      console.error('❌ 清除目標體重歷史失敗:', histErr.message);
+      process.exit(1);
+    }
+  } else {
+    deletedHistoryCount = delHistory?.length || 0;
+  }
+
+  const { data: delRecords, error: recErr } = await supabase
+    .from('weight_records')
+    .delete()
+    .eq('family_code', familyCode)
+    .select('id');
+
+  if (recErr) {
+    console.error('❌ 清除體重紀錄失敗:', recErr.message);
+    process.exit(1);
+  }
+
+  const { data: delMembers, error: memErr } = await supabase
+    .from('members')
+    .delete()
+    .eq('family_code', familyCode)
+    .select('id');
+
+  if (memErr) {
+    console.error('❌ 清除成員資料失敗:', memErr.message);
+    process.exit(1);
+  }
+
+  return {
+    members: delMembers?.length || 0,
+    records: delRecords?.length || 0,
+    targetHistory: deletedHistoryCount
+  };
+}
+
+async function runClean() {
+  console.log(`🧹 開始清除家庭同步碼 [${FAMILY_CODE}] 的所有資料...`);
+  const deleted = await clearFamilyData(FAMILY_CODE);
+  console.log(
+    `✅ 清除完成！共刪除 ${deleted.members} 位成員、${deleted.records} 筆體重紀錄、${deleted.targetHistory} 筆目標體重歷史。`
+  );
+}
+
 async function runSeed() {
   console.log(`🚀 開始為家庭同步碼 [${FAMILY_CODE}] 建立測試資料...`);
 
-  // 1. 先清除該同步碼的舊資料（外鍵會自動連動刪除 weight_records 與 target_weight_history）
-  const { error: delError } = await supabase
-    .from('members')
-    .delete()
-    .eq('family_code', FAMILY_CODE);
-
-  if (delError) {
-    console.error('❌ 清除舊資料失敗:', delError.message);
-    process.exit(1);
-  }
+  // 1. 先清除該同步碼的舊資料
+  await clearFamilyData(FAMILY_CODE);
 
   // 2. 寫入測試成員
   const membersToInsert = MOCK_MEMBERS.map(({ name, type, height_cm, target_weight }) => ({
@@ -192,6 +262,11 @@ async function runSeed() {
 
   console.log(`\n🎉 完成！共寫入 ${insertedMembers.length} 位成員、${totalInserted} 筆紀錄。`);
   console.log(`💡 提示：腳本刻意包含 30 天超過兩年的舊資料，可順便驗證後端查詢過濾與自動清理功能。`);
+  console.log(`🧹 若後續想一鍵刪除此批種子資料，請執行：npm run seed:clean -- --confirm ${FAMILY_CODE}`);
 }
 
-runSeed();
+if (isCleanMode) {
+  runClean();
+} else {
+  runSeed();
+}
