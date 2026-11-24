@@ -423,16 +423,66 @@ document.getElementById('btn-open-member-modal').onclick = () => {
   document.getElementById('modal-member').classList.remove('hidden');
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidRecordedDate(dateStr) {
+  if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const parsed = new Date(Date.UTC(y, m - 1, d));
+  if (
+    parsed.getUTCFullYear() !== y ||
+    parsed.getUTCMonth() + 1 !== m ||
+    parsed.getUTCDate() !== d
+  ) {
+    return false;
+  }
+  const minTime = Date.UTC(2000, 0, 1);
+  const maxTime = Date.now() + 2 * 24 * 60 * 60 * 1000;
+  return parsed.getTime() >= minTime && parsed.getTime() <= maxTime;
+}
+
+// 嚴格解析數字欄位（使用 Number() 避免 parseFloat 接受 "65abc"，且不讓 0 或 NaN 靜默轉為 null）
+function parseStrictNumber(raw, { required = false, min, max, label }) {
+  const trimmed = String(raw ?? '').trim();
+  if (trimmed === '') {
+    if (required) return { error: `${label}不可為空` };
+    return { value: null };
+  }
+  const num = Number(trimmed);
+  if (!Number.isFinite(num)) {
+    return { error: `${label}必須為有效數字` };
+  }
+  if (num < min || num > max) {
+    return { error: `${label}須介於 ${min}–${max}` };
+  }
+  return { value: num };
+}
+
 // 表單送出：新增體重
 document.getElementById('form-record').onsubmit = async (e) => {
   e.preventDefault();
+  const memberId = document.getElementById('rec-member').value.trim();
+  const weightParsed = parseStrictNumber(document.getElementById('rec-weight').value, {
+    required: true,
+    min: 0.1,
+    max: 500,
+    label: '體重 (kg)'
+  });
+  const recordedAt = document.getElementById('rec-date').value.trim();
+  const note = document.getElementById('rec-note').value.trim();
+
+  if (!UUID_REGEX.test(memberId)) return showToast('請選擇有效的成員', true);
+  if (weightParsed.error) return showToast(weightParsed.error, true);
+  if (!isValidRecordedDate(recordedAt)) return showToast('日期格式不正確或超出合理範圍', true);
+  if (note.length > 200) return showToast('備註不可超過 200 字元', true);
+
   showLoading(true);
   try {
     await FamilyAPI.addRecord(familyCode, {
-      member_id: document.getElementById('rec-member').value,
-      weight_kg: parseFloat(document.getElementById('rec-weight').value),
-      recorded_at: document.getElementById('rec-date').value,
-      note: document.getElementById('rec-note').value.trim()
+      member_id: memberId,
+      weight_kg: weightParsed.value,
+      recorded_at: recordedAt,
+      note
     });
     document.getElementById('modal-record').classList.add('hidden');
     e.target.reset();
@@ -448,13 +498,33 @@ document.getElementById('form-record').onsubmit = async (e) => {
 // 表單送出：新增成員
 document.getElementById('form-member').onsubmit = async (e) => {
   e.preventDefault();
+  const name = document.getElementById('mem-name').value.trim();
+  const type = document.getElementById('mem-type').value;
+  const heightParsed = parseStrictNumber(document.getElementById('mem-height').value, {
+    required: false,
+    min: 20,
+    max: 300,
+    label: '身高 (cm)'
+  });
+  const targetParsed = parseStrictNumber(document.getElementById('mem-target').value, {
+    required: false,
+    min: 0.1,
+    max: 500,
+    label: '目標體重 (kg)'
+  });
+
+  if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
+  if (type !== 'human' && type !== 'cat') return showToast('成員類型不正確', true);
+  if (heightParsed.error) return showToast(heightParsed.error, true);
+  if (targetParsed.error) return showToast(targetParsed.error, true);
+
   showLoading(true);
   try {
     await FamilyAPI.addMember(familyCode, {
-      name: document.getElementById('mem-name').value.trim(),
-      type: document.getElementById('mem-type').value,
-      height_cm: parseFloat(document.getElementById('mem-height').value) || null,
-      target_weight: parseFloat(document.getElementById('mem-target').value) || null
+      name,
+      type,
+      height_cm: type === 'cat' ? null : heightParsed.value,
+      target_weight: targetParsed.value
     });
     document.getElementById('modal-member').classList.add('hidden');
     e.target.reset();
@@ -470,15 +540,29 @@ document.getElementById('form-member').onsubmit = async (e) => {
 // 表單送出：更新個人資訊
 document.getElementById('form-profile').onsubmit = async (e) => {
   e.preventDefault();
-  const id = document.getElementById('prof-id').value;
-  const heightVal = document.getElementById('prof-height').value;
-  const targetVal = document.getElementById('prof-target').value;
+  const id = document.getElementById('prof-id').value.trim();
+  const heightParsed = parseStrictNumber(document.getElementById('prof-height').value, {
+    required: false,
+    min: 20,
+    max: 300,
+    label: '身高 (cm)'
+  });
+  const targetParsed = parseStrictNumber(document.getElementById('prof-target').value, {
+    required: false,
+    min: 0.1,
+    max: 500,
+    label: '目標體重 (kg)'
+  });
+
+  if (!UUID_REGEX.test(id)) return showToast('無效的成員識別碼', true);
+  if (heightParsed.error) return showToast(heightParsed.error, true);
+  if (targetParsed.error) return showToast(targetParsed.error, true);
 
   showLoading(true);
   try {
     await FamilyAPI.updateMember(familyCode, id, {
-      height_cm: heightVal ? parseFloat(heightVal) : null,
-      target_weight: targetVal ? parseFloat(targetVal) : null
+      height_cm: heightParsed.value,
+      target_weight: targetParsed.value
     });
     document.getElementById('modal-profile').classList.add('hidden');
     showToast('個人資訊已更新');

@@ -59,10 +59,10 @@ function isValidRecordedDate(dateStr) {
   return parsed.getTime() >= minTime && parsed.getTime() <= maxTime;
 }
 
-// Zod 輸入驗證 Schema
+// Zod 嚴格輸入驗證 Schema（z.strictObject 拒絕任何未定義的額外欄位，防止 Mass Assignment）
 const uuidSchema = z.uuid('無效的資源識別碼');
 
-const createMemberSchema = z.object({
+const createMemberSchema = z.strictObject({
   family_code: z.string().optional(),
   name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元'),
   type: z.enum(['human', 'cat'], { message: '成員類型必須為 human 或 cat' }),
@@ -83,7 +83,7 @@ const createMemberSchema = z.object({
 });
 
 const updateMemberSchema = z
-  .object({
+  .strictObject({
     height_cm: z
       .number({ message: '身高必須為數字' })
       .finite('身高必須為有效數值')
@@ -104,7 +104,7 @@ const updateMemberSchema = z
     { message: '至少需提供身高或目標體重其中一項欄位' }
   );
 
-const createRecordSchema = z.object({
+const createRecordSchema = z.strictObject({
   family_code: z.string().optional(),
   member_id: uuidSchema,
   weight_kg: z
@@ -125,6 +125,13 @@ const createRecordSchema = z.object({
     .optional()
     .transform((v) => v ?? '')
 });
+
+function formatZodError(error) {
+  const first = error?.issues?.[0];
+  if (!first) return '請求欄位格式不正確';
+  if (first.code === 'unrecognized_keys') return '請求包含不允許的額外欄位';
+  return first.message || '請求欄位格式不正確';
+}
 
 // 使用 SHA-256 + timingSafeEqual 進行常數時間金鑰比對，避免計時側通道與長度洩漏
 function safeEqual(a, b) {
@@ -347,7 +354,7 @@ app.get('/api/families/:familyCode/data', asyncHandler(async (req, res) => {
 app.post('/api/members', asyncHandler(async (req, res) => {
   const parsed = createMemberSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.issues[0]?.message || '請求欄位格式不正確' });
+    return res.status(400).json({ error: formatZodError(parsed.error) });
   }
 
   const { family_code, name, type, height_cm, target_weight } = parsed.data;
@@ -388,7 +395,7 @@ app.put('/api/members/:id', asyncHandler(async (req, res) => {
 
   const bodyParsed = updateMemberSchema.safeParse(req.body);
   if (!bodyParsed.success) {
-    return res.status(400).json({ error: bodyParsed.error.issues[0]?.message || '請求欄位格式不正確' });
+    return res.status(400).json({ error: formatZodError(bodyParsed.error) });
   }
 
   const resolved = resolveFamilyCode(req);
@@ -460,7 +467,7 @@ app.delete('/api/members/:id', asyncHandler(async (req, res) => {
 app.post('/api/records', asyncHandler(async (req, res) => {
   const parsed = createRecordSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.issues[0]?.message || '請求欄位格式不正確' });
+    return res.status(400).json({ error: formatZodError(parsed.error) });
   }
 
   const { family_code, member_id, weight_kg, recorded_at, note } = parsed.data;
