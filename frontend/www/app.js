@@ -37,7 +37,12 @@ function renderAll() {
 async function syncData() {
   showLoading(true);
   try {
-    state.appData = await FamilyAPI.getAllData(state.familyCode);
+    const data = await FamilyAPI.getAllData(state.familyCode);
+    state.appData = {
+      members: data.members || [],
+      records: data.records || [],
+      targetHistory: data.targetHistory || []
+    };
     if (!state.selectedMemberId && state.appData.members.length > 0) {
       state.selectedMemberId = state.appData.members[0].id;
     }

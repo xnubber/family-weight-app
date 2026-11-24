@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { FamilyAPI } from '../services/api.js';
 import { createEl, showLoading, showToast } from '../utils/dom.js';
-import { aggregateRecords } from '../utils/metrics.js';
+import { aggregateRecords, resolveTargetWeightSeries } from '../utils/metrics.js';
 
 let chartInstance = null;
 
@@ -25,7 +25,8 @@ export function renderCharts({ onSync }) {
 
   const member = state.appData.members.find((m) => m.id === state.selectedMemberId);
   const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
-  const { labels, values, filteredRecords } = aggregateRecords(recs, state.selectedRange);
+  const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
+  const { labels, values, pointDates, filteredRecords } = aggregateRecords(recs, state.selectedRange);
 
   const ctx = document.getElementById('weightChart').getContext('2d');
   if (chartInstance) chartInstance.destroy();
@@ -40,14 +41,22 @@ export function renderCharts({ onSync }) {
     tension: 0.3
   }];
 
-  if (member?.target_weight && labels.length > 0) {
+  const targetSeries = resolveTargetWeightSeries(pointDates, memberHistory, member);
+  if (targetSeries.hasAnyTarget && labels.length > 0) {
+    const targetLabel = member?.target_weight
+      ? `目標體重（目前 ${member.target_weight} kg）`
+      : '歷史目標體重 (kg)';
     datasets.push({
-      label: `目標體重 (${member.target_weight} kg)`,
-      data: labels.map(() => Number(member.target_weight)),
+      label: targetLabel,
+      data: targetSeries.values,
       borderColor: '#94a3b8',
+      backgroundColor: '#94a3b8',
       borderWidth: 2,
       borderDash: [6, 6],
-      pointRadius: 0,
+      stepped: 'before',
+      spanGaps: false,
+      pointRadius: targetSeries.pointRadii,
+      pointHoverRadius: 4,
       fill: false
     });
   }

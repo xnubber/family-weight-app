@@ -10,7 +10,7 @@ function initFamilyCode() {
 
 export const state = {
   familyCode: initFamilyCode(),
-  appData: { members: [], records: [] },
+  appData: { members: [], records: [], targetHistory: [] },
   selectedMemberId: null,
   selectedRange: 'day' // 'day' | 'week' | 'month' | 'year'
 };

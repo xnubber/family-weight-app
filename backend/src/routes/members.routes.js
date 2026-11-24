@@ -8,9 +8,32 @@ import {
   formatZodError
 } from '../schemas/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { getTodayDate } from '../utils/date.js';
 import logger from '../utils/logger.js';
 
 const router = Router();
+
+function normalizeTargetWeight(value) {
+  if (value === null || value === undefined) return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+async function appendTargetHistory(supabase, { familyCode, memberId, targetWeight, effectiveDate }) {
+  const { error } = await supabase.from('target_weight_history').insert({
+    family_code: familyCode,
+    member_id: memberId,
+    target_weight: targetWeight,
+    effective_date: effectiveDate || getTodayDate()
+  });
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205') {
+      logger.warn('尚未建立 target_weight_history 資料表，略過寫入目標體重歷史');
+    } else {
+      logger.warn('寫入目標體重歷史紀錄失敗', { memberId, error: error.message });
+    }
+  }
+}
 
 // 新增成員
 router.post('/', asyncHandler(async (req, res) => {
@@ -19,7 +42,7 @@ router.post('/', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: formatZodError(parsed.error) });
   }
 
-  const { family_code, name, type, height_cm, target_weight } = parsed.data;
+  const { family_code, name, type, height_cm, target_weight, target_effective_date } = parsed.data;
   const resolved = resolveFamilyCode(req, family_code);
   if (resolved.errorStatus) {
     return res.status(resolved.errorStatus).json({ error: resolved.errorMessage });
@@ -42,6 +65,16 @@ router.post('/', asyncHandler(async (req, res) => {
   if (error) {
     logger.error('新增成員失敗', { error: error.message });
     return res.status(500).json({ error: '新增成員失敗，請稍後再試' });
+  }
+
+  // 若建立成員時已設定目標體重，同步記錄初始生效日期
+  if (data.target_weight !== null && data.target_weight !== undefined) {
+    await appendTargetHistory(supabase, {
+      familyCode,
+      memberId: data.id,
+      targetWeight: normalizeTargetWeight(data.target_weight),
+      effectiveDate: target_effective_date || getTodayDate()
+    });
   }
 
   logger.info('新增成員成功', { id: data.id, type });
@@ -67,12 +100,29 @@ router.put('/:id', asyncHandler(async (req, res) => {
   }
   const { familyCode } = resolved;
 
+  const supabase = getSupabaseClient();
+  // 先讀取原目標體重，僅在目標體重實際變更時才新增歷史紀錄
+  const { data: existing, error: fetchErr } = await supabase
+    .from('members')
+    .select('id, target_weight')
+    .eq('id', id)
+    .eq('family_code', familyCode)
+    .maybeSingle();
+
+  if (fetchErr) {
+    logger.error('讀取原成員資料失敗', { id, error: fetchErr.message });
+    return res.status(500).json({ error: '更新成員資料失敗，請稍後再試' });
+  }
+  if (!existing) {
+    logger.warn('更新成員遭拒（找不到成員或非所屬家庭）', { id, ip: req.ip });
+    return res.status(404).json({ error: '找不到成員或無權限修改' });
+  }
+
   const updatePayload = {};
   if (bodyParsed.data.name !== undefined) updatePayload.name = bodyParsed.data.name;
   if (bodyParsed.data.height_cm !== undefined) updatePayload.height_cm = bodyParsed.data.height_cm;
   if (bodyParsed.data.target_weight !== undefined) updatePayload.target_weight = bodyParsed.data.target_weight;
 
-  const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from('members')
     .update(updatePayload)
@@ -88,6 +138,19 @@ router.put('/:id', asyncHandler(async (req, res) => {
   if (!data) {
     logger.warn('更新成員遭拒（找不到成員或非所屬家庭）', { id, ip: req.ip });
     return res.status(404).json({ error: '找不到成員或無權限修改' });
+  }
+
+  if (bodyParsed.data.target_weight !== undefined) {
+    const prevTarget = normalizeTargetWeight(existing.target_weight);
+    const nextTarget = normalizeTargetWeight(bodyParsed.data.target_weight);
+    if (prevTarget !== nextTarget) {
+      await appendTargetHistory(supabase, {
+        familyCode,
+        memberId: id,
+        targetWeight: nextTarget,
+        effectiveDate: bodyParsed.data.target_effective_date || getTodayDate()
+      });
+    }
   }
 
   logger.info('更新成員資料成功', { id });

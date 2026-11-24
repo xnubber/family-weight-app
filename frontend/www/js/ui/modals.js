@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { FamilyAPI } from '../services/api.js';
 import { createEl, showLoading, showToast } from '../utils/dom.js';
-import { calculateBmi } from '../utils/metrics.js';
+import { calculateBmi, getLocalTodayDate } from '../utils/metrics.js';
 import { UUID_REGEX, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
 
 // 開啟新增體重彈窗（可指定預選成員）
@@ -22,7 +22,7 @@ export function openRecordModal(preselectedMemberId = null) {
 
   document.getElementById('rec-weight').value = '';
   document.getElementById('rec-note').value = '';
-  document.getElementById('rec-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('rec-date').value = getLocalTodayDate();
   document.getElementById('modal-record').classList.remove('hidden');
   document.getElementById('rec-weight').focus();
 }
@@ -257,7 +257,8 @@ export function initModals({ onSync }) {
         await FamilyAPI.updateMember(state.familyCode, editId, {
           name,
           height_cm: heightParsed.value,
-          target_weight: targetParsed.value
+          target_weight: targetParsed.value,
+          target_effective_date: getLocalTodayDate()
         });
         showToast('成員資料已更新');
       } else {
@@ -265,7 +266,8 @@ export function initModals({ onSync }) {
           name,
           type,
           height_cm: heightParsed.value,
-          target_weight: targetParsed.value
+          target_weight: targetParsed.value,
+          target_effective_date: getLocalTodayDate()
         });
         showToast('成員已新增');
       }
@@ -311,7 +313,8 @@ export function initModals({ onSync }) {
       await FamilyAPI.updateMember(state.familyCode, id, {
         name,
         height_cm: heightParsed.value,
-        target_weight: targetParsed.value
+        target_weight: targetParsed.value,
+        target_effective_date: getLocalTodayDate()
       });
       document.getElementById('modal-profile').classList.add('hidden');
       showToast('個人資訊已更新');

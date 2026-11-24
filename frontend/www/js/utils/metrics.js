@@ -1,4 +1,13 @@
-// 依據 日/週/月/年 篩選並計算平均體重
+// 取得使用者裝置當地日期字串 (YYYY-MM-DD)，避免 UTC 時差造成設定日期偏移一天
+export function getLocalTodayDate() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// 依據 日/週/月/年 篩選並計算平均體重，同時保留每個 X 軸點對應的代表日期 pointDates
 export function aggregateRecords(recs, range) {
   const now = new Date();
   const cutoff = new Date();
@@ -15,6 +24,7 @@ export function aggregateRecords(recs, range) {
     return {
       labels: filtered.map((r) => r.recorded_at.slice(5)),
       values: filtered.map((r) => Number(r.weight_kg)),
+      pointDates: filtered.map((r) => r.recorded_at),
       filteredRecords: filtered
     };
   }
@@ -30,18 +40,86 @@ export function aggregateRecords(recs, range) {
     } else {
       key = r.recorded_at.slice(0, 7);
     }
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(Number(r.weight_kg));
+    if (!groups[key]) {
+      groups[key] = { values: [], maxDate: r.recorded_at };
+    }
+    groups[key].values.push(Number(r.weight_kg));
+    if (r.recorded_at > groups[key].maxDate) {
+      groups[key].maxDate = r.recorded_at;
+    }
   });
 
   const labels = Object.keys(groups);
   const values = labels.map((k) => {
-    const arr = groups[k];
+    const arr = groups[k].values;
     const avg = arr.reduce((sum, v) => sum + v, 0) / arr.length;
     return Number(avg.toFixed(2));
   });
+  const pointDates = labels.map((k) => groups[k].maxDate);
 
-  return { labels, values, filteredRecords: filtered };
+  return { labels, values, pointDates, filteredRecords: filtered };
+}
+
+/**
+ * 依據目標體重歷史紀錄計算每個圖表日期點當下生效的目標體重：
+ * - 在首次設定當天（effective_date）之前的日期回傳 null（圖表不顯示目標線）
+ * - 未來變更目標體重時，僅影響新 effective_date 當天與之後的點，過去維持原目標值
+ * - 若某天清除目標體重（target_weight = null），則該日起顯示為 null，過去仍保留歷史目標線
+ */
+export function resolveTargetWeightSeries(pointDates, memberHistory = [], member = null) {
+  let sorted = (memberHistory || [])
+    .filter((h) => typeof h?.effective_date === 'string' && h.effective_date.length >= 10)
+    .map((h) => ({
+      effective_date: h.effective_date.slice(0, 10),
+      created_at: String(h.created_at || ''),
+      target_weight: h.target_weight === null || h.target_weight === undefined
+        ? null
+        : Number(h.target_weight)
+    }))
+    .sort((a, b) => {
+      if (a.effective_date !== b.effective_date) {
+        return a.effective_date.localeCompare(b.effective_date);
+      }
+      return a.created_at.localeCompare(b.created_at);
+    });
+
+  // 相容尚未執行 SQL 遷移的舊資料：若無歷史表紀錄但成員已有目標體重，以建立日作為生效日
+  if (sorted.length === 0 && member?.target_weight !== null && member?.target_weight !== undefined) {
+    const fallbackDate = typeof member.created_at === 'string' && member.created_at.length >= 10
+      ? member.created_at.slice(0, 10)
+      : getLocalTodayDate();
+    sorted = [{
+      effective_date: fallbackDate,
+      created_at: '',
+      target_weight: Number(member.target_weight)
+    }];
+  }
+
+  const values = pointDates.map((dateStr) => {
+    let activeTarget = null;
+    for (const entry of sorted) {
+      if (entry.effective_date <= dateStr) {
+        activeTarget = entry.target_weight;
+      } else {
+        break;
+      }
+    }
+    return activeTarget;
+  });
+
+  // 若目標線段只有孤立單點（例如今天剛設定目標且只有今天一筆紀錄），顯示小圓點避免圖表上看不見
+  const pointRadii = values.map((val, idx) => {
+    if (val === null) return 0;
+    const prevIsNull = idx === 0 || values[idx - 1] === null;
+    const nextIsNull = idx === values.length - 1 || values[idx + 1] === null;
+    return prevIsNull && nextIsNull ? 4 : 0;
+  });
+
+  return {
+    values,
+    pointRadii,
+    hasAnyTarget: values.some((v) => v !== null)
+  };
 }
 
 export function calculateBmi(weightKg, heightCm) {

@@ -47,7 +47,11 @@ const MOCK_MEMBERS = [
     target_weight: 72.0,
     startWeight: 78.5,
     endWeight: 73.2, // 模擬兩年內緩慢減重
-    fluctuation: 0.6
+    fluctuation: 0.6,
+    targetHistory: [
+      { daysAgo: 180, target_weight: 75.0 },
+      { daysAgo: 45, target_weight: 72.0 }
+    ]
   },
   {
     name: '媽媽',
@@ -56,7 +60,10 @@ const MOCK_MEMBERS = [
     target_weight: 53.0,
     startWeight: 54.0,
     endWeight: 53.5, // 模擬維持體重
-    fluctuation: 0.4
+    fluctuation: 0.4,
+    targetHistory: [
+      { daysAgo: 120, target_weight: 53.0 }
+    ]
   },
   {
     name: '橘貓咪咪',
@@ -65,7 +72,10 @@ const MOCK_MEMBERS = [
     target_weight: 4.5,
     startWeight: 4.1,
     endWeight: 4.85, // 模擬貓咪慢慢變胖
-    fluctuation: 0.12
+    fluctuation: 0.12,
+    targetHistory: [
+      { daysAgo: 60, target_weight: 4.5 }
+    ]
   }
 ];
 
@@ -73,6 +83,12 @@ const NOTES = ['', '', '', '', '飯前量測', '剛運動完', '換新飼料', '
 
 function formatDate(date) {
   return date.toISOString().split('T')[0];
+}
+
+function getDateDaysAgo(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return formatDate(d);
 }
 
 // 產生近 760 天（約 2 年 + 1 個月）的平滑隨機體重資料
@@ -108,7 +124,7 @@ function generateRecords(memberId, config) {
 async function runSeed() {
   console.log(`🚀 開始為家庭同步碼 [${FAMILY_CODE}] 建立測試資料...`);
 
-  // 1. 先清除該同步碼的舊資料（外鍵會自動連動刪除 weight_records）
+  // 1. 先清除該同步碼的舊資料（外鍵會自動連動刪除 weight_records 與 target_weight_history）
   const { error: delError } = await supabase
     .from('members')
     .delete()
@@ -138,8 +154,9 @@ async function runSeed() {
     process.exit(1);
   }
 
-  // 3. 為每位成員產生並批次寫入體重紀錄
+  // 3. 為每位成員產生並批次寫入體重紀錄與目標體重歷史
   let totalInserted = 0;
+  const historyRows = [];
   for (let i = 0; i < insertedMembers.length; i++) {
     const member = insertedMembers[i];
     const config = MOCK_MEMBERS[i];
@@ -151,8 +168,26 @@ async function runSeed() {
       process.exit(1);
     }
 
+    for (const h of config.targetHistory || []) {
+      historyRows.push({
+        family_code: FAMILY_CODE,
+        member_id: member.id,
+        target_weight: h.target_weight,
+        effective_date: getDateDaysAgo(h.daysAgo)
+      });
+    }
+
     totalInserted += records.length;
     console.log(`✅ 已建立 ${member.name}（${member.type}）：${records.length} 筆體重紀錄`);
+  }
+
+  if (historyRows.length > 0) {
+    const { error: histErr } = await supabase.from('target_weight_history').insert(historyRows);
+    if (histErr) {
+      console.warn('⚠️  寫入 target_weight_history 略過（請確認已執行 backend/sql/001_target_weight_history.sql）:', histErr.message);
+    } else {
+      console.log(`✅ 已建立 ${historyRows.length} 筆目標體重歷史紀錄`);
+    }
   }
 
   console.log(`\n🎉 完成！共寫入 ${insertedMembers.length} 位成員、${totalInserted} 筆紀錄。`);

@@ -33,6 +33,11 @@ export const createMemberSchema = z.strictObject({
     .min(0.1, '目標體重須介於 0.1–500 kg')
     .max(500, '目標體重須介於 0.1–500 kg')
     .nullable()
+    .optional(),
+  target_effective_date: z
+    .string()
+    .trim()
+    .refine(isValidRecordedDate, '目標體重生效日期格式不正確或超出合理範圍')
     .optional()
 });
 
@@ -52,6 +57,11 @@ export const updateMemberSchema = z
       .min(0.1, '目標體重須介於 0.1–500 kg')
       .max(500, '目標體重須介於 0.1–500 kg')
       .nullable()
+      .optional(),
+    target_effective_date: z
+      .string()
+      .trim()
+      .refine(isValidRecordedDate, '目標體重生效日期格式不正確或超出合理範圍')
       .optional()
   })
   .refine(
