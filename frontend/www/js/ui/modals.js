@@ -326,6 +326,7 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
 
   document.getElementById('btn-prof-to-chart').onclick = () => {
     state.selectedMemberId = m.id;
+    state.historyPage = 1;
     document.getElementById('modal-profile').classList.add('hidden');
     onNavigateToChart();
   };

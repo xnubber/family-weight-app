@@ -61,8 +61,12 @@
         <canvas id="weightChart" height="220"></canvas>
       </div>
       <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-        <h3 class="font-bold text-sm text-slate-600 mb-3">歷史紀錄</h3>
+        <div class="flex items-center justify-between gap-2 mb-3">
+          <h3 class="font-bold text-sm text-slate-600">歷史紀錄</h3>
+          <span id="history-count" class="text-xs text-slate-400 tabular-nums"></span>
+        </div>
         <ul id="history-list" class="divide-y divide-slate-100 text-sm"></ul>
+        <div id="history-pagination" class="hidden pt-3 mt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs"></div>
       </div>
     </section>
 

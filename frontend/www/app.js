@@ -64,11 +64,13 @@ async function syncData() {
     };
     if (!state.selectedMemberId && state.appData.members.length > 0) {
       state.selectedMemberId = state.appData.members[0].id;
+      state.historyPage = 1;
     } else if (
       state.selectedMemberId &&
       !state.appData.members.some((m) => m.id === state.selectedMemberId)
     ) {
       state.selectedMemberId = state.appData.members[0]?.id ?? null;
+      state.historyPage = 1;
     }
     renderAll();
   } catch (err) {

@@ -10,6 +10,7 @@ import {
   getDaysSinceLastRecord
 } from '../utils/metrics.js';
 
+const HISTORY_PAGE_SIZE = 10;
 let chartInstance = null;
 
 function createStatCell(labelText, valueText, valueClass = 'text-slate-800') {
@@ -118,6 +119,151 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
   container.replaceChildren(...blocks);
 }
 
+function createPagerButton(label, ariaLabel, disabled, onClick, compact = false) {
+  const btn = createEl(
+    'button',
+    `${compact ? 'px-2' : 'px-2.5'} py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-medium whitespace-nowrap`,
+    label
+  );
+  btn.type = 'button';
+  btn.disabled = disabled;
+  btn.setAttribute('aria-label', ariaLabel);
+  if (!disabled) {
+    btn.onclick = onClick;
+  }
+  return btn;
+}
+
+function renderHistoryList(member, memberHistory, filteredRecords) {
+  const list = document.getElementById('history-list');
+  const countEl = document.getElementById('history-count');
+  const pagerEl = document.getElementById('history-pagination');
+
+  const reversed = filteredRecords.slice().reverse();
+  const total = reversed.length;
+
+  if (total === 0) {
+    state.historyPage = 1;
+    if (countEl) countEl.textContent = '';
+    list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '此區間尚無紀錄'));
+    if (pagerEl) {
+      pagerEl.classList.add('hidden');
+      pagerEl.replaceChildren();
+    }
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
+  state.historyPage = Math.min(Math.max(1, Number(state.historyPage) || 1), totalPages);
+
+  const startIdx = (state.historyPage - 1) * HISTORY_PAGE_SIZE;
+  const endIdx = Math.min(startIdx + HISTORY_PAGE_SIZE, total);
+  const pageRecords = reversed.slice(startIdx, endIdx);
+
+  if (countEl) {
+    countEl.textContent = totalPages > 1
+      ? `第 ${startIdx + 1}–${endIdx} 筆 / 共 ${total} 筆`
+      : `共 ${total} 筆`;
+  }
+
+  // 僅針對目前分頁顯示的紀錄計算「當下生效的目標體重」，與趨勢圖表規則完全一致
+  const recordTargetSeries = resolveTargetWeightSeries(
+    pageRecords.map((r) => r.recorded_at),
+    memberHistory,
+    member
+  );
+
+  const items = pageRecords.map((r, idx) => {
+    const li = createEl('li', 'py-2.5 flex justify-between items-center gap-2');
+    const info = createEl('div', 'min-w-0 flex-1');
+
+    const topRow = createEl('div', 'flex items-baseline flex-wrap gap-x-2 gap-y-0.5');
+    topRow.append(
+      createEl('span', 'w-20 shrink-0 font-semibold text-slate-800 tabular-nums', `${r.weight_kg} kg`),
+      createEl('span', 'w-20 shrink-0 text-xs text-slate-400 tabular-nums', String(r.recorded_at ?? ''))
+    );
+
+    const activeTarget = recordTargetSeries.values[idx];
+    const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
+    if (targetGap) {
+      const gapColor = targetGap.isAchieved
+        ? 'text-emerald-600'
+        : targetGap.gap > 0
+          ? 'text-amber-600'
+          : 'text-teal-600';
+      topRow.appendChild(
+        createEl('span', `text-xs font-medium tabular-nums shrink-0 ${gapColor}`, targetGap.compactLabel)
+      );
+    }
+
+    info.appendChild(topRow);
+
+    if (r.note) {
+      info.appendChild(createEl('p', 'text-xs text-slate-500 mt-0.5 break-words', String(r.note)));
+    }
+
+    const delBtn = createEl(
+      'button',
+      'shrink-0 whitespace-nowrap text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg',
+      '刪除'
+    );
+    delBtn.type = 'button';
+    delBtn.onclick = () => {
+      if (!confirm('確定刪除此筆體重紀錄？')) return;
+      optimisticDeleteRecord(r.id);
+      showToast('已刪除紀錄');
+    };
+
+    li.append(info, delBtn);
+    return li;
+  });
+  list.replaceChildren(...items);
+
+  if (!pagerEl) return;
+  if (totalPages <= 1) {
+    pagerEl.classList.add('hidden');
+    pagerEl.replaceChildren();
+    return;
+  }
+
+  const goToPage = (targetPage) => {
+    state.historyPage = targetPage;
+    renderHistoryList(member, memberHistory, filteredRecords);
+  };
+
+  const isFirst = state.historyPage <= 1;
+  const isLast = state.historyPage >= totalPages;
+
+  const leftGroup = createEl('div', 'flex items-center gap-1');
+  if (totalPages > 2) {
+    leftGroup.appendChild(
+      createPagerButton('«', '第一頁', isFirst, () => goToPage(1), true)
+    );
+  }
+  leftGroup.appendChild(
+    createPagerButton('‹ 上一頁', '上一頁', isFirst, () => goToPage(state.historyPage - 1))
+  );
+
+  const pageLabel = createEl(
+    'span',
+    'text-slate-500 font-medium tabular-nums whitespace-nowrap',
+    totalPages > 2 ? `${state.historyPage} / ${totalPages} 頁` : `第 ${state.historyPage} / ${totalPages} 頁`
+  );
+
+  const rightGroup = createEl('div', 'flex items-center gap-1');
+  rightGroup.appendChild(
+    createPagerButton('下一頁 ›', '下一頁', isLast, () => goToPage(state.historyPage + 1))
+  );
+  if (totalPages > 2) {
+    rightGroup.appendChild(
+      createPagerButton('»', '最後一頁', isLast, () => goToPage(totalPages), true)
+    );
+  }
+
+  pagerEl.classList.remove('hidden');
+  pagerEl.replaceChildren(leftGroup, pageLabel, rightGroup);
+}
+
 export function renderCharts() {
   const pills = document.getElementById('chart-member-pills');
   const pillButtons = state.appData.members.map((m) => {
@@ -129,8 +275,11 @@ export function renderCharts() {
     btn.type = 'button';
     btn.dataset.id = String(m.id);
     btn.onclick = () => {
-      state.selectedMemberId = m.id;
-      renderCharts();
+      if (state.selectedMemberId !== m.id) {
+        state.selectedMemberId = m.id;
+        state.historyPage = 1;
+        renderCharts();
+      }
     };
     return btn;
   });
@@ -182,71 +331,14 @@ export function renderCharts() {
     options: { responsive: true, plugins: { legend: { display: true } } }
   });
 
-  const list = document.getElementById('history-list');
-  const reversed = filteredRecords.slice().reverse();
-  if (reversed.length === 0) {
-    list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '此區間尚無紀錄'));
-    return;
-  }
-
-  // 針對每筆歷史紀錄的日期計算「當下生效的目標體重」，與趨勢圖表規則完全一致
-  const recordTargetSeries = resolveTargetWeightSeries(
-    reversed.map((r) => r.recorded_at),
-    memberHistory,
-    member
-  );
-
-  const items = reversed.map((r, idx) => {
-    const li = createEl('li', 'py-2.5 flex justify-between items-center gap-2');
-    const info = createEl('div', 'min-w-0 flex-1');
-
-    const topRow = createEl('div', 'flex items-baseline flex-wrap gap-x-2 gap-y-0.5');
-    topRow.append(
-      createEl('span', 'w-20 shrink-0 font-semibold text-slate-800 tabular-nums', `${r.weight_kg} kg`),
-      createEl('span', 'w-20 shrink-0 text-xs text-slate-400 tabular-nums', String(r.recorded_at ?? ''))
-    );
-
-    const activeTarget = recordTargetSeries.values[idx];
-    const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
-    if (targetGap) {
-      const gapColor = targetGap.isAchieved
-        ? 'text-emerald-600'
-        : targetGap.gap > 0
-          ? 'text-amber-600'
-          : 'text-teal-600';
-      topRow.appendChild(
-        createEl('span', `text-xs font-medium tabular-nums shrink-0 ${gapColor}`, targetGap.compactLabel)
-      );
-    }
-
-    info.appendChild(topRow);
-
-    if (r.note) {
-      info.appendChild(createEl('p', 'text-xs text-slate-500 mt-0.5 break-words', String(r.note)));
-    }
-
-    const delBtn = createEl(
-      'button',
-      'shrink-0 whitespace-nowrap text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg',
-      '刪除'
-    );
-    delBtn.type = 'button';
-    delBtn.onclick = () => {
-      if (!confirm('確定刪除此筆體重紀錄？')) return;
-      optimisticDeleteRecord(r.id);
-      showToast('已刪除紀錄');
-    };
-
-    li.append(info, delBtn);
-    return li;
-  });
-  list.replaceChildren(...items);
+  renderHistoryList(member, memberHistory, filteredRecords);
 }
 
 export function initChartRangeControls({ onRangeChange }) {
   document.querySelectorAll('.range-btn').forEach((btn) => {
     btn.onclick = () => {
       state.selectedRange = btn.dataset.range;
+      state.historyPage = 1;
       document.querySelectorAll('.range-btn').forEach((b) => {
         b.className = 'range-btn flex-1 py-1.5 rounded-lg text-slate-600';
       });

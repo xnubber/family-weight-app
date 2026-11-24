@@ -68,6 +68,7 @@ export function initSettings({ onSync }) {
 
     state.familyCode = nextCode;
     state.selectedMemberId = null;
+    state.historyPage = 1;
     localStorage.setItem('familySyncCode', state.familyCode);
     showToast('設定已儲存');
     onSync();
