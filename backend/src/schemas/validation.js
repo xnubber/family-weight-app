@@ -1,0 +1,88 @@
+import { z } from 'zod';
+import { isValidRecordedDate } from '../utils/date.js';
+
+// 家庭同步碼驗證規則：12-64 字元英數字、- 或 _，禁止使用弱預設碼
+export const FAMILY_CODE_REGEX = /^[A-Za-z0-9_-]{12,64}$/;
+export const FORBIDDEN_FAMILY_CODES = new Set(['my-family-2026']);
+
+export function isValidFamilyCode(code) {
+  return (
+    typeof code === 'string' &&
+    FAMILY_CODE_REGEX.test(code) &&
+    !FORBIDDEN_FAMILY_CODES.has(code)
+  );
+}
+
+// Zod 嚴格輸入驗證 Schema（z.strictObject 拒絕任何未定義的額外欄位，防止 Mass Assignment）
+export const uuidSchema = z.uuid('無效的資源識別碼');
+
+export const createMemberSchema = z.strictObject({
+  family_code: z.string().optional(),
+  name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元'),
+  type: z.enum(['human', 'cat'], { message: '成員類型必須為 human 或 cat' }),
+  height_cm: z
+    .number({ message: '身高必須為數字' })
+    .finite('身高必須為有效數值')
+    .min(20, '身高須介於 20–300 cm')
+    .max(300, '身高須介於 20–300 cm')
+    .nullable()
+    .optional(),
+  target_weight: z
+    .number({ message: '目標體重必須為數字' })
+    .finite('目標體重必須為有效數值')
+    .min(0.1, '目標體重須介於 0.1–500 kg')
+    .max(500, '目標體重須介於 0.1–500 kg')
+    .nullable()
+    .optional()
+});
+
+export const updateMemberSchema = z
+  .strictObject({
+    height_cm: z
+      .number({ message: '身高必須為數字' })
+      .finite('身高必須為有效數值')
+      .min(20, '身高須介於 20–300 cm')
+      .max(300, '身高須介於 20–300 cm')
+      .nullable()
+      .optional(),
+    target_weight: z
+      .number({ message: '目標體重必須為數字' })
+      .finite('目標體重必須為有效數值')
+      .min(0.1, '目標體重須介於 0.1–500 kg')
+      .max(500, '目標體重須介於 0.1–500 kg')
+      .nullable()
+      .optional()
+  })
+  .refine(
+    (data) => data.height_cm !== undefined || data.target_weight !== undefined,
+    { message: '至少需提供身高或目標體重其中一項欄位' }
+  );
+
+export const createRecordSchema = z.strictObject({
+  family_code: z.string().optional(),
+  member_id: uuidSchema,
+  weight_kg: z
+    .number({ message: '體重必須為數字' })
+    .finite('體重必須為有效數值')
+    .min(0.1, '體重須介於 0.1–500 kg')
+    .max(500, '體重須介於 0.1–500 kg'),
+  recorded_at: z
+    .string()
+    .trim()
+    .refine(isValidRecordedDate, '日期格式不正確或超出合理範圍')
+    .optional(),
+  note: z
+    .string()
+    .trim()
+    .max(200, '備註不可超過 200 字元')
+    .nullable()
+    .optional()
+    .transform((v) => v ?? '')
+});
+
+export function formatZodError(error) {
+  const first = error?.issues?.[0];
+  if (!first) return '請求欄位格式不正確';
+  if (first.code === 'unrecognized_keys') return '請求包含不允許的額外欄位';
+  return first.message || '請求欄位格式不正確';
+}

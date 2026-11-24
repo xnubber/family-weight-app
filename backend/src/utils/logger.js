@@ -51,9 +51,7 @@ if (process.env.LOG_TO_FILE !== 'false') {
     tailable: true
   };
   transports.push(
-    // 2. 僅將錯誤等級寫入 logs/error.log
     new winston.transports.File({ filename: 'logs/error.log', level: 'error', ...fileOptions }),
-    // 3. 所有等級寫入 logs/combined.log
     new winston.transports.File({ filename: 'logs/combined.log', ...fileOptions })
   );
 }
@@ -62,7 +60,7 @@ const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: combine(
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    errors({ stack: true }), // 錯誤時自動記錄 Stack Trace
+    errors({ stack: true }),
     logFormat
   ),
   transports
