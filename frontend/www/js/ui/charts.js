@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { optimisticDeleteRecord } from '../services/syncQueue.js';
 import { createEl, showToast } from '../utils/dom.js';
-import { aggregateRecords, resolveTargetWeightSeries } from '../utils/metrics.js';
+import { aggregateRecords, resolveTargetWeightSeries, calculateTargetGap } from '../utils/metrics.js';
 
 let chartInstance = null;
 
@@ -74,15 +74,36 @@ export function renderCharts() {
     return;
   }
 
-  const items = reversed.map((r) => {
-    const li = createEl('li', 'py-2.5 flex justify-between items-center gap-3');
+  // 針對每筆歷史紀錄的日期計算「當下生效的目標體重」，與趨勢圖表規則完全一致
+  const recordTargetSeries = resolveTargetWeightSeries(
+    reversed.map((r) => r.recorded_at),
+    memberHistory,
+    member
+  );
+
+  const items = reversed.map((r, idx) => {
+    const li = createEl('li', 'py-2.5 flex justify-between items-center gap-2');
     const info = createEl('div', 'min-w-0 flex-1');
 
-    const topRow = createEl('div', 'flex items-baseline gap-3');
+    const topRow = createEl('div', 'flex items-baseline flex-wrap gap-x-2 gap-y-0.5');
     topRow.append(
       createEl('span', 'w-20 shrink-0 font-semibold text-slate-800 tabular-nums', `${r.weight_kg} kg`),
-      createEl('span', 'text-xs text-slate-400 tabular-nums shrink-0', String(r.recorded_at ?? ''))
+      createEl('span', 'w-20 shrink-0 text-xs text-slate-400 tabular-nums', String(r.recorded_at ?? ''))
     );
+
+    const activeTarget = recordTargetSeries.values[idx];
+    const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
+    if (targetGap) {
+      const gapColor = targetGap.isAchieved
+        ? 'text-emerald-600'
+        : targetGap.gap > 0
+          ? 'text-amber-600'
+          : 'text-teal-600';
+      topRow.appendChild(
+        createEl('span', `text-xs font-medium tabular-nums shrink-0 ${gapColor}`, targetGap.compactLabel)
+      );
+    }
+
     info.appendChild(topRow);
 
     if (r.note) {

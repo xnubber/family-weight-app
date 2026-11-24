@@ -122,6 +122,25 @@ export function resolveTargetWeightSeries(pointDates, memberHistory = [], member
   };
 }
 
+export function calculateTargetGap(weightKg, targetWeight) {
+  if (weightKg === null || weightKg === undefined || targetWeight === null || targetWeight === undefined) {
+    return null;
+  }
+  const w = Number(weightKg);
+  const t = Number(targetWeight);
+  if (!Number.isFinite(w) || !Number.isFinite(t)) return null;
+  const gap = Number((w - t).toFixed(2));
+  const absFixed = Math.abs(gap).toFixed(2);
+  const signedText = gap === 0 ? '0.00' : `${gap > 0 ? '+' : '-'}${absFixed}`;
+  return {
+    gap,
+    isAchieved: gap === 0,
+    signedText,
+    label: gap === 0 ? '已達目標' : `距目標 ${signedText} kg`,
+    compactLabel: gap === 0 ? '已達標' : `距目標 ${signedText}`
+  };
+}
+
 export function calculateBmi(weightKg, heightCm) {
   const w = Number(weightKg);
   const h = Number(heightCm) / 100;
