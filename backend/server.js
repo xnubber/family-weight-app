@@ -22,6 +22,13 @@ if (!process.env.APP_API_KEY || COMPROMISED_API_KEYS.has(process.env.APP_API_KEY
   logger.error('APP_API_KEY 未設定或仍使用已外洩的舊金鑰，請重新產生高強度隨機金鑰後再啟動');
   process.exit(1);
 }
+if (process.env.APP_API_KEY.length < 16 && isProduction) {
+  logger.error('正式環境 APP_API_KEY 長度過短（至少需 16 字元，建議 32 字元以上），伺服器拒絕啟動');
+  process.exit(1);
+}
+if (process.env.APP_API_KEY.length < 24) {
+  logger.warn('APP_API_KEY 長度建議至少 24 字元以上以提升安全性');
+}
 
 // 家庭同步碼驗證規則：12-64 字元英數字、- 或 _，禁止使用弱預設碼
 const FAMILY_CODE_REGEX = /^[A-Za-z0-9_-]{12,64}$/;
@@ -132,6 +139,16 @@ function sanitizeLogValue(val) {
   return String(val ?? '').replace(/[\r\n\t]/g, ' ').slice(0, 200);
 }
 
+// 遮罩 URL 路徑中的家庭同步碼（/api/families/:familyCode/...）與查詢參數，避免同步碼明文寫入日誌
+function maskSensitiveUrl(rawUrl) {
+  const safe = sanitizeLogValue(rawUrl);
+  const pathOnly = safe.split('?')[0];
+  return pathOnly.replace(/(\/api\/families\/)([^/]+)/i, (_, prefix, code) => {
+    const masked = code.length <= 4 ? '****' : `${code.slice(0, 2)}***${code.slice(-2)}`;
+    return `${prefix}${masked}`;
+  });
+}
+
 // Express 4 非同步路由包裝器，確保任何未捕捉例外都交給全域錯誤處理器
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
@@ -222,7 +239,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
-    logger.warn('觸發速率限制 (429)', { ip: req.ip, path: sanitizeLogValue(req.originalUrl) });
+    logger.warn('觸發速率限制 (429)', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
     res.status(429).json({ error: '請求過於頻繁，請稍後再試' });
   }
 });
@@ -236,22 +253,24 @@ const authFailLimiter = rateLimit({
   skipSuccessfulRequests: true,
   skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
-    logger.warn('觸發異常失敗請求限流 (429)', { ip: req.ip, path: sanitizeLogValue(req.originalUrl) });
+    logger.warn('觸發異常失敗請求限流 (429)', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
     res.status(429).json({ error: '錯誤嘗試過於頻繁，請稍後再試' });
   }
 });
 
-// HTTP 請求日誌中介層：記錄每個 API 的方法、路徑、狀態碼與耗時
+// HTTP 請求日誌中介層：記錄每個 API 的方法、遮罩後路徑、狀態碼與耗時
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const safeUrl = sanitizeLogValue(req.originalUrl);
+    const safeUrl = maskSensitiveUrl(req.originalUrl);
     const msg = `${req.method} ${safeUrl} ${res.statusCode} - ${duration}ms`;
     if (res.statusCode >= 500) {
       logger.error(msg, { ip: req.ip });
     } else if (res.statusCode >= 400) {
       logger.warn(msg, { ip: req.ip });
+    } else if (safeUrl === '/api/health') {
+      logger.debug(msg);
     } else {
       logger.info(msg);
     }
@@ -287,7 +306,7 @@ app.use('/api', apiLimiter, authFailLimiter, (req, res, next) => {
 
   const clientKey = req.headers['x-api-key'];
   if (!safeEqual(clientKey, process.env.APP_API_KEY)) {
-    logger.warn('無效的 API Key 存取嘗試', { ip: req.ip, path: sanitizeLogValue(req.originalUrl) });
+    logger.warn('無效的 API Key 存取嘗試', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
     return res.status(401).json({ error: '未授權的存取' });
   }
   next();
