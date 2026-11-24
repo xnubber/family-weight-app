@@ -76,8 +76,11 @@
       <!-- 區間統計摘要、目標進度與提醒 -->
       <div id="chart-stats-summary" class="space-y-3"></div>
 
-      <div class="journal-card p-4 rounded-2xl">
-        <canvas id="weightChart" height="220"></canvas>
+      <div class="journal-card p-4 rounded-2xl space-y-2.5">
+        <div id="chart-inspect-bar" class="min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] bg-oat-50 border border-oat-200/70 text-ink-400"></div>
+        <div class="select-none">
+          <canvas id="weightChart" height="220" class="touch-pan-y select-none"></canvas>
+        </div>
       </div>
       <div class="journal-card p-4 rounded-2xl">
         <div class="flex items-center justify-between gap-2 mb-3">

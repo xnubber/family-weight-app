@@ -21,31 +21,356 @@ import {
 } from '../utils/metrics.js';
 
 const HISTORY_PAGE_SIZE = 10;
+const LONG_PRESS_MS = 260;
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+
 let chartInstance = null;
+
+const inspectState = {
+  activeIndex: null,
+  isInspecting: false,
+  isPointerDown: false,
+  activePointerId: null,
+  pressTimer: null,
+  startX: 0,
+  startY: 0,
+  lastClientX: 0,
+  context: null // { labels, values, pointDates, targetValues, isHidden, theme, range }
+};
 
 function getMemberTheme(type) {
   if (type === 'cat') {
     return {
       lineColor: '#C07A57',
-      fillColor: 'rgba(192, 122, 87, 0.14)',
+      fillColor: 'rgba(192, 122, 87, 0.16)',
       progressClass: 'goal-progress-cat',
-      accentText: 'text-clay-700'
+      accentText: 'text-clay-700',
+      inspectBarClass: 'bg-clay-50 border-clay-200 text-clay-700',
+      dotBgClass: 'bg-clay-500'
     };
   }
   if (type === 'dog') {
     return {
       lineColor: '#B68A4C',
-      fillColor: 'rgba(182, 138, 76, 0.14)',
+      fillColor: 'rgba(182, 138, 76, 0.16)',
       progressClass: 'goal-progress-dog',
-      accentText: 'text-ochre-700'
+      accentText: 'text-ochre-700',
+      inspectBarClass: 'bg-ochre-50 border-ochre-200 text-ochre-700',
+      dotBgClass: 'bg-ochre-500'
     };
   }
   return {
     lineColor: '#587864',
-    fillColor: 'rgba(88, 120, 100, 0.14)',
+    fillColor: 'rgba(88, 120, 100, 0.16)',
     progressClass: '',
-    accentText: 'text-sage-700'
+    accentText: 'text-sage-700',
+    inspectBarClass: 'bg-sage-50 border-sage-200 text-sage-700',
+    dotBgClass: 'bg-sage-600'
   };
+}
+
+// 在 Canvas 上直接繪製長按檢視的垂直／水平引導線、雙環焦點圓點與 X 軸日期標籤（絕不繪製體重數字）
+const inspectCrosshairPlugin = {
+  id: 'inspectCrosshair',
+  afterDatasetsDraw(chart) {
+    const idx = inspectState.activeIndex;
+    const ctxData = inspectState.context;
+    if (idx === null || !ctxData) return;
+
+    const meta = chart.getDatasetMeta?.(0);
+    const point = meta?.data?.[idx];
+    const chartArea = chart.chartArea;
+    if (!point || !chartArea) return;
+
+    const c = chart.ctx;
+    const theme = ctxData.theme;
+    const px = point.x;
+    const py = point.y;
+
+    c.save();
+
+    // 1. 垂直虛線引導線
+    c.beginPath();
+    c.setLineDash([4, 4]);
+    c.lineWidth = 1.5;
+    c.strokeStyle = theme.lineColor;
+    c.globalAlpha = 0.5;
+    c.moveTo(px, chartArea.top);
+    c.lineTo(px, chartArea.bottom);
+    c.stroke();
+
+    // 2. 水平細虛線引導線（對齊該點高度）
+    c.beginPath();
+    c.setLineDash([3, 4]);
+    c.lineWidth = 1;
+    c.globalAlpha = 0.28;
+    c.moveTo(chartArea.left, py);
+    c.lineTo(px, py);
+    c.stroke();
+
+    c.setLineDash([]);
+    c.globalAlpha = 1;
+
+    // 3. 外圈柔和光暈 + 暖白雙環焦點圓點
+    c.beginPath();
+    c.arc(px, py, 11, 0, Math.PI * 2);
+    c.fillStyle = theme.fillColor;
+    c.fill();
+
+    c.beginPath();
+    c.arc(px, py, 6, 0, Math.PI * 2);
+    c.fillStyle = '#FCFBF8';
+    c.fill();
+    c.lineWidth = 2.5;
+    c.strokeStyle = theme.lineColor;
+    c.stroke();
+
+    c.beginPath();
+    c.arc(px, py, 2.5, 0, Math.PI * 2);
+    c.fillStyle = theme.lineColor;
+    c.fill();
+
+    // 4. 底部 X 軸日期膠囊標記，明確指出目前檢視的點位
+    const tagLabel = String(ctxData.labels[idx] ?? '');
+    if (tagLabel) {
+      c.font = '600 10px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
+      const textWidth = c.measureText(tagLabel).width;
+      const pillW = textWidth + 12;
+      const pillH = 18;
+      const rawX = px - pillW / 2;
+      const clampedX = Math.max(chartArea.left, Math.min(rawX, chartArea.right - pillW));
+      const pillY = chartArea.bottom - pillH - 2;
+      const radius = 9;
+
+      c.beginPath();
+      c.moveTo(clampedX + radius, pillY);
+      c.lineTo(clampedX + pillW - radius, pillY);
+      c.quadraticCurveTo(clampedX + pillW, pillY, clampedX + pillW, pillY + radius);
+      c.lineTo(clampedX + pillW, pillY + pillH - radius);
+      c.quadraticCurveTo(clampedX + pillW, pillY + pillH, clampedX + pillW - radius, pillY + pillH);
+      c.lineTo(clampedX + radius, pillY + pillH);
+      c.quadraticCurveTo(clampedX, pillY + pillH, clampedX, pillY + pillH - radius);
+      c.lineTo(clampedX, pillY + radius);
+      c.quadraticCurveTo(clampedX, pillY, clampedX + radius, pillY);
+      c.closePath();
+      c.fillStyle = theme.lineColor;
+      c.fill();
+
+      c.fillStyle = '#FCFBF8';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(tagLabel, clampedX + pillW / 2, pillY + pillH / 2 + 0.5);
+    }
+
+    c.restore();
+  }
+};
+
+function renderInspectBar() {
+  const bar = document.getElementById('chart-inspect-bar');
+  if (!bar) return;
+
+  const ctxData = inspectState.context;
+  if (!ctxData || ctxData.values.length === 0) {
+    bar.classList.add('hidden');
+    bar.replaceChildren();
+    return;
+  }
+
+  bar.classList.remove('hidden');
+  const idx = inspectState.activeIndex;
+
+  if (idx === null || idx < 0 || idx >= ctxData.values.length) {
+    bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] bg-oat-50 border border-oat-200/70 text-ink-400';
+    const hintText = ctxData.isHidden
+      ? '長按圖表並左右拖曳，可檢視各點位變化趨勢'
+      : '長按圖表並左右拖曳，可檢視各點位體重';
+    bar.replaceChildren(
+      createEl('span', 'truncate', hintText),
+      createEl('span', 'shrink-0 tabular-nums text-ink-400', `共 ${ctxData.values.length} 點`)
+    );
+    return;
+  }
+
+  const { labels, values, pointDates, isHidden, theme, range } = ctxData;
+  const val = Number(values[idx]);
+  const dateDisplay = range === 'day'
+    ? String(pointDates[idx] || labels[idx] || '')
+    : `${labels[idx] || ''}（平均）`;
+
+  bar.className = `min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-xs border transition-colors ${theme.inspectBarClass}`;
+
+  const leftWrap = createEl('div', 'flex items-center gap-2 min-w-0');
+  leftWrap.append(
+    createEl('span', `w-2 h-2 rounded-full shrink-0 ${theme.dotBgClass}`),
+    createEl('span', 'font-medium tabular-nums truncate', dateDisplay)
+  );
+
+  const rightWrap = createEl('div', 'flex items-center gap-2 shrink-0 tabular-nums');
+
+  if (isHidden) {
+    const baseline = Number(values[0]);
+    let relText = '區間起點';
+    if (idx > 0 && Number.isFinite(val) && Number.isFinite(baseline)) {
+      const delta = Number((val - baseline).toFixed(2));
+      const sign = delta > 0 ? '+' : '';
+      relText = `較起點 ${sign}${delta.toFixed(2)} kg`;
+    }
+    rightWrap.append(
+      createEl('span', 'text-[11px] opacity-80', relText),
+      createEl('span', 'font-semibold text-sm text-ink-400 inline-flex items-center gap-1', `${MASKED_WEIGHT} kg`)
+    );
+  } else {
+    if (idx > 0 && Number.isFinite(val) && Number.isFinite(Number(values[idx - 1]))) {
+      const stepDelta = Number((val - Number(values[idx - 1])).toFixed(2));
+      const sign = stepDelta > 0 ? '+' : '';
+      const deltaClass = stepDelta > 0 ? 'text-rosewood-600' : 'text-sage-700';
+      rightWrap.appendChild(
+        createEl('span', `text-[11px] font-medium ${deltaClass}`, `${sign}${stepDelta.toFixed(2)}`)
+      );
+    }
+    rightWrap.appendChild(
+      createEl('span', 'font-semibold text-sm text-ink', `${val} kg`)
+    );
+  }
+
+  bar.replaceChildren(leftWrap, rightWrap);
+}
+
+function findNearestPointIndex(canvas, clientX) {
+  if (!chartInstance || !inspectState.context || inspectState.context.values.length === 0) {
+    return null;
+  }
+  const meta = chartInstance.getDatasetMeta?.(0);
+  const points = meta?.data;
+  if (!Array.isArray(points) || points.length === 0) return null;
+
+  const rect = canvas.getBoundingClientRect();
+  const localX = clientX - rect.left;
+
+  let nearestIdx = 0;
+  let minDist = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const dist = Math.abs(points[i].x - localX);
+    if (dist < minDist) {
+      minDist = dist;
+      nearestIdx = i;
+    }
+  }
+  return nearestIdx;
+}
+
+function setInspectIndex(nextIndex) {
+  if (inspectState.activeIndex === nextIndex) return;
+  const wasInspecting = inspectState.activeIndex !== null;
+  inspectState.activeIndex = nextIndex;
+  renderInspectBar();
+  chartInstance?.draw?.();
+  if (nextIndex !== null && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(wasInspecting ? 4 : 12);
+  }
+}
+
+function clearInspection(shouldRedraw = true) {
+  if (inspectState.pressTimer) {
+    clearTimeout(inspectState.pressTimer);
+    inspectState.pressTimer = null;
+  }
+  inspectState.isPointerDown = false;
+  inspectState.activePointerId = null;
+  inspectState.isInspecting = false;
+  if (inspectState.activeIndex !== null) {
+    inspectState.activeIndex = null;
+    renderInspectBar();
+    if (shouldRedraw) chartInstance?.draw?.();
+  }
+}
+
+function bindChartLongPressEvents(canvas) {
+  if (!canvas || canvas.dataset?.inspectBound === '1') return;
+  if (canvas.dataset) canvas.dataset.inspectBound = '1';
+
+  // 禁止長按彈出系統右鍵／儲存圖片選單
+  canvas.addEventListener?.('contextmenu', (e) => e.preventDefault());
+
+  const activateInspection = (clientX) => {
+    inspectState.pressTimer = null;
+    if (!inspectState.isPointerDown) return;
+    inspectState.isInspecting = true;
+    const idx = findNearestPointIndex(canvas, clientX);
+    if (idx !== null) {
+      setInspectIndex(idx);
+    }
+  };
+
+  canvas.addEventListener?.('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (!inspectState.context || inspectState.context.values.length === 0) return;
+
+    if (inspectState.pressTimer) clearTimeout(inspectState.pressTimer);
+    inspectState.isPointerDown = true;
+    inspectState.activePointerId = e.pointerId ?? null;
+    inspectState.isInspecting = false;
+    inspectState.startX = e.clientX;
+    inspectState.startY = e.clientY;
+    inspectState.lastClientX = e.clientX;
+
+    inspectState.pressTimer = setTimeout(() => {
+      activateInspection(inspectState.lastClientX);
+    }, LONG_PRESS_MS);
+  });
+
+  // 啟動長按檢視後鎖定畫面捲動，讓手指可流暢左右滑動檢視每個點位
+  canvas.addEventListener?.(
+    'touchmove',
+    (e) => {
+      if (inspectState.isInspecting && e.cancelable) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pointermove', (e) => {
+      if (!inspectState.isPointerDown) return;
+      if (inspectState.activePointerId !== null && e.pointerId !== undefined && e.pointerId !== inspectState.activePointerId) {
+        return;
+      }
+
+      if (!inspectState.isInspecting) {
+        const dist = Math.hypot(e.clientX - inspectState.startX, e.clientY - inspectState.startY);
+        if (dist > LONG_PRESS_MOVE_TOLERANCE_PX) {
+          // 尚未觸發長按前大幅移動，視為一般頁面捲動並取消長按計時
+          if (inspectState.pressTimer) {
+            clearTimeout(inspectState.pressTimer);
+            inspectState.pressTimer = null;
+          }
+          inspectState.isPointerDown = false;
+          inspectState.activePointerId = null;
+          return;
+        }
+        inspectState.lastClientX = e.clientX;
+        return;
+      }
+
+      const idx = findNearestPointIndex(canvas, e.clientX);
+      if (idx !== null) {
+        setInspectIndex(idx);
+      }
+    });
+
+    const handleRelease = (e) => {
+      if (!inspectState.isPointerDown && !inspectState.isInspecting) return;
+      if (inspectState.activePointerId !== null && e.pointerId !== undefined && e.pointerId !== inspectState.activePointerId) {
+        return;
+      }
+      clearInspection(true);
+    };
+
+    window.addEventListener('pointerup', handleRelease);
+    window.addEventListener('pointercancel', handleRelease);
+  }
 }
 
 function createStatCell(labelText, valueText, valueClass = 'text-ink') {
@@ -425,14 +750,29 @@ export function renderCharts() {
   const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
   const { labels, values, pointDates, filteredRecords } = aggregateRecords(recs, state.selectedRange);
   const isHidden = isMemberWeightHidden(member);
+  const theme = getMemberTheme(member?.type);
 
   renderStatsSummary(member, recs, filteredRecords);
 
-  const ctx = document.getElementById('weightChart').getContext('2d');
+  const canvas = document.getElementById('weightChart');
+  const ctx = canvas.getContext('2d');
+  clearInspection(false);
   if (chartInstance) chartInstance.destroy();
-  const theme = getMemberTheme(member?.type);
-  const baselineWeight = values.length > 0 ? Number(values[0]) : null;
 
+  const targetSeries = resolveTargetWeightSeries(pointDates, memberHistory, member);
+  inspectState.context = {
+    labels,
+    values,
+    pointDates,
+    targetValues: targetSeries.values,
+    isHidden,
+    theme,
+    range: state.selectedRange
+  };
+  bindChartLongPressEvents(canvas);
+  renderInspectBar();
+
+  const baselineWeight = values.length > 0 ? Number(values[0]) : null;
   const datasets = [{
     label: isHidden
       ? `${member?.name || ''} 體重趨勢（已隱藏數值）`
@@ -447,7 +787,6 @@ export function renderCharts() {
     tension: 0.32
   }];
 
-  const targetSeries = resolveTargetWeightSeries(pointDates, memberHistory, member);
   if (targetSeries.hasAnyTarget && labels.length > 0) {
     const targetLabel = isHidden
       ? '目標線（已隱藏數值）'
@@ -472,6 +811,7 @@ export function renderCharts() {
   chartInstance = new window.Chart(ctx, {
     type: 'line',
     data: { labels, datasets },
+    plugins: [inspectCrosshairPlugin],
     options: {
       responsive: true,
       plugins: {
@@ -480,6 +820,7 @@ export function renderCharts() {
           labels: { color: '#494C45', boxWidth: 12, usePointStyle: true }
         },
         tooltip: {
+          filter: () => !inspectState.isInspecting,
           callbacks: {
             label: (ctxItem) => {
               if (!isHidden) {
