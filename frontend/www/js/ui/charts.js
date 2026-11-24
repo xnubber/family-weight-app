@@ -75,17 +75,21 @@ export function renderCharts() {
   }
 
   const items = reversed.map((r) => {
-    const li = createEl('li', 'py-2.5 flex justify-between items-center');
-    const info = createEl('div');
-    info.append(
-      createEl('span', 'font-semibold', `${r.weight_kg} kg`),
-      createEl('span', 'text-xs text-slate-400 ml-2', String(r.recorded_at ?? ''))
+    const li = createEl('li', 'py-2.5 flex justify-between items-center gap-3');
+    const info = createEl('div', 'min-w-0 flex-1');
+
+    const topRow = createEl('div', 'flex items-baseline gap-3');
+    topRow.append(
+      createEl('span', 'w-20 shrink-0 font-semibold text-slate-800 tabular-nums', `${r.weight_kg} kg`),
+      createEl('span', 'text-xs text-slate-400 tabular-nums shrink-0', String(r.recorded_at ?? ''))
     );
+    info.appendChild(topRow);
+
     if (r.note) {
-      info.appendChild(createEl('p', 'text-xs text-slate-500', String(r.note)));
+      info.appendChild(createEl('p', 'text-xs text-slate-500 mt-0.5 break-words', String(r.note)));
     }
 
-    const delBtn = createEl('button', 'text-xs text-rose-500 hover:underline', '刪除');
+    const delBtn = createEl('button', 'shrink-0 whitespace-nowrap text-xs text-rose-500 hover:underline px-1', '刪除');
     delBtn.type = 'button';
     delBtn.onclick = () => {
       if (!confirm('確定刪除此筆體重紀錄？')) return;
