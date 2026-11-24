@@ -43,7 +43,7 @@ export function renderOverview({ onSelectMember }) {
     const subText = createEl(
       'p',
       'text-xs text-slate-400 mt-1',
-      `${latest ? `最後更新：${latest.recorded_at}` : '尚未有體重紀錄'} · 點擊編輯`
+      `${latest ? `最後更新：${latest.recorded_at}` : '尚未有體重紀錄'} · 點擊查看`
     );
     leftWrap.append(titleRow, subText);
 

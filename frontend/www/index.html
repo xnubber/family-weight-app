@@ -196,23 +196,49 @@
 
       <input type="hidden" id="prof-id" />
 
-      <div>
-        <label class="text-xs text-slate-500">成員名稱</label>
-        <input id="prof-name" type="text" maxlength="50" required placeholder="例：爸爸、橘貓咪咪" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      <!-- 檢視模式：唯讀文字顯示 -->
+      <div id="prof-view-fields" class="divide-y divide-slate-100 text-sm border border-slate-100 rounded-xl px-3">
+        <div class="py-2.5 flex justify-between items-center">
+          <span class="text-slate-500">成員名稱</span>
+          <span id="prof-view-name" class="font-medium text-slate-800">--</span>
+        </div>
+        <div id="prof-view-height-row" class="py-2.5 flex justify-between items-center">
+          <span class="text-slate-500">身高</span>
+          <span id="prof-view-height" class="font-medium text-slate-800">--</span>
+        </div>
+        <div class="py-2.5 flex justify-between items-center">
+          <span class="text-slate-500">目標體重</span>
+          <span id="prof-view-target" class="font-medium text-slate-800">--</span>
+        </div>
       </div>
 
-      <div id="prof-height-wrap">
-        <label class="text-xs text-slate-500">身高 (cm)</label>
-        <input id="prof-height" type="number" min="20" max="300" step="0.1" placeholder="例：172.5" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+      <!-- 編輯模式：點擊編輯後才顯示輸入框 -->
+      <div id="prof-edit-fields" class="hidden space-y-3">
+        <div>
+          <label class="text-xs text-slate-500">成員名稱</label>
+          <input id="prof-name" type="text" maxlength="50" required placeholder="例：爸爸、橘貓咪咪" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+        </div>
+
+        <div id="prof-height-wrap">
+          <label class="text-xs text-slate-500">身高 (cm)</label>
+          <input id="prof-height" type="number" min="20" max="300" step="0.1" placeholder="例：172.5" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+        </div>
+
+        <div>
+          <label class="text-xs text-slate-500">目標體重 (kg)</label>
+          <input id="prof-target" type="number" min="0.1" max="500" step="0.01" placeholder="例：65.0" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
+        </div>
       </div>
 
-      <div>
-        <label class="text-xs text-slate-500">目標體重 (kg)</label>
-        <input id="prof-target" type="number" min="0.1" max="500" step="0.01" placeholder="例：65.0" class="w-full border rounded-lg p-2.5 text-sm mt-1" />
-      </div>
-
-      <div class="flex gap-2 pt-2">
+      <!-- 檢視模式操作列 -->
+      <div id="prof-view-actions" class="flex gap-2 pt-2">
         <button type="button" class="btn-close-modal flex-1 py-2.5 bg-slate-100 rounded-xl text-sm">關閉</button>
+        <button type="button" id="btn-prof-edit" class="flex-1 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-semibold">✏️ 編輯資料</button>
+      </div>
+
+      <!-- 編輯模式操作列 -->
+      <div id="prof-edit-actions" class="hidden flex gap-2 pt-2">
+        <button type="button" id="btn-prof-cancel-edit" class="flex-1 py-2.5 bg-slate-100 rounded-xl text-sm">取消編輯</button>
         <button type="submit" class="flex-1 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold">儲存修改</button>
       </div>
     </form>

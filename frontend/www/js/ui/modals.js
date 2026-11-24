@@ -65,6 +65,18 @@ export function openMemberModal(member = null) {
   nameInput.focus();
 }
 
+function setProfileEditMode(isEditing) {
+  document.getElementById('prof-view-fields').classList.toggle('hidden', isEditing);
+  document.getElementById('prof-view-actions').classList.toggle('hidden', isEditing);
+  document.getElementById('btn-prof-add-record').classList.toggle('hidden', isEditing);
+  document.getElementById('prof-edit-fields').classList.toggle('hidden', !isEditing);
+  document.getElementById('prof-edit-actions').classList.toggle('hidden', !isEditing);
+
+  if (isEditing) {
+    document.getElementById('prof-name').focus();
+  }
+}
+
 export function openProfileModal(memberId, { onNavigateToChart }) {
   const m = state.appData.members.find((x) => x.id === memberId);
   if (!m) return;
@@ -72,12 +84,25 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   const latest = recs[recs.length - 1];
   const isCat = m.type === 'cat';
 
+  const fillEditInputs = () => {
+    document.getElementById('prof-name').value = m.name || '';
+    document.getElementById('prof-height').value = isCat ? '' : (m.height_cm ?? '');
+    document.getElementById('prof-target').value = m.target_weight ?? '';
+  };
+
   document.getElementById('prof-id').value = m.id;
   document.getElementById('prof-title').textContent = `${isCat ? '🐱' : '👤'} ${m.name} 的個人資訊`;
-  document.getElementById('prof-name').value = m.name || '';
-  document.getElementById('prof-height').value = isCat ? '' : (m.height_cm ?? '');
-  document.getElementById('prof-target').value = m.target_weight ?? '';
+
+  // 檢視模式文字
+  document.getElementById('prof-view-name').textContent = m.name || '--';
+  document.getElementById('prof-view-height-row').classList.toggle('hidden', isCat);
+  document.getElementById('prof-view-height').textContent = m.height_cm ? `${m.height_cm} cm` : '未設定';
+  document.getElementById('prof-view-target').textContent = m.target_weight ? `${m.target_weight} kg` : '未設定';
+
+  // 編輯模式欄位初始值
   document.getElementById('prof-height-wrap').classList.toggle('hidden', isCat);
+  fillEditInputs();
+  setProfileEditMode(false);
 
   let metricLabel = '目標差距';
   let metricVal = '--';
@@ -113,6 +138,13 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   document.getElementById('btn-prof-add-record').onclick = () => {
     document.getElementById('modal-profile').classList.add('hidden');
     openRecordModal(m.id);
+  };
+
+  // 切換至編輯模式／取消編輯還原原值
+  document.getElementById('btn-prof-edit').onclick = () => setProfileEditMode(true);
+  document.getElementById('btn-prof-cancel-edit').onclick = () => {
+    fillEditInputs();
+    setProfileEditMode(false);
   };
 
   document.getElementById('modal-profile').classList.remove('hidden');
