@@ -1,3 +1,5 @@
+import { createIcon } from './icons.js';
+
 // 建立純文字 DOM 元素的共用輔助函式，徹底避免使用 innerHTML 導致 XSS
 export function createEl(tag, className = '', text = '') {
   const node = document.createElement(tag);
@@ -6,20 +8,29 @@ export function createEl(tag, className = '', text = '') {
   return node;
 }
 
-// 非阻塞式頂部同步狀態指示器（不遮罩畫面，讓使用者在背景同步期間可持續操作）
+// 非阻塞式頂部同步狀態指示器（使用文青細線 SVG 圖示，不遮罩畫面）
 export function updateSyncIndicator({ pendingCount = 0, isFetching = false } = {}) {
   const btn = document.getElementById('btn-refresh');
   if (!btn) return;
 
   if (pendingCount > 0) {
-    btn.textContent = `☁️ 同步中 (${pendingCount})`;
-    btn.className = 'text-xs sm:text-sm bg-teal-50 text-teal-700 border border-teal-200 px-3 py-1.5 rounded-lg font-medium transition';
+    btn.className = 'inline-flex items-center gap-1.5 text-xs bg-sage-50 text-sage-700 border border-sage-200 px-3 py-1.5 rounded-full font-medium transition';
+    btn.replaceChildren(
+      createIcon('cloud', 'w-3.5 h-3.5 shrink-0'),
+      createEl('span', '', `同步中 (${pendingCount})`)
+    );
   } else if (isFetching) {
-    btn.textContent = '🔄 同步中...';
-    btn.className = 'text-xs sm:text-sm bg-slate-100 text-slate-500 px-3 py-1.5 rounded-lg transition';
+    btn.className = 'inline-flex items-center gap-1.5 text-xs bg-oat-100 text-ink-500 border border-oat-200 px-3 py-1.5 rounded-full font-medium transition';
+    btn.replaceChildren(
+      createIcon('refresh', 'w-3.5 h-3.5 shrink-0 animate-spin'),
+      createEl('span', '', '同步中')
+    );
   } else {
-    btn.textContent = '🔄 同步';
-    btn.className = 'text-sm bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-slate-700 transition';
+    btn.className = 'inline-flex items-center gap-1.5 text-xs bg-linen hover:bg-oat-100 text-ink-700 border border-oat-200 px-3 py-1.5 rounded-full font-medium transition';
+    btn.replaceChildren(
+      createIcon('refresh', 'w-3.5 h-3.5 shrink-0'),
+      createEl('span', '', '同步')
+    );
   }
 }
 
@@ -28,9 +39,9 @@ let toastTimer = null;
 export function showToast(msg, isError = false) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.className = `fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-sm text-white shadow-lg ${isError ? 'bg-rose-600' : 'bg-slate-800'}`;
+  el.className = `fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-xs font-medium tracking-wide text-linen shadow-soft ${isError ? 'bg-rosewood-600' : 'bg-ink'}`;
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add('hidden'), 2500);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
 }
 
 // 統一點擊回饋：確保手機上快速輕點（<50ms）也能呈現完整的按壓縮放與回彈手感

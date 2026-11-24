@@ -35,6 +35,11 @@ async function appendTargetHistory(supabase, { familyCode, memberId, targetWeigh
   }
 }
 
+function isMissingAvatarColumnError(error) {
+  const msg = String(error?.message || '');
+  return (error?.code === '42703' || error?.code === 'PGRST204') && msg.toLowerCase().includes('avatar');
+}
+
 // 新增成員
 router.post('/', asyncHandler(async (req, res) => {
   const parsed = createMemberSchema.safeParse(req.body);
@@ -42,7 +47,7 @@ router.post('/', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: formatZodError(parsed.error) });
   }
 
-  const { family_code, name, type, height_cm, target_weight, target_effective_date } = parsed.data;
+  const { family_code, name, type, avatar, height_cm, target_weight, target_effective_date } = parsed.data;
   const resolved = resolveFamilyCode(req, family_code);
   if (resolved.errorStatus) {
     return res.status(resolved.errorStatus).json({ error: resolved.errorMessage });
@@ -50,19 +55,43 @@ router.post('/', asyncHandler(async (req, res) => {
   const familyCode = resolved.familyCode;
   const supabase = getSupabaseClient();
 
-  const { data, error } = await supabase
+  const insertPayload = {
+    family_code: familyCode,
+    name,
+    type,
+    height_cm: height_cm ?? null,
+    target_weight: target_weight ?? null
+  };
+  if (avatar !== undefined) {
+    insertPayload.avatar = avatar;
+  }
+
+  let { data, error } = await supabase
     .from('members')
-    .insert({
-      family_code: familyCode,
-      name,
-      type,
-      height_cm: height_cm ?? null,
-      target_weight: target_weight ?? null
-    })
+    .insert(insertPayload)
     .select()
     .single();
 
+  // 相容尚未執行 002_dog_and_avatar.sql 遷移的資料庫：略過 avatar 欄位重試
+  if (error && isMissingAvatarColumnError(error)) {
+    logger.warn('members 表尚未新增 avatar 欄位，請執行 backend/sql/002_dog_and_avatar.sql');
+    delete insertPayload.avatar;
+    const retry = await supabase
+      .from('members')
+      .insert(insertPayload)
+      .select()
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
+    if (error.code === '23514' && type === 'dog') {
+      logger.warn('新增狗狗成員遭資料庫 CHECK 條件拒絕，請執行 002_dog_and_avatar.sql');
+      return res.status(400).json({
+        error: '資料庫尚未啟用「狗狗」類別，請先於 Supabase 執行 backend/sql/002_dog_and_avatar.sql'
+      });
+    }
     logger.error('新增成員失敗', { error: error.message });
     return res.status(500).json({ error: '新增成員失敗，請稍後再試' });
   }
@@ -81,7 +110,7 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(data);
 }));
 
-// 更新成員資料（名稱、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
+// 更新成員資料（名稱、頭像、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
 router.put('/:id', asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
@@ -101,10 +130,10 @@ router.put('/:id', asyncHandler(async (req, res) => {
   const { familyCode } = resolved;
 
   const supabase = getSupabaseClient();
-  // 先讀取原目標體重，僅在目標體重實際變更時才新增歷史紀錄
+  // 先讀取原成員資料，僅在目標體重實際變更時才新增歷史紀錄
   const { data: existing, error: fetchErr } = await supabase
     .from('members')
-    .select('id, target_weight')
+    .select('*')
     .eq('id', id)
     .eq('family_code', familyCode)
     .maybeSingle();
@@ -120,16 +149,37 @@ router.put('/:id', asyncHandler(async (req, res) => {
 
   const updatePayload = {};
   if (bodyParsed.data.name !== undefined) updatePayload.name = bodyParsed.data.name;
+  if (bodyParsed.data.avatar !== undefined) updatePayload.avatar = bodyParsed.data.avatar;
   if (bodyParsed.data.height_cm !== undefined) updatePayload.height_cm = bodyParsed.data.height_cm;
   if (bodyParsed.data.target_weight !== undefined) updatePayload.target_weight = bodyParsed.data.target_weight;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('members')
     .update(updatePayload)
     .eq('id', id)
     .eq('family_code', familyCode)
     .select()
     .maybeSingle();
+
+  // 相容尚未執行 002_dog_and_avatar.sql 遷移的資料庫：略過 avatar 欄位重試
+  if (error && isMissingAvatarColumnError(error)) {
+    logger.warn('members 表尚未新增 avatar 欄位，請執行 backend/sql/002_dog_and_avatar.sql');
+    delete updatePayload.avatar;
+    if (Object.keys(updatePayload).length === 0) {
+      data = existing;
+      error = null;
+    } else {
+      const retry = await supabase
+        .from('members')
+        .update(updatePayload)
+        .eq('id', id)
+        .eq('family_code', familyCode)
+        .select()
+        .maybeSingle();
+      data = retry.data;
+      error = retry.error;
+    }
+  }
 
   if (error) {
     logger.error('更新成員資料失敗', { id, error: error.message });

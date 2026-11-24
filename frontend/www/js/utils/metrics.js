@@ -159,7 +159,8 @@ export function calculateHealthyWeightRange(heightCm) {
   return { minKg, maxKg };
 }
 
-export function calculateCatCalories(weightKg, factor) {
+// 寵物（貓咪／狗狗）基礎代謝 RER 與每日建議熱量 DER 計算（獸醫標準公式：RER = 70 × kg^0.75）
+export function calculatePetCalories(weightKg, factor) {
   const w = Number(weightKg);
   const f = Number(factor);
   if (!(w > 0) || !(f > 0)) return null;
@@ -167,6 +168,8 @@ export function calculateCatCalories(weightKg, factor) {
   const der = Math.round(rer * f);
   return { rer, der };
 }
+
+export const calculateCatCalories = calculatePetCalories;
 
 // 計算選定時間區間內的平均、最低、最高與區間增減幅
 export function calculatePeriodStats(filteredRecords) {

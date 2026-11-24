@@ -1,6 +1,8 @@
 import { state } from '../state.js';
 import { optimisticDeleteRecord } from '../services/syncQueue.js';
 import { createEl, showToast } from '../utils/dom.js';
+import { createIcon } from '../utils/icons.js';
+import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import {
   aggregateRecords,
   resolveTargetWeightSeries,
@@ -13,11 +15,36 @@ import {
 const HISTORY_PAGE_SIZE = 10;
 let chartInstance = null;
 
-function createStatCell(labelText, valueText, valueClass = 'text-slate-800') {
+function getMemberTheme(type) {
+  if (type === 'cat') {
+    return {
+      lineColor: '#C07A57',
+      fillColor: 'rgba(192, 122, 87, 0.14)',
+      progressClass: 'goal-progress-cat',
+      accentText: 'text-clay-700'
+    };
+  }
+  if (type === 'dog') {
+    return {
+      lineColor: '#B68A4C',
+      fillColor: 'rgba(182, 138, 76, 0.14)',
+      progressClass: 'goal-progress-dog',
+      accentText: 'text-ochre-700'
+    };
+  }
+  return {
+    lineColor: '#587864',
+    fillColor: 'rgba(88, 120, 100, 0.14)',
+    progressClass: '',
+    accentText: 'text-sage-700'
+  };
+}
+
+function createStatCell(labelText, valueText, valueClass = 'text-ink') {
   const cell = createEl('div', 'px-1 min-w-0 text-center');
   cell.append(
-    createEl('div', 'text-[11px] text-slate-400 truncate', labelText),
-    createEl('div', `text-xs font-bold tabular-nums mt-0.5 truncate ${valueClass}`, valueText)
+    createEl('div', 'text-[11px] text-ink-400 truncate', labelText),
+    createEl('div', `text-xs font-semibold tabular-nums mt-0.5 truncate ${valueClass}`, valueText)
   );
   return cell;
 }
@@ -32,43 +59,43 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
   }
 
   const blocks = [];
-  const isCat = member.type === 'cat';
+  const theme = getMemberTheme(member.type);
 
   // 1. 超過 7 天未量測提醒（或尚無任何紀錄）
   const daysSince = getDaysSinceLastRecord(allMemberRecs);
-  if (daysSince === null) {
-    blocks.push(
+  if (daysSince === null || daysSince >= 7) {
+    const notice = createEl(
+      'div',
+      'bg-ochre-50 border border-ochre-200 text-ochre-700 rounded-2xl px-3.5 py-2.5 text-xs font-medium flex items-center gap-2'
+    );
+    notice.append(
+      createIcon('clock', 'w-4 h-4 shrink-0 text-ochre-600'),
       createEl(
-        'div',
-        'bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-3.5 py-2.5 text-xs font-medium',
-        `⏰ ${member.name} 尚未有體重紀錄，快回總覽新增第一筆吧！`
+        'span',
+        '',
+        daysSince === null
+          ? `${member.name} 尚未有體重紀錄，回總覽寫下第一筆紀錄吧。`
+          : `${member.name} 已 ${daysSince} 天未記錄體重，記得定期量測追蹤變化喔。`
       )
     );
-  } else if (daysSince >= 7) {
-    blocks.push(
-      createEl(
-        'div',
-        'bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-3.5 py-2.5 text-xs font-medium',
-        `⏰ ${member.name} 已 ${daysSince} 天未記錄體重，記得定期量測追蹤變化喔！`
-      )
-    );
+    blocks.push(notice);
   }
 
   // 2. 區間統計摘要（平均 / 最低 / 最高 / 區間變化）
   const stats = calculatePeriodStats(filteredRecords);
   const statsCard = createEl(
     'div',
-    'bg-white p-3.5 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-4 divide-x divide-slate-100'
+    'journal-card p-3.5 rounded-2xl grid grid-cols-4 divide-x divide-oat-200'
   );
   if (stats) {
     const deltaText = stats.delta === null
       ? '--'
       : `${stats.delta > 0 ? '+' : ''}${stats.delta.toFixed(2)}`;
     const deltaColor = stats.delta === null
-      ? 'text-slate-400'
+      ? 'text-ink-400'
       : stats.delta > 0
-        ? 'text-rose-500'
-        : 'text-emerald-600';
+        ? 'text-rosewood-600'
+        : 'text-sage-600';
 
     statsCard.append(
       createStatCell('區間平均', `${stats.avg} kg`),
@@ -78,10 +105,10 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     );
   } else {
     statsCard.append(
-      createStatCell('區間平均', '--', 'text-slate-400'),
-      createStatCell('區間最低', '--', 'text-slate-400'),
-      createStatCell('區間最高', '--', 'text-slate-400'),
-      createStatCell('區間變化', '--', 'text-slate-400')
+      createStatCell('區間平均', '--', 'text-ink-400'),
+      createStatCell('區間最低', '--', 'text-ink-400'),
+      createStatCell('區間最高', '--', 'text-ink-400'),
+      createStatCell('區間變化', '--', 'text-ink-400')
     );
   }
   blocks.push(statsCard);
@@ -89,26 +116,39 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
   // 3. 目標體重達成進度條
   const progress = calculateGoalProgress(allMemberRecs, member.target_weight);
   if (progress) {
-    const progCard = createEl('div', 'bg-white p-3.5 rounded-2xl shadow-sm border border-slate-100 space-y-2');
+    const progCard = createEl('div', 'journal-card p-3.5 rounded-2xl space-y-2');
     const headRow = createEl('div', 'flex justify-between items-center text-xs');
-    headRow.append(
-      createEl('span', 'font-semibold text-slate-600', '🎯 目標達成進度'),
-      createEl(
-        'span',
-        `font-bold tabular-nums ${progress.isAchieved ? 'text-emerald-600' : (isCat ? 'text-orange-600' : 'text-teal-700')}`,
-        progress.isAchieved ? '已達標 🎉 (100%)' : `${progress.percent}%`
-      )
+
+    const titleWrap = createEl('span', 'font-medium text-ink-700 inline-flex items-center gap-1.5');
+    titleWrap.append(
+      createIcon('target', `w-3.5 h-3.5 shrink-0 ${theme.accentText}`),
+      createEl('span', '', '目標達成進度')
     );
 
+    const statusWrap = createEl(
+      'span',
+      `font-semibold tabular-nums inline-flex items-center gap-1 ${progress.isAchieved ? 'text-sage-600' : theme.accentText}`
+    );
+    if (progress.isAchieved) {
+      statusWrap.append(
+        createIcon('check', 'w-3.5 h-3.5 shrink-0'),
+        createEl('span', '', '已達標 (100%)')
+      );
+    } else {
+      statusWrap.textContent = `${progress.percent}%`;
+    }
+
+    headRow.append(titleWrap, statusWrap);
+
     const bar = document.createElement('progress');
-    bar.className = `goal-progress ${isCat ? 'goal-progress-cat' : ''}`;
+    bar.className = `goal-progress ${theme.progressClass}`.trim();
     bar.value = progress.percent;
     bar.max = 100;
 
-    const footRow = createEl('div', 'flex justify-between text-[11px] text-slate-400 tabular-nums');
+    const footRow = createEl('div', 'flex justify-between text-[11px] text-ink-400 tabular-nums');
     footRow.append(
       createEl('span', '', `起始 ${progress.startWeight} kg`),
-      createEl('span', 'text-slate-600 font-medium', `目前 ${progress.currentWeight} kg`),
+      createEl('span', 'text-ink-700 font-medium', `目前 ${progress.currentWeight} kg`),
       createEl('span', '', `目標 ${progress.targetWeight} kg`)
     );
 
@@ -119,15 +159,27 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
   container.replaceChildren(...blocks);
 }
 
-function createPagerButton(label, ariaLabel, disabled, onClick, compact = false) {
+function createPagerButton({ label = '', iconName = '', iconPosition = 'left', ariaLabel, disabled, onClick, compact = false }) {
   const btn = createEl(
     'button',
-    `${compact ? 'px-2' : 'px-2.5'} py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-medium whitespace-nowrap`,
-    label
+    `${compact ? 'px-2' : 'px-2.5'} py-1.5 rounded-xl border border-oat-200 bg-linen text-ink-700 font-medium whitespace-nowrap inline-flex items-center gap-1`
   );
   btn.type = 'button';
   btn.disabled = disabled;
   btn.setAttribute('aria-label', ariaLabel);
+
+  const iconEl = iconName ? createIcon(iconName, 'w-3.5 h-3.5 shrink-0') : null;
+  const textEl = label ? createEl('span', '', label) : null;
+
+  if (iconEl && textEl) {
+    if (iconPosition === 'right') btn.append(textEl, iconEl);
+    else btn.append(iconEl, textEl);
+  } else if (iconEl) {
+    btn.appendChild(iconEl);
+  } else if (textEl) {
+    btn.appendChild(textEl);
+  }
+
   if (!disabled) {
     btn.onclick = onClick;
   }
@@ -145,7 +197,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   if (total === 0) {
     state.historyPage = 1;
     if (countEl) countEl.textContent = '';
-    list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '此區間尚無紀錄'));
+    list.replaceChildren(createEl('li', 'py-3 text-center text-ink-400', '此區間尚無紀錄'));
     if (pagerEl) {
       pagerEl.classList.add('hidden');
       pagerEl.replaceChildren();
@@ -179,18 +231,18 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
     const topRow = createEl('div', 'flex items-baseline flex-wrap gap-x-2 gap-y-0.5');
     topRow.append(
-      createEl('span', 'w-20 shrink-0 font-semibold text-slate-800 tabular-nums', `${r.weight_kg} kg`),
-      createEl('span', 'w-20 shrink-0 text-xs text-slate-400 tabular-nums', String(r.recorded_at ?? ''))
+      createEl('span', 'w-20 shrink-0 font-semibold text-ink tabular-nums', `${r.weight_kg} kg`),
+      createEl('span', 'w-20 shrink-0 text-xs text-ink-400 tabular-nums', String(r.recorded_at ?? ''))
     );
 
     const activeTarget = recordTargetSeries.values[idx];
     const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
     if (targetGap) {
       const gapColor = targetGap.isAchieved
-        ? 'text-emerald-600'
+        ? 'text-sage-600'
         : targetGap.gap > 0
-          ? 'text-amber-600'
-          : 'text-teal-600';
+          ? 'text-ochre-600'
+          : 'text-sage-700';
       topRow.appendChild(
         createEl('span', `text-xs font-medium tabular-nums shrink-0 ${gapColor}`, targetGap.compactLabel)
       );
@@ -199,12 +251,12 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
     info.appendChild(topRow);
 
     if (r.note) {
-      info.appendChild(createEl('p', 'text-xs text-slate-500 mt-0.5 break-words', String(r.note)));
+      info.appendChild(createEl('p', 'text-xs text-ink-500 mt-0.5 break-words', String(r.note)));
     }
 
     const delBtn = createEl(
       'button',
-      'shrink-0 whitespace-nowrap text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg',
+      'shrink-0 whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2 py-1 rounded-lg',
       '刪除'
     );
     delBtn.type = 'button';
@@ -237,26 +289,26 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   const leftGroup = createEl('div', 'flex items-center gap-1');
   if (totalPages > 2) {
     leftGroup.appendChild(
-      createPagerButton('«', '第一頁', isFirst, () => goToPage(1), true)
+      createPagerButton({ iconName: 'chevronsLeft', ariaLabel: '第一頁', disabled: isFirst, onClick: () => goToPage(1), compact: true })
     );
   }
   leftGroup.appendChild(
-    createPagerButton('‹ 上一頁', '上一頁', isFirst, () => goToPage(state.historyPage - 1))
+    createPagerButton({ label: '上一頁', iconName: 'chevronLeft', iconPosition: 'left', ariaLabel: '上一頁', disabled: isFirst, onClick: () => goToPage(state.historyPage - 1) })
   );
 
   const pageLabel = createEl(
     'span',
-    'text-slate-500 font-medium tabular-nums whitespace-nowrap',
+    'text-ink-500 font-medium tabular-nums whitespace-nowrap',
     totalPages > 2 ? `${state.historyPage} / ${totalPages} 頁` : `第 ${state.historyPage} / ${totalPages} 頁`
   );
 
   const rightGroup = createEl('div', 'flex items-center gap-1');
   rightGroup.appendChild(
-    createPagerButton('下一頁 ›', '下一頁', isLast, () => goToPage(state.historyPage + 1))
+    createPagerButton({ label: '下一頁', iconName: 'chevronRight', iconPosition: 'right', ariaLabel: '下一頁', disabled: isLast, onClick: () => goToPage(state.historyPage + 1) })
   );
   if (totalPages > 2) {
     rightGroup.appendChild(
-      createPagerButton('»', '最後一頁', isLast, () => goToPage(totalPages), true)
+      createPagerButton({ iconName: 'chevronsRight', ariaLabel: '最後一頁', disabled: isLast, onClick: () => goToPage(totalPages), compact: true })
     );
   }
 
@@ -267,13 +319,17 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 export function renderCharts() {
   const pills = document.getElementById('chart-member-pills');
   const pillButtons = state.appData.members.map((m) => {
+    const isActive = m.id === state.selectedMemberId;
     const btn = createEl(
       'button',
-      `pill-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-medium ${m.id === state.selectedMemberId ? 'bg-teal-600 text-white' : 'bg-white border text-slate-600'}`,
-      `${m.type === 'cat' ? '🐱' : '👤'} ${m.name ?? ''}`
+      `pill-btn shrink-0 inline-flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-sage-600 text-linen shadow-sm' : 'bg-linen border border-oat-200 text-ink-700'}`
     );
     btn.type = 'button';
     btn.dataset.id = String(m.id);
+    btn.append(
+      createAvatarNode(resolveMemberAvatar(m), 'w-5 h-5'),
+      createEl('span', '', String(m.name ?? ''))
+    );
     btn.onclick = () => {
       if (state.selectedMemberId !== m.id) {
         state.selectedMemberId = m.id;
@@ -294,15 +350,18 @@ export function renderCharts() {
 
   const ctx = document.getElementById('weightChart').getContext('2d');
   if (chartInstance) chartInstance.destroy();
-  const color = member?.type === 'cat' ? '#f97316' : '#0d9488';
+  const theme = getMemberTheme(member?.type);
 
   const datasets = [{
     label: `${member?.name || ''} 體重 (kg)${state.selectedRange === 'day' ? '' : '（平均）'}`,
     data: values,
-    borderColor: color,
-    backgroundColor: color + '20',
+    borderColor: theme.lineColor,
+    backgroundColor: theme.fillColor,
+    borderWidth: 2,
+    pointRadius: 2.5,
+    pointHoverRadius: 5,
     fill: true,
-    tension: 0.3
+    tension: 0.32
   }];
 
   const targetSeries = resolveTargetWeightSeries(pointDates, memberHistory, member);
@@ -313,10 +372,10 @@ export function renderCharts() {
     datasets.push({
       label: targetLabel,
       data: targetSeries.values,
-      borderColor: '#94a3b8',
-      backgroundColor: '#94a3b8',
-      borderWidth: 2,
-      borderDash: [6, 6],
+      borderColor: '#A8A295',
+      backgroundColor: '#A8A295',
+      borderWidth: 1.8,
+      borderDash: [5, 5],
       stepped: 'before',
       spanGaps: false,
       pointRadius: targetSeries.pointRadii,
@@ -328,7 +387,25 @@ export function renderCharts() {
   chartInstance = new window.Chart(ctx, {
     type: 'line',
     data: { labels, datasets },
-    options: { responsive: true, plugins: { legend: { display: true } } }
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: '#494C45', boxWidth: 12, usePointStyle: true }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#727068' },
+          grid: { color: '#EFECE4' }
+        },
+        y: {
+          ticks: { color: '#727068' },
+          grid: { color: '#EFECE4' }
+        }
+      }
+    }
   });
 
   renderHistoryList(member, memberHistory, filteredRecords);
@@ -340,9 +417,9 @@ export function initChartRangeControls({ onRangeChange }) {
       state.selectedRange = btn.dataset.range;
       state.historyPage = 1;
       document.querySelectorAll('.range-btn').forEach((b) => {
-        b.className = 'range-btn flex-1 py-1.5 rounded-lg text-slate-600';
+        b.className = 'range-btn flex-1 py-1.5 rounded-xl text-ink-500';
       });
-      btn.className = 'range-btn flex-1 py-1.5 rounded-lg bg-white text-teal-700 shadow-sm';
+      btn.className = 'range-btn flex-1 py-1.5 rounded-xl bg-linen text-sage-700 shadow-sm';
       onRangeChange();
     };
   });

@@ -13,13 +13,36 @@ export function isValidFamilyCode(code) {
   );
 }
 
+export const MEMBER_TYPES = ['human', 'cat', 'dog'];
+
+export const AVATAR_IDS = [
+  'human-short',
+  'human-bob',
+  'human-glasses',
+  'human-bun',
+  'cat-orange',
+  'cat-tuxedo',
+  'cat-calico',
+  'dog-shiba',
+  'dog-poodle',
+  'dog-corgi',
+  'botanical-leaf',
+  'lifestyle-mug'
+];
+
+const avatarSchema = z
+  .enum(AVATAR_IDS, { message: '頭像代碼不在允許清單中' })
+  .nullable()
+  .optional();
+
 // Zod 嚴格輸入驗證 Schema（z.strictObject 拒絕任何未定義的額外欄位，防止 Mass Assignment）
 export const uuidSchema = z.uuid('無效的資源識別碼');
 
 export const createMemberSchema = z.strictObject({
   family_code: z.string().optional(),
   name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元'),
-  type: z.enum(['human', 'cat'], { message: '成員類型必須為 human 或 cat' }),
+  type: z.enum(MEMBER_TYPES, { message: '成員類型必須為 human、cat 或 dog' }),
+  avatar: avatarSchema,
   height_cm: z
     .number({ message: '身高必須為數字' })
     .finite('身高必須為有效數值')
@@ -44,6 +67,7 @@ export const createMemberSchema = z.strictObject({
 export const updateMemberSchema = z
   .strictObject({
     name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元').optional(),
+    avatar: avatarSchema,
     height_cm: z
       .number({ message: '身高必須為數字' })
       .finite('身高必須為有效數值')
@@ -65,8 +89,12 @@ export const updateMemberSchema = z
       .optional()
   })
   .refine(
-    (data) => data.name !== undefined || data.height_cm !== undefined || data.target_weight !== undefined,
-    { message: '至少需提供名稱、身高或目標體重其中一項欄位' }
+    (data) =>
+      data.name !== undefined ||
+      data.avatar !== undefined ||
+      data.height_cm !== undefined ||
+      data.target_weight !== undefined,
+    { message: '至少需提供名稱、頭像、身高或目標體重其中一項欄位' }
   );
 
 export const createRecordSchema = z.strictObject({

@@ -2,26 +2,40 @@ import { state } from '../state.js';
 import { hasInjectedApiKey } from '../services/api.js';
 import { optimisticDeleteMember } from '../services/syncQueue.js';
 import { createEl, showToast } from '../utils/dom.js';
+import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
+
+function getMemberTypeLabel(type) {
+  if (type === 'cat') return '貓咪';
+  if (type === 'dog') return '狗狗';
+  return '家人';
+}
 
 export function renderSettingsMembers({ onEditMember }) {
   const list = document.getElementById('settings-member-list');
   if (state.appData.members.length === 0) {
-    list.replaceChildren(createEl('li', 'py-3 text-center text-slate-400', '尚無成員'));
+    list.replaceChildren(createEl('li', 'py-3 text-center text-ink-400', '尚無成員'));
     return;
   }
 
   const items = state.appData.members.map((m) => {
-    const li = createEl('li', 'py-2.5 flex justify-between items-center');
-    li.appendChild(createEl('span', '', `${m.type === 'cat' ? '🐱' : '👤'} ${m.name ?? ''}`));
+    const li = createEl('li', 'py-2.5 flex justify-between items-center gap-2');
+
+    const identity = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
+    const nameGroup = createEl('div', 'min-w-0');
+    nameGroup.append(
+      createEl('div', 'font-medium text-ink truncate', String(m.name ?? '')),
+      createEl('div', 'text-[11px] text-ink-400', getMemberTypeLabel(m.type))
+    );
+    identity.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), nameGroup);
 
     const actions = createEl('div', 'flex items-center gap-1.5 shrink-0');
 
-    const editBtn = createEl('button', 'text-xs text-teal-600 hover:bg-teal-50 px-2 py-1 rounded-lg', '編輯');
+    const editBtn = createEl('button', 'text-xs text-sage-700 hover:bg-sage-50 px-2.5 py-1 rounded-lg font-medium', '編輯');
     editBtn.type = 'button';
     editBtn.onclick = () => onEditMember(m);
 
-    const delBtn = createEl('button', 'text-xs text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg', '刪除');
+    const delBtn = createEl('button', 'text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1 rounded-lg font-medium', '刪除');
     delBtn.type = 'button';
     delBtn.onclick = () => {
       if (!confirm('刪除成員會連同所有體重紀錄一起刪除，確定嗎？')) return;
@@ -30,7 +44,7 @@ export function renderSettingsMembers({ onEditMember }) {
     };
 
     actions.append(editBtn, delBtn);
-    li.appendChild(actions);
+    li.append(identity, actions);
     return li;
   });
   list.replaceChildren(...items);

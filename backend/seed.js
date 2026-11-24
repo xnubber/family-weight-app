@@ -66,6 +66,7 @@ const MOCK_MEMBERS = [
   {
     name: '爸爸',
     type: 'human',
+    avatar: 'human-glasses',
     height_cm: 175,
     target_weight: 72.0,
     startWeight: 78.5,
@@ -79,6 +80,7 @@ const MOCK_MEMBERS = [
   {
     name: '媽媽',
     type: 'human',
+    avatar: 'human-bob',
     height_cm: 162,
     target_weight: 53.0,
     startWeight: 54.0,
@@ -91,6 +93,7 @@ const MOCK_MEMBERS = [
   {
     name: '橘貓咪咪',
     type: 'cat',
+    avatar: 'cat-orange',
     height_cm: null,
     target_weight: 4.5,
     startWeight: 4.1,
@@ -98,6 +101,19 @@ const MOCK_MEMBERS = [
     fluctuation: 0.12,
     targetHistory: [
       { daysAgo: 60, target_weight: 4.5 }
+    ]
+  },
+  {
+    name: '柴犬豆豆',
+    type: 'dog',
+    avatar: 'dog-shiba',
+    height_cm: null,
+    target_weight: 9.8,
+    startWeight: 10.6,
+    endWeight: 9.95, // 模擬狗狗穩定減重
+    fluctuation: 0.2,
+    targetHistory: [
+      { daysAgo: 90, target_weight: 9.8 }
     ]
   }
 ];
@@ -206,18 +222,27 @@ async function runSeed() {
   await clearFamilyData(FAMILY_CODE);
 
   // 2. 寫入測試成員
-  const membersToInsert = MOCK_MEMBERS.map(({ name, type, height_cm, target_weight }) => ({
+  const membersToInsert = MOCK_MEMBERS.map(({ name, type, avatar, height_cm, target_weight }) => ({
     family_code: FAMILY_CODE,
     name,
     type,
+    avatar,
     height_cm,
     target_weight
   }));
 
-  const { data: insertedMembers, error: memError } = await supabase
+  let { data: insertedMembers, error: memError } = await supabase
     .from('members')
     .insert(membersToInsert)
     .select();
+
+  if (memError && String(memError.message || '').toLowerCase().includes('avatar')) {
+    console.warn('⚠️  members 表尚未新增 avatar 欄位，改以無 avatar 模式寫入（建議執行 backend/sql/002_dog_and_avatar.sql）');
+    const fallbackMembers = membersToInsert.map(({ avatar: _ignored, ...rest }) => rest);
+    const retry = await supabase.from('members').insert(fallbackMembers).select();
+    insertedMembers = retry.data;
+    memError = retry.error;
+  }
 
   if (memError) {
     console.error('❌ 新增成員失敗:', memError.message);

@@ -3,6 +3,7 @@ import { FamilyAPI } from './api.js';
 import { showToast } from '../utils/dom.js';
 import { getLocalTodayDate } from '../utils/metrics.js';
 import { isTempId } from '../utils/validation.js';
+import { saveLocalAvatar, migrateLocalAvatar, removeLocalAvatar } from '../utils/avatars.js';
 
 let tempSeq = 0;
 const idMap = new Map(); // tempId -> 後端回傳之正式 UUID
@@ -101,9 +102,10 @@ async function processQueue() {
 
 function replaceMemberTempId(tempId, realMember) {
   idMap.set(tempId, realMember.id);
+  migrateLocalAvatar(tempId, realMember.id);
   const idx = state.appData.members.findIndex((m) => m.id === tempId);
   if (idx !== -1) {
-    // 保留在等待期間使用者可能又做的本地編輯（僅補回正式 id 與伺服器預設欄位）
+    // 保留在等待期間使用者可能又做的本地編輯（含頭像設定），並補回正式 id 與伺服器預設欄位
     state.appData.members[idx] = { ...realMember, ...state.appData.members[idx], id: realMember.id };
   }
   state.appData.records.forEach((r) => {
@@ -129,10 +131,14 @@ export function optimisticAddMember(payload) {
     family_code: targetFamilyCode,
     name: payload.name,
     type: payload.type,
+    avatar: payload.avatar ?? null,
     height_cm: payload.height_cm ?? null,
     target_weight: payload.target_weight ?? null,
     created_at: nowIso
   };
+  if (optimisticMember.avatar) {
+    saveLocalAvatar(tempId, optimisticMember.avatar);
+  }
 
   let tempHistoryId = null;
   state.appData.members.push(optimisticMember);
@@ -163,9 +169,11 @@ export function optimisticAddMember(payload) {
         onRenderCallback();
       } else {
         idMap.set(tempId, created.id);
+        migrateLocalAvatar(tempId, created.id);
       }
     },
     rollback: () => {
+      removeLocalAvatar(tempId);
       if (state.familyCode !== targetFamilyCode) return;
       state.appData.members = state.appData.members.filter((m) => m.id !== tempId);
       state.appData.records = state.appData.records.filter((r) => r.member_id !== tempId);
@@ -179,7 +187,7 @@ export function optimisticAddMember(payload) {
   });
 }
 
-// 2. 樂觀更新成員（名稱、身高、目標體重）
+// 2. 樂觀更新成員（名稱、頭像、身高、目標體重）
 export function optimisticUpdateMember(rawMemberId, payload) {
   const targetFamilyCode = state.familyCode;
   const currentId = resolveId(rawMemberId);
@@ -193,6 +201,10 @@ export function optimisticUpdateMember(rawMemberId, payload) {
     : normalizeTargetWeight(payload.target_weight);
 
   if (payload.name !== undefined) member.name = payload.name;
+  if (payload.avatar !== undefined) {
+    member.avatar = payload.avatar;
+    if (payload.avatar) saveLocalAvatar(member.id, payload.avatar);
+  }
   if (payload.height_cm !== undefined) member.height_cm = payload.height_cm;
   if (payload.target_weight !== undefined) member.target_weight = payload.target_weight;
 
@@ -222,12 +234,18 @@ export function optimisticUpdateMember(rawMemberId, payload) {
       if (state.familyCode === targetFamilyCode) {
         const idx = state.appData.members.findIndex((m) => m.id === realId);
         if (idx !== -1) {
-          state.appData.members[idx] = { ...state.appData.members[idx], ...updated };
+          // 若資料庫尚未遷移 avatar 欄位，保留本地剛選好的頭像
+          const merged = { ...state.appData.members[idx], ...updated };
+          if (payload.avatar && !updated.avatar) {
+            merged.avatar = payload.avatar;
+          }
+          state.appData.members[idx] = merged;
         }
         onRenderCallback();
       }
     },
     rollback: () => {
+      if (snapshot.avatar) saveLocalAvatar(snapshot.id, snapshot.avatar);
       if (state.familyCode !== targetFamilyCode) return;
       const realId = resolveId(rawMemberId);
       const idx = state.appData.members.findIndex((m) => m.id === realId || m.id === rawMemberId);
@@ -257,6 +275,7 @@ export function optimisticDeleteMember(rawMemberId) {
   );
   const prevSelectedId = state.selectedMemberId;
 
+  removeLocalAvatar(member.id);
   state.appData.members = state.appData.members.filter((m) => m.id !== member.id && m.id !== rawMemberId);
   state.appData.records = state.appData.records.filter((r) => r.member_id !== member.id && r.member_id !== rawMemberId);
   state.appData.targetHistory = state.appData.targetHistory.filter(
@@ -278,6 +297,7 @@ export function optimisticDeleteMember(rawMemberId) {
       await FamilyAPI.deleteMember(targetFamilyCode, realId);
     },
     rollback: () => {
+      if (removedMember.avatar) saveLocalAvatar(removedMember.id, removedMember.avatar);
       if (state.familyCode !== targetFamilyCode) return;
       const restoredId = resolveId(rawMemberId);
       state.appData.members.push({ ...removedMember, id: restoredId });

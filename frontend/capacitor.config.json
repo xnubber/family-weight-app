@@ -1,6 +1,6 @@
 {
   "appId": "com.familyweight.app",
-  "appName": "家人與貓咪體重",
+  "appName": "家與毛孩體重誌",
   "webDir": "www",
   "server": {
     "androidScheme": "https",

@@ -5,10 +5,18 @@ import {
   optimisticAddRecord
 } from '../services/syncQueue.js';
 import { createEl, showToast } from '../utils/dom.js';
+import { createIcon } from '../utils/icons.js';
+import {
+  createAvatarNode,
+  getDefaultAvatarForType,
+  isValidAvatarId,
+  renderAvatarPicker,
+  resolveMemberAvatar
+} from '../utils/avatars.js';
 import {
   calculateBmi,
   calculateHealthyWeightRange,
-  calculateCatCalories,
+  calculatePetCalories,
   getLocalTodayDate
 } from '../utils/metrics.js';
 import { isValidResourceId, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
@@ -20,12 +28,41 @@ const CAT_FACTORS = [
   { value: '2.5', label: '幼貓成長期 (2.5x)' }
 ];
 
+const DOG_FACTORS = [
+  { value: '1.6', label: '已結紮成犬 (1.6x)' },
+  { value: '1.8', label: '未結紮成犬 (1.8x)' },
+  { value: '1.0', label: '減重中狗狗 (1.0x)' },
+  { value: '2.0', label: '活潑／高活動量成犬 (2.0x)' },
+  { value: '3.0', label: '幼犬成長期 (3.0x)' }
+];
+
+const VALID_MEMBER_TYPES = new Set(['human', 'cat', 'dog']);
+
 let recordModalMode = 'batch'; // 'batch' | 'single'
 let hasProfileHealthCard = false;
+let memberAvatarManuallyPicked = false;
 
-function getSavedCatFactor(memberId) {
-  const saved = localStorage.getItem(`catFactor:${memberId}`);
-  return CAT_FACTORS.some((f) => f.value === saved) ? saved : '1.2';
+function getMemberTypeLabel(type) {
+  if (type === 'cat') return '貓咪';
+  if (type === 'dog') return '狗狗';
+  return '家人';
+}
+
+function isPetType(type) {
+  return type === 'cat' || type === 'dog';
+}
+
+function getPetFactors(type) {
+  return type === 'dog' ? DOG_FACTORS : CAT_FACTORS;
+}
+
+function getSavedPetFactor(memberId, type) {
+  const factors = getPetFactors(type);
+  const defaultFactor = type === 'dog' ? '1.6' : '1.2';
+  const saved =
+    localStorage.getItem(`petFactor:${memberId}`) ||
+    (type === 'cat' ? localStorage.getItem(`catFactor:${memberId}`) : null);
+  return factors.some((f) => f.value === saved) ? saved : defaultFactor;
 }
 
 function setRecordModalMode(mode) {
@@ -38,11 +75,11 @@ function setRecordModalMode(mode) {
   const batchBtn = document.getElementById('btn-rec-mode-batch');
   const singleBtn = document.getElementById('btn-rec-mode-single');
   batchBtn.className = isBatch
-    ? 'px-2.5 py-1 rounded-lg bg-white text-teal-700 shadow-sm'
-    : 'px-2.5 py-1 rounded-lg text-slate-600';
+    ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-linen text-sage-700 shadow-sm'
+    : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-ink-500';
   singleBtn.className = !isBatch
-    ? 'px-2.5 py-1 rounded-lg bg-white text-teal-700 shadow-sm'
-    : 'px-2.5 py-1 rounded-lg text-slate-600';
+    ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-linen text-sage-700 shadow-sm'
+    : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-ink-500';
 
   document.getElementById('btn-rec-submit').textContent = isBatch ? '一次儲存' : '儲存';
 }
@@ -52,18 +89,19 @@ function renderBatchMemberRows() {
   const rows = state.appData.members.map((m) => {
     const recs = state.appData.records.filter((r) => r.member_id === m.id);
     const latest = recs[recs.length - 1];
-    const isCat = m.type === 'cat';
 
     const row = createEl('div', 'py-2.5 flex items-center justify-between gap-3');
+    const leftGroup = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
     const labelWrap = createEl('div', 'min-w-0 flex-1');
     labelWrap.append(
-      createEl('div', 'font-medium text-sm text-slate-800 truncate', `${isCat ? '🐱' : '👤'} ${m.name ?? ''}`),
+      createEl('div', 'font-medium text-sm text-ink truncate', String(m.name ?? '')),
       createEl(
         'div',
-        'text-[11px] text-slate-400 tabular-nums',
+        'text-[11px] text-ink-400 tabular-nums',
         latest ? `上次 ${latest.weight_kg} kg（${latest.recorded_at}）` : '尚未有紀錄'
       )
     );
+    leftGroup.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), labelWrap);
 
     const inputWrap = createEl('div', 'flex items-center gap-1.5 shrink-0');
     const input = document.createElement('input');
@@ -74,10 +112,10 @@ function renderBatchMemberRows() {
     input.placeholder = latest ? String(latest.weight_kg) : '體重';
     input.dataset.memberId = String(m.id);
     input.dataset.memberName = String(m.name ?? '');
-    input.className = 'batch-weight-input w-24 border rounded-lg px-2.5 py-1.5 text-sm text-right tabular-nums';
+    input.className = 'batch-weight-input w-24 border rounded-xl px-2.5 py-1.5 text-sm text-right tabular-nums';
 
-    inputWrap.append(input, createEl('span', 'text-xs text-slate-400', 'kg'));
-    row.append(labelWrap, inputWrap);
+    inputWrap.append(input, createEl('span', 'text-xs text-ink-400', 'kg'));
+    row.append(leftGroup, inputWrap);
     return row;
   });
 
@@ -94,7 +132,7 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
   const options = state.appData.members.map((m) => {
     const opt = document.createElement('option');
     opt.value = String(m.id);
-    opt.textContent = String(m.name ?? '');
+    opt.textContent = `${m.name ?? ''}（${getMemberTypeLabel(m.type)}）`;
     return opt;
   });
   select.replaceChildren(...options);
@@ -121,7 +159,18 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
   }
 }
 
-// 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、身高與目標體重）
+function setMemberModalAvatar(avatarId) {
+  const input = document.getElementById('mem-avatar');
+  const picker = document.getElementById('mem-avatar-picker');
+  const validId = isValidAvatarId(avatarId) ? avatarId : 'human-short';
+  input.value = validId;
+  renderAvatarPicker(picker, validId, (picked) => {
+    memberAvatarManuallyPicked = true;
+    input.value = picked;
+  });
+}
+
+// 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、頭像、身高與目標體重）
 export function openMemberModal(member = null) {
   const form = document.getElementById('form-member');
   const titleEl = document.getElementById('mem-modal-title');
@@ -136,35 +185,39 @@ export function openMemberModal(member = null) {
   form.reset();
 
   if (member) {
-    const isCat = member.type === 'cat';
+    const isPet = isPetType(member.type);
+    memberAvatarManuallyPicked = true;
     titleEl.textContent = '編輯成員';
     submitBtn.textContent = '儲存修改';
     idInput.value = member.id;
     nameInput.value = member.name || '';
-    typeSelect.value = member.type || 'human';
+    typeSelect.value = VALID_MEMBER_TYPES.has(member.type) ? member.type : 'human';
     typeSelect.disabled = true;
-    heightWrap.classList.toggle('hidden', isCat);
-    heightInput.value = isCat ? '' : (member.height_cm ?? '');
+    heightWrap.classList.toggle('hidden', isPet);
+    heightInput.value = isPet ? '' : (member.height_cm ?? '');
     targetInput.value = member.target_weight ?? '';
+    setMemberModalAvatar(resolveMemberAvatar(member));
   } else {
+    memberAvatarManuallyPicked = false;
     titleEl.textContent = '新增成員';
     submitBtn.textContent = '新增';
     idInput.value = '';
     typeSelect.value = 'human';
     typeSelect.disabled = false;
     heightWrap.classList.remove('hidden');
+    setMemberModalAvatar(getDefaultAvatarForType('human'));
   }
 
   document.getElementById('modal-member').classList.remove('hidden');
   nameInput.focus();
 }
 
-// 繪製個人資訊面板中的「自動健康指標卡」（取代原本獨立的指標分頁）
+// 繪製個人資訊面板中的「自動健康指標卡」（家人 BMI / 區間、貓咪與狗狗 RER / DER）
 function renderProfileHealthCard(member, latest) {
   const card = document.getElementById('prof-health-card');
-  const isCat = member.type === 'cat';
+  const isHuman = member.type === 'human';
 
-  if (!isCat) {
+  if (isHuman) {
     const bmiRes = latest && member.height_cm ? calculateBmi(latest.weight_kg, member.height_cm) : null;
     const range = member.height_cm ? calculateHealthyWeightRange(member.height_cm) : null;
 
@@ -176,28 +229,33 @@ function renderProfileHealthCard(member, latest) {
     }
 
     hasProfileHealthCard = true;
-    card.className = 'rounded-xl p-3.5 text-sm space-y-2 border bg-teal-50/60 border-teal-100';
+    card.className = 'rounded-2xl p-3.5 text-sm space-y-2 border bg-sage-50/75 border-sage-200';
 
-    const header = createEl('div', 'flex justify-between items-center');
-    header.appendChild(createEl('span', 'font-semibold text-teal-800 text-xs', '👤 衛福部成人健康指標'));
+    const header = createEl('div', 'flex justify-between items-center gap-2');
+    const titleWrap = createEl('span', 'font-medium text-sage-700 text-xs inline-flex items-center gap-1.5');
+    titleWrap.append(
+      createIcon('leaf', 'w-3.5 h-3.5 shrink-0'),
+      createEl('span', '', '衛福部成人健康指標')
+    );
+    header.appendChild(titleWrap);
 
     if (bmiRes) {
       const badgeClass = bmiRes.status === '正常範圍'
-        ? 'bg-emerald-100 text-emerald-700'
+        ? 'bg-sage-100 text-sage-700 border border-sage-200'
         : bmiRes.status === '過輕'
-          ? 'bg-sky-100 text-sky-700'
-          : 'bg-amber-100 text-amber-700';
+          ? 'bg-oat-100 text-ink-700 border border-oat-200'
+          : 'bg-ochre-100 text-ochre-700 border border-ochre-200';
       header.appendChild(
-        createEl('span', `text-xs font-semibold px-2 py-0.5 rounded-full ${badgeClass}`, `BMI ${bmiRes.bmi.toFixed(1)} · ${bmiRes.status}`)
+        createEl('span', `text-xs font-medium px-2 py-0.5 rounded-full tabular-nums ${badgeClass}`, `BMI ${bmiRes.bmi.toFixed(1)} · ${bmiRes.status}`)
       );
     }
 
     const children = [header];
     if (range) {
-      const row = createEl('div', 'flex justify-between items-center text-xs text-slate-600');
+      const row = createEl('div', 'flex justify-between items-center text-xs text-ink-500');
       row.append(
         createEl('span', '', '建議健康體重區間（BMI 18.5–24）'),
-        createEl('strong', 'text-slate-800 tabular-nums', `${range.minKg}–${range.maxKg} kg`)
+        createEl('strong', 'text-ink font-semibold tabular-nums', `${range.minKg}–${range.maxKg} kg`)
       );
       children.push(row);
     }
@@ -206,7 +264,7 @@ function renderProfileHealthCard(member, latest) {
     return;
   }
 
-  // 貓咪自動每日熱量建議（RER / DER）
+  // 貓咪／狗狗自動每日熱量建議（RER / DER）
   if (!latest) {
     hasProfileHealthCard = false;
     card.classList.add('hidden');
@@ -214,46 +272,58 @@ function renderProfileHealthCard(member, latest) {
     return;
   }
 
+  const isDog = member.type === 'dog';
+  const factors = getPetFactors(member.type);
   hasProfileHealthCard = true;
-  card.className = 'rounded-xl p-3.5 text-sm space-y-2.5 border bg-orange-50/70 border-orange-100';
+  card.className = isDog
+    ? 'rounded-2xl p-3.5 text-sm space-y-2.5 border bg-ochre-50/80 border-ochre-200'
+    : 'rounded-2xl p-3.5 text-sm space-y-2.5 border bg-clay-50/80 border-clay-200';
 
   const header = createEl('div', 'flex justify-between items-center gap-2');
-  header.appendChild(createEl('span', 'font-semibold text-orange-700 text-xs shrink-0', '🐱 貓咪每日熱量建議'));
+  const titleWrap = createEl(
+    'span',
+    `font-medium text-xs shrink-0 inline-flex items-center gap-1.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`
+  );
+  titleWrap.append(
+    createIcon('paw', 'w-3.5 h-3.5 shrink-0'),
+    createEl('span', '', isDog ? '狗狗每日熱量建議' : '貓咪每日熱量建議')
+  );
+  header.appendChild(titleWrap);
 
   const factorSelect = document.createElement('select');
-  factorSelect.className = 'border border-orange-200 rounded-lg px-2 py-1 text-xs bg-white text-slate-700';
-  CAT_FACTORS.forEach((optCfg) => {
+  factorSelect.className = `border rounded-lg px-2 py-1 text-xs bg-linen text-ink-700 ${isDog ? 'border-ochre-200' : 'border-clay-200'}`;
+  factors.forEach((optCfg) => {
     const opt = document.createElement('option');
     opt.value = optCfg.value;
     opt.textContent = optCfg.label;
     factorSelect.appendChild(opt);
   });
-  factorSelect.value = getSavedCatFactor(member.id);
+  factorSelect.value = getSavedPetFactor(member.id, member.type);
 
-  const resultGrid = createEl('div', 'grid grid-cols-2 gap-2 bg-white/80 rounded-lg p-2.5 text-center');
-  const renderCatResult = () => {
-    const res = calculateCatCalories(latest.weight_kg, factorSelect.value);
+  const resultGrid = createEl('div', 'grid grid-cols-2 gap-2 bg-linen/90 border border-oat-200/70 rounded-xl p-2.5 text-center');
+  const renderPetResult = () => {
+    const res = calculatePetCalories(latest.weight_kg, factorSelect.value);
     if (!res) return;
     const colRer = createEl('div');
     colRer.append(
-      createEl('div', 'text-[11px] text-slate-400', '基礎代謝 RER'),
-      createEl('div', 'font-bold text-slate-800 tabular-nums', `${res.rer} kcal`)
+      createEl('div', 'text-[11px] text-ink-400', '基礎代謝 RER'),
+      createEl('div', 'font-semibold text-ink tabular-nums', `${res.rer} kcal`)
     );
     const colDer = createEl('div');
     colDer.append(
-      createEl('div', 'text-[11px] text-slate-400', '每日建議攝取 DER'),
-      createEl('div', 'font-bold text-orange-600 tabular-nums', `${res.der} kcal`)
+      createEl('div', 'text-[11px] text-ink-400', '每日建議攝取 DER'),
+      createEl('div', `font-semibold tabular-nums ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, `${res.der} kcal`)
     );
     resultGrid.replaceChildren(colRer, colDer);
   };
 
   factorSelect.onchange = () => {
-    localStorage.setItem(`catFactor:${member.id}`, factorSelect.value);
-    renderCatResult();
+    localStorage.setItem(`petFactor:${member.id}`, factorSelect.value);
+    renderPetResult();
   };
 
   header.appendChild(factorSelect);
-  renderCatResult();
+  renderPetResult();
   card.replaceChildren(header, resultGrid);
 }
 
@@ -275,34 +345,50 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   if (!m) return;
   const recs = state.appData.records.filter((r) => r.member_id === m.id);
   const latest = recs[recs.length - 1];
-  const isCat = m.type === 'cat';
+  const isPet = isPetType(m.type);
+  const initialAvatar = resolveMemberAvatar(m);
+
+  const renderProfileAvatarPreview = (avatarId) => {
+    const slot = document.getElementById('prof-avatar-slot');
+    if (slot) {
+      slot.replaceChildren(createAvatarNode(avatarId, 'w-11 h-11'));
+    }
+  };
 
   const fillEditInputs = () => {
     document.getElementById('prof-name').value = m.name || '';
-    document.getElementById('prof-height').value = isCat ? '' : (m.height_cm ?? '');
+    document.getElementById('prof-height').value = isPet ? '' : (m.height_cm ?? '');
     document.getElementById('prof-target').value = m.target_weight ?? '';
+    document.getElementById('prof-avatar').value = initialAvatar;
+    renderProfileAvatarPreview(initialAvatar);
+    renderAvatarPicker(document.getElementById('prof-avatar-picker'), initialAvatar, (picked) => {
+      document.getElementById('prof-avatar').value = picked;
+      renderProfileAvatarPreview(picked);
+    });
   };
 
   document.getElementById('prof-id').value = m.id;
-  document.getElementById('prof-title').textContent = `${isCat ? '🐱' : '👤'} ${m.name} 的個人資訊`;
+  document.getElementById('prof-title').textContent = m.name || '個人資訊';
+  document.getElementById('prof-subtitle').textContent = `${getMemberTypeLabel(m.type)}檔案`;
 
   // 檢視模式文字
   document.getElementById('prof-view-name').textContent = m.name || '--';
-  document.getElementById('prof-view-height-row').classList.toggle('hidden', isCat);
+  document.getElementById('prof-view-type').textContent = getMemberTypeLabel(m.type);
+  document.getElementById('prof-view-height-row').classList.toggle('hidden', isPet);
   document.getElementById('prof-view-height').textContent = m.height_cm ? `${m.height_cm} cm` : '未設定';
   document.getElementById('prof-view-target').textContent = m.target_weight ? `${m.target_weight} kg` : '未設定';
 
-  // 自動健康指標卡（家人 BMI / 健康區間、貓咪 RER / DER）
+  // 自動健康指標卡（家人 BMI / 健康區間、貓咪與狗狗 RER / DER）
   renderProfileHealthCard(m, latest);
 
   // 編輯模式欄位初始值
-  document.getElementById('prof-height-wrap').classList.toggle('hidden', isCat);
+  document.getElementById('prof-height-wrap').classList.toggle('hidden', isPet);
   fillEditInputs();
   setProfileEditMode(false);
 
   let metricLabel = '目標差距';
   let metricVal = '--';
-  const bmiRes = !isCat && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
+  const bmiRes = !isPet && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
   if (bmiRes) {
     metricLabel = '目前 BMI';
     metricVal = bmiRes.bmi.toFixed(1);
@@ -314,13 +400,13 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   const summary = document.getElementById('prof-summary');
   const col1 = createEl('div');
   col1.append(
-    createEl('div', 'text-xs text-slate-400', '最新體重'),
-    createEl('div', 'font-bold text-base text-slate-800 tabular-nums', latest ? `${latest.weight_kg} kg` : '--')
+    createEl('div', 'text-xs text-ink-400', '最新體重'),
+    createEl('div', 'font-semibold text-base text-ink tabular-nums mt-0.5', latest ? `${latest.weight_kg} kg` : '--')
   );
   const col2 = createEl('div');
   col2.append(
-    createEl('div', 'text-xs text-slate-400', metricLabel),
-    createEl('div', 'font-bold text-base text-teal-700 tabular-nums', metricVal)
+    createEl('div', 'text-xs text-ink-400', metricLabel),
+    createEl('div', 'font-semibold text-base text-sage-700 tabular-nums mt-0.5', metricVal)
   );
   summary.replaceChildren(col1, col2);
 
@@ -367,11 +453,15 @@ export function initModals() {
   document.getElementById('btn-rec-mode-batch').onclick = () => setRecordModalMode('batch');
   document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single');
 
-  // 切換成員類型時自動隱藏／顯示身高欄位
+  // 切換成員類型時自動隱藏／顯示身高欄位，並在未手動挑頭像時貼心帶入對應風格頭像
   document.getElementById('mem-type').onchange = (e) => {
-    const isCat = e.target.value === 'cat';
-    document.getElementById('mem-height-wrap').classList.toggle('hidden', isCat);
-    if (isCat) document.getElementById('mem-height').value = '';
+    const nextType = e.target.value;
+    const isPet = isPetType(nextType);
+    document.getElementById('mem-height-wrap').classList.toggle('hidden', isPet);
+    if (isPet) document.getElementById('mem-height').value = '';
+    if (!memberAvatarManuallyPicked) {
+      setMemberModalAvatar(getDefaultAvatarForType(nextType));
+    }
   };
 
   // 總覽主按鈕：預設開啟「批量紀錄」模式，方便一次填完今日全家體重
@@ -456,14 +546,16 @@ export function initModals() {
     showToast('體重已記錄');
   };
 
-  // 表單送出：樂觀新增或編輯成員
+  // 表單送出：樂觀新增或編輯成員（含自訂頭像與狗狗類型）
   document.getElementById('form-member').onsubmit = (e) => {
     e.preventDefault();
     const editId = document.getElementById('mem-id').value.trim();
     const name = document.getElementById('mem-name').value.trim();
     const type = document.getElementById('mem-type').value;
-    const isCat = type === 'cat';
-    const heightParsed = isCat
+    const rawAvatar = document.getElementById('mem-avatar').value.trim();
+    const avatar = isValidAvatarId(rawAvatar) ? rawAvatar : getDefaultAvatarForType(type);
+    const isPet = isPetType(type);
+    const heightParsed = isPet
       ? { value: null }
       : parseStrictNumber(document.getElementById('mem-height').value, {
           required: false,
@@ -479,7 +571,7 @@ export function initModals() {
     });
 
     if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
-    if (type !== 'human' && type !== 'cat') return showToast('成員類型不正確', true);
+    if (!VALID_MEMBER_TYPES.has(type)) return showToast('成員類型不正確', true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
     if (targetParsed.error) return showToast(targetParsed.error, true);
 
@@ -489,6 +581,7 @@ export function initModals() {
       e.target.reset();
       optimisticUpdateMember(editId, {
         name,
+        avatar,
         height_cm: heightParsed.value,
         target_weight: targetParsed.value,
         target_effective_date: getLocalTodayDate()
@@ -500,6 +593,7 @@ export function initModals() {
       optimisticAddMember({
         name,
         type,
+        avatar,
         height_cm: heightParsed.value,
         target_weight: targetParsed.value,
         target_effective_date: getLocalTodayDate()
@@ -508,14 +602,16 @@ export function initModals() {
     }
   };
 
-  // 表單送出：樂觀更新個人資訊（含名稱、身高、目標體重）
+  // 表單送出：樂觀更新個人資訊（含名稱、頭像、身高、目標體重）
   document.getElementById('form-profile').onsubmit = (e) => {
     e.preventDefault();
     const id = document.getElementById('prof-id').value.trim();
     const member = state.appData.members.find((x) => x.id === id);
-    const isCat = member?.type === 'cat';
+    const isPet = isPetType(member?.type);
     const name = document.getElementById('prof-name').value.trim();
-    const heightParsed = isCat
+    const rawAvatar = document.getElementById('prof-avatar').value.trim();
+    const avatar = isValidAvatarId(rawAvatar) ? rawAvatar : resolveMemberAvatar(member);
+    const heightParsed = isPet
       ? { value: null }
       : parseStrictNumber(document.getElementById('prof-height').value, {
           required: false,
@@ -538,6 +634,7 @@ export function initModals() {
     document.getElementById('modal-profile').classList.add('hidden');
     optimisticUpdateMember(id, {
       name,
+      avatar,
       height_cm: heightParsed.value,
       target_weight: targetParsed.value,
       target_effective_date: getLocalTodayDate()
