@@ -734,8 +734,8 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
         ? `${numericWeight.toFixed(2)} kg`
         : `${r.weight_kg} kg`;
 
-    // 第 1 行：固定欄寬體重（小數兩位等寬對齊）＋ 垂直對齊之目標差距膠囊
-    const topRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-2');
+    // 第 1 行：固定欄寬體重（小數兩位等寬對齊）＋ 垂直對齊之目標差距膠囊（固定列高避免有無膠囊高低不一）
+    const topRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-2 min-h-[22px]');
     topRow.appendChild(
       createEl(
         'span',
@@ -744,7 +744,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
       )
     );
 
-    const pillSlot = createEl('div', 'flex items-center min-w-0');
+    const pillSlot = createEl('div', 'flex items-center min-w-0 min-h-[22px]');
     const activeTarget = recordTargetSeries.values[idx];
     const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
     if (targetGap) {
@@ -775,9 +775,30 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
     }
     topRow.appendChild(pillSlot);
 
-    // 第 2 行：量測日期（與左側體重精準對齊）
-    const dateRow = createEl('div', 'text-fluid-label text-ink-400 tabular-nums mt-0.5 leading-4', String(r.recorded_at ?? ''));
-    info.append(topRow, dateRow);
+    // 第 2 行：量測日期 ＋ 單行省略備註（同欄寬對齊且固定高度，確保每筆歷史紀錄版面完全一致）
+    const bottomRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-2 h-4 mt-1');
+    const dateCell = createEl(
+      'span',
+      'text-fluid-label text-ink-400 tabular-nums leading-4 whitespace-nowrap',
+      String(r.recorded_at ?? '')
+    );
+    const noteSlot = createEl('div', 'min-w-0 flex items-center');
+    const noteText = String(r.note ?? '').trim();
+    if (noteText) {
+      const noteBtn = createEl(
+        'button',
+        'block w-full text-left text-xs leading-4 text-ink-500 hover:text-ink truncate',
+        noteText
+      );
+      noteBtn.type = 'button';
+      noteBtn.setAttribute('title', noteText);
+      noteBtn.setAttribute('aria-label', `查看備註：${noteText}`);
+      noteBtn.onclick = () => showToast(`${r.recorded_at} 備註：${noteText}`, false, 4000);
+      noteSlot.appendChild(noteBtn);
+    }
+    bottomRow.append(dateCell, noteSlot);
+
+    info.append(topRow, bottomRow);
 
     if (!isHidden) {
       const delBtn = createEl(
@@ -803,10 +824,6 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
     }
 
     li.appendChild(mainRow);
-
-    if (r.note) {
-      li.appendChild(createEl('p', 'text-xs text-ink-500 mt-1.5 leading-relaxed break-words', String(r.note)));
-    }
     return li;
   });
   list.replaceChildren(...items);

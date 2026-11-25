@@ -102,14 +102,14 @@ export function playSoftFade(el) {
 let toastHideTimer = null;
 let toastCleanupTimer = null;
 
-export function showToast(msg, isError = false) {
+export function showToast(msg, isError = false, durationMs = 2400) {
   const el = document.getElementById('toast');
   if (!el) return;
   if (toastHideTimer) clearTimeout(toastHideTimer);
   if (toastCleanupTimer) clearTimeout(toastCleanupTimer);
 
   el.textContent = msg;
-  el.className = `toast-banner fixed top-16 left-1/2 z-50 px-4 py-2 rounded-full text-xs font-medium tracking-wide text-linen shadow-soft ${isError ? 'bg-rosewood-600' : 'bg-ink'}`;
+  el.className = `toast-banner fixed top-16 left-1/2 z-50 max-w-[calc(100vw-2rem)] break-words text-center px-4 py-2 rounded-2xl text-xs font-medium leading-relaxed tracking-wide text-linen shadow-soft ${isError ? 'bg-rosewood-600' : 'bg-ink'}`;
 
   const nextFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
   nextFrame(() => {
@@ -123,7 +123,7 @@ export function showToast(msg, isError = false) {
         el.classList.add('hidden');
       }
     }, 240);
-  }, 2400);
+  }, durationMs);
 }
 
 // 統一點擊回饋：確保手機上快速輕點（<50ms）也能呈現完整的按壓縮放與回彈手感
