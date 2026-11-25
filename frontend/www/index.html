@@ -83,9 +83,10 @@
 
       <div class="journal-card p-4 rounded-2xl space-y-2.5">
         <div id="chart-inspect-bar" class="min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400"></div>
-        <div class="select-none">
+        <div id="chart-canvas-wrap" class="select-none">
           <canvas id="weightChart" height="220" class="touch-pan-y select-none"></canvas>
         </div>
+        <div id="chart-empty-state" class="hidden py-10 text-center text-xs text-ink-400">此區間尚無體重紀錄，切換時間範圍或新增體重即可檢視趨勢。</div>
       </div>
       <div class="journal-card p-4 rounded-2xl">
         <div class="flex items-center justify-between gap-2 mb-3">

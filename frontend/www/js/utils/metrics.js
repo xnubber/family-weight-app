@@ -1,63 +1,184 @@
-// 取得使用者裝置當地日期字串 (YYYY-MM-DD)，避免 UTC 時差造成設定日期偏移一天
-export function getLocalTodayDate() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
+function formatLocalDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
-// 依據 日/週/月/年 篩選並計算平均體重，同時保留每個 X 軸點對應的代表日期 pointDates
+function parseYmdParts(ymd) {
+  const [y, m, d] = String(ymd || '').slice(0, 10).split('-').map(Number);
+  return { y, m, d };
+}
+
+function getQuarterRangeText(q) {
+  if (q === 1) return '1–3月';
+  if (q === 2) return '4–6月';
+  if (q === 3) return '7–9月';
+  return '10–12月';
+}
+
+// 取得使用者裝置當地日期字串 (YYYY-MM-DD)，避免 UTC 時差造成設定日期偏移一天
+export function getLocalTodayDate() {
+  return formatLocalDateStr(new Date());
+}
+
+const RANGE_SUMMARY_MAP = {
+  day: '近 30 天 · 每日紀錄',
+  week: '近 12 週 · 每週平均',
+  month: '近 12 月 · 每月平均',
+  year: '近 3 年 · 每季平均'
+};
+
+// 依據 日/週/月/年 篩選並計算平均體重，同時回傳清晰的 X 軸標籤、檢視列詳情與代表日期 pointDates
 export function aggregateRecords(recs, range) {
   const now = new Date();
-  const cutoff = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  if (range === 'day') cutoff.setDate(now.getDate() - 30);
-  else if (range === 'week') cutoff.setDate(now.getDate() - 84);
-  else if (range === 'month') cutoff.setMonth(now.getMonth() - 12);
-  else if (range === 'year') cutoff.setFullYear(now.getFullYear() - 2);
+  if (range === 'day') cutoff.setDate(cutoff.getDate() - 30);
+  else if (range === 'week') cutoff.setDate(cutoff.getDate() - 84);
+  else if (range === 'month') cutoff.setMonth(cutoff.getMonth() - 12);
+  else if (range === 'year') cutoff.setFullYear(cutoff.getFullYear() - 3);
 
-  const cutoffStr = cutoff.toISOString().split('T')[0];
-  const filtered = recs.filter((r) => r.recorded_at >= cutoffStr);
+  const cutoffStr = formatLocalDateStr(cutoff);
+  const filtered = (recs || [])
+    .filter((r) => r.recorded_at >= cutoffStr)
+    .slice()
+    .sort((a, b) => String(a.recorded_at || '').localeCompare(String(b.recorded_at || '')));
+
+  const rangeSummary = RANGE_SUMMARY_MAP[range] || RANGE_SUMMARY_MAP.day;
 
   if (range === 'day') {
+    const years = new Set(filtered.map((r) => parseYmdParts(r.recorded_at).y));
+    const spansYears = years.size > 1;
+    let prevYear = null;
+    const labels = [];
+    const tagLabels = [];
+    const detailLabels = [];
+
+    filtered.forEach((r) => {
+      const { y, m, d } = parseYmdParts(r.recorded_at);
+      const showYear = spansYears && y !== prevYear;
+      prevYear = y;
+      const shortMd = `${m}/${d}`;
+      labels.push(showYear ? `${String(y).slice(-2)}/${shortMd}` : shortMd);
+      tagLabels.push(shortMd);
+      detailLabels.push(`${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`);
+    });
+
     return {
-      labels: filtered.map((r) => r.recorded_at.slice(5)),
+      labels,
+      tagLabels,
+      detailLabels,
+      bucketCounts: filtered.map(() => 1),
       values: filtered.map((r) => Number(r.weight_kg)),
       pointDates: filtered.map((r) => r.recorded_at),
-      filteredRecords: filtered
+      filteredRecords: filtered,
+      rangeSummary
     };
   }
 
-  const groups = {};
+  const groupMap = new Map();
   filtered.forEach((r) => {
-    let key;
+    const { y, m, d } = parseYmdParts(r.recorded_at);
+    let bucketKey;
+    let meta;
+
     if (range === 'week') {
-      const d = new Date(r.recorded_at + 'T00:00:00');
-      const diff = d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1);
-      d.setDate(diff);
-      key = d.toISOString().split('T')[0].slice(5) + '週';
+      const localDate = new Date(y, m - 1, d);
+      const dayOfWeek = localDate.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(y, m - 1, d + mondayOffset);
+      const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+      bucketKey = formatLocalDateStr(monday);
+      meta = {
+        startYear: monday.getFullYear(),
+        startMonth: monday.getMonth() + 1,
+        startDay: monday.getDate(),
+        endYear: sunday.getFullYear(),
+        endMonth: sunday.getMonth() + 1,
+        endDay: sunday.getDate()
+      };
+    } else if (range === 'month') {
+      bucketKey = `${y}-${String(m).padStart(2, '0')}`;
+      meta = { year: y, month: m };
     } else {
-      key = r.recorded_at.slice(0, 7);
+      const quarter = Math.floor((m - 1) / 3) + 1;
+      bucketKey = `${y}-Q${quarter}`;
+      meta = { year: y, quarter };
     }
-    if (!groups[key]) {
-      groups[key] = { values: [], maxDate: r.recorded_at };
+
+    if (!groupMap.has(bucketKey)) {
+      groupMap.set(bucketKey, { values: [], maxDate: r.recorded_at, meta });
     }
-    groups[key].values.push(Number(r.weight_kg));
-    if (r.recorded_at > groups[key].maxDate) {
-      groups[key].maxDate = r.recorded_at;
+    const bucket = groupMap.get(bucketKey);
+    bucket.values.push(Number(r.weight_kg));
+    if (r.recorded_at > bucket.maxDate) {
+      bucket.maxDate = r.recorded_at;
     }
   });
 
-  const labels = Object.keys(groups);
-  const values = labels.map((k) => {
-    const arr = groups[k].values;
+  const orderedEntries = Array.from(groupMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const distinctYears = new Set(
+    orderedEntries.map(([, b]) => (range === 'week' ? b.meta.startYear : b.meta.year))
+  );
+  const spansYears = distinctYears.size > 1;
+
+  let prevYear = null;
+  const labels = [];
+  const tagLabels = [];
+  const detailLabels = [];
+  const bucketCounts = [];
+  const values = [];
+  const pointDates = [];
+
+  orderedEntries.forEach(([, bucket]) => {
+    const arr = bucket.values;
     const avg = arr.reduce((sum, v) => sum + v, 0) / arr.length;
-    return Number(avg.toFixed(2));
-  });
-  const pointDates = labels.map((k) => groups[k].maxDate);
+    values.push(Number(avg.toFixed(2)));
+    pointDates.push(bucket.maxDate);
+    bucketCounts.push(arr.length);
 
-  return { labels, values, pointDates, filteredRecords: filtered };
+    if (range === 'week') {
+      const { startYear, startMonth, startDay, endYear, endMonth, endDay } = bucket.meta;
+      const showYear = spansYears && startYear !== prevYear;
+      prevYear = startYear;
+      const startShort = `${startMonth}/${startDay}`;
+      const endShort = `${endMonth}/${endDay}`;
+      labels.push(showYear ? `${String(startYear).slice(-2)}/${startShort}~` : `${startShort}~`);
+      tagLabels.push(`${startShort}週`);
+      const rangeStr = startYear !== endYear
+        ? `${String(startYear).slice(-2)}/${startShort}–${String(endYear).slice(-2)}/${endShort}`
+        : `${startShort}–${endShort}`;
+      detailLabels.push(`${rangeStr} 週平均`);
+    } else if (range === 'month') {
+      const { year, month } = bucket.meta;
+      const showYear = spansYears && year !== prevYear;
+      prevYear = year;
+      const yy = String(year).slice(-2);
+      labels.push(showYear ? `${yy}年${month}月` : `${month}月`);
+      tagLabels.push(`${yy}年${month}月`);
+      detailLabels.push(`${year}年${month}月 月平均`);
+    } else {
+      const { year, quarter } = bucket.meta;
+      const showYear = year !== prevYear;
+      prevYear = year;
+      const yy = String(year).slice(-2);
+      labels.push(showYear ? `${yy}年Q${quarter}` : `Q${quarter}`);
+      tagLabels.push(`${yy}年Q${quarter}`);
+      detailLabels.push(`${year}年 Q${quarter}（${getQuarterRangeText(quarter)}平均）`);
+    }
+  });
+
+  return {
+    labels,
+    tagLabels,
+    detailLabels,
+    bucketCounts,
+    values,
+    pointDates,
+    filteredRecords: filtered,
+    rangeSummary
+  };
 }
 
 /**

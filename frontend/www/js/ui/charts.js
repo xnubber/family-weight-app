@@ -131,7 +131,7 @@ const inspectCrosshairPlugin = {
     c.fill();
 
     // 4. 底部 X 軸日期膠囊標記，明確指出目前檢視的點位
-    const tagLabel = String(ctxData.labels[idx] ?? '');
+    const tagLabel = String(ctxData.tagLabels?.[idx] ?? ctxData.labels[idx] ?? '');
     if (tagLabel) {
       c.font = '600 11.5px -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif';
       const textWidth = c.measureText(tagLabel).width;
@@ -172,8 +172,12 @@ function renderInspectBar() {
 
   const ctxData = inspectState.context;
   if (!ctxData || ctxData.values.length === 0) {
-    bar.classList.add('hidden');
-    bar.replaceChildren();
+    bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400';
+    bar.classList.remove('hidden');
+    bar.replaceChildren(
+      createEl('span', 'font-medium text-ink-500 min-w-0 leading-snug', ctxData?.rangeSummary || '體重趨勢'),
+      createEl('span', 'shrink-0 whitespace-nowrap text-ink-400', '尚無資料')
+    );
     return;
   }
 
@@ -182,28 +186,30 @@ function renderInspectBar() {
 
   if (idx === null || idx < 0 || idx >= ctxData.values.length) {
     bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400';
-    const hintText = ctxData.isHidden
-      ? '長按圖表檢視趨勢'
-      : '長按圖表左右拖曳檢視';
+    const hintText = ctxData.isHidden ? '長按檢視趨勢' : '長按左右拖曳檢視';
     bar.replaceChildren(
-      createEl('span', 'min-w-0 leading-snug', hintText),
-      createEl('span', 'shrink-0 whitespace-nowrap tabular-nums text-ink-400', `共 ${ctxData.values.length} 點`)
+      createEl('span', 'font-medium text-ink-600 min-w-0 leading-snug', ctxData.rangeSummary || '體重趨勢'),
+      createEl('span', 'shrink-0 whitespace-nowrap text-ink-400', hintText)
     );
     return;
   }
 
-  const { labels, values, pointDates, isHidden, theme, range } = ctxData;
+  const { labels, detailLabels, bucketCounts, values, pointDates, isHidden, theme, range } = ctxData;
   const val = Number(values[idx]);
-  const dateDisplay = range === 'day'
+  const count = bucketCounts?.[idx] || 1;
+  const baseDateLabel = detailLabels?.[idx] || (range === 'day'
     ? String(pointDates[idx] || labels[idx] || '')
-    : `${labels[idx] || ''}（平均）`;
+    : `${labels[idx] || ''}（平均）`);
+  const dateDisplay = range !== 'day' && count > 1
+    ? `${baseDateLabel} · ${count}筆`
+    : baseDateLabel;
 
   bar.className = `min-h-[34px] rounded-xl px-3 py-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs border transition-colors ${theme.inspectBarClass}`;
 
   const leftWrap = createEl('div', 'flex items-center gap-2 min-w-0');
   leftWrap.append(
     createEl('span', `w-2 h-2 rounded-full shrink-0 ${theme.dotBgClass}`),
-    createEl('span', 'font-medium tabular-nums whitespace-nowrap', dateDisplay)
+    createEl('span', 'font-medium tabular-nums truncate', dateDisplay)
   );
 
   const rightWrap = createEl('div', 'flex items-center gap-2 shrink-0 tabular-nums whitespace-nowrap');
@@ -805,32 +811,60 @@ export function renderCharts() {
   const member = state.appData.members.find((m) => m.id === state.selectedMemberId);
   const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
   const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
-  const { labels, values, pointDates, filteredRecords } = aggregateRecords(recs, state.selectedRange);
+  const {
+    labels,
+    tagLabels,
+    detailLabels,
+    bucketCounts,
+    values,
+    pointDates,
+    filteredRecords,
+    rangeSummary
+  } = aggregateRecords(recs, state.selectedRange);
   const isHidden = isMemberWeightHidden(member);
   const theme = getMemberTheme(member?.type);
 
   renderStatsSummary(member, recs, filteredRecords);
 
   const canvas = document.getElementById('weightChart');
-  const ctx = canvas.getContext('2d');
+  const canvasWrap = document.getElementById('chart-canvas-wrap');
+  const emptyStateEl = document.getElementById('chart-empty-state');
   clearInspection(false);
-  if (chartInstance) chartInstance.destroy();
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
 
   const targetSeries = resolveTargetWeightSeries(pointDates, memberHistory, member);
   inspectState.context = {
     labels,
+    tagLabels,
+    detailLabels,
+    bucketCounts,
     values,
     pointDates,
     targetValues: targetSeries.values,
     isHidden,
     theme,
-    range: state.selectedRange
+    range: state.selectedRange,
+    rangeSummary
   };
   bindChartLongPressEvents(canvas);
   renderInspectBar();
 
-  const baselineWeight = values.length > 0 ? Number(values[0]) : null;
+  const hasData = values.length > 0;
+  if (canvasWrap) canvasWrap.classList.toggle('hidden', !hasData);
+  if (emptyStateEl) emptyStateEl.classList.toggle('hidden', hasData);
+
+  if (!hasData) {
+    renderHistoryList(member, memberHistory, filteredRecords);
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+  const baselineWeight = Number(values[0]);
   const isDaily = state.selectedRange === 'day';
+  const pointRadius = values.length <= 12 ? 3 : 2;
   const datasets = [{
     label: isHidden
       ? (isDaily ? '體重趨勢' : '平均趨勢')
@@ -838,11 +872,14 @@ export function renderCharts() {
     data: values,
     borderColor: theme.lineColor,
     backgroundColor: theme.fillColor,
-    borderWidth: 2,
-    pointRadius: 2.5,
+    borderWidth: 2.2,
+    pointRadius,
     pointHoverRadius: 5,
+    pointBackgroundColor: '#FCFBF8',
+    pointBorderColor: theme.lineColor,
+    pointBorderWidth: 1.8,
     fill: true,
-    tension: 0.32
+    tension: 0.3
   }];
 
   if (targetSeries.hasAnyTarget && labels.length > 0) {
@@ -856,7 +893,7 @@ export function renderCharts() {
       data: targetSeries.values,
       borderColor: '#A8A295',
       backgroundColor: '#A8A295',
-      borderWidth: 1.8,
+      borderWidth: 1.6,
       borderDash: [5, 5],
       stepped: 'before',
       spanGaps: false,
@@ -872,18 +909,42 @@ export function renderCharts() {
     plugins: [inspectCrosshairPlugin],
     options: {
       responsive: true,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
       animation: {
-        duration: 340,
+        duration: 320,
         easing: 'easeOutQuart'
       },
       plugins: {
         legend: {
           display: true,
-          labels: { color: '#494C45', boxWidth: 10, boxHeight: 10, padding: 12, usePointStyle: true, font: { size: 12 } }
+          labels: {
+            color: '#494C45',
+            boxWidth: 10,
+            boxHeight: 10,
+            padding: 12,
+            usePointStyle: true,
+            font: { size: 12 }
+          }
         },
         tooltip: {
           filter: () => !inspectState.isInspecting,
+          backgroundColor: 'rgba(47, 52, 47, 0.92)',
+          titleColor: '#FCFBF8',
+          bodyColor: '#F6F4EE',
+          cornerRadius: 10,
+          padding: 10,
+          displayColors: true,
           callbacks: {
+            title: (items) => {
+              const i = items?.[0]?.dataIndex;
+              if (i === undefined || i === null) return '';
+              const base = detailLabels?.[i] || labels[i] || '';
+              const cnt = bucketCounts?.[i] || 1;
+              return !isDaily && cnt > 1 ? `${base}（${cnt} 筆）` : base;
+            },
             label: (ctxItem) => {
               if (!isHidden) {
                 if (ctxItem.datasetIndex === 0) {
@@ -903,14 +964,33 @@ export function renderCharts() {
       },
       scales: {
         x: {
-          ticks: { color: '#727068', font: { size: 12 } },
-          grid: { color: '#EFECE4' }
+          border: { display: false },
+          grid: { display: false },
+          ticks: {
+            color: '#727068',
+            font: { size: 11.5 },
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: true,
+            autoSkipPadding: 14,
+            maxTicksLimit: 5,
+            padding: 6
+          }
         },
         y: {
+          grace: isHidden ? '15%' : '12%',
+          border: { display: false },
           ticks: {
             display: !isHidden,
             color: '#727068',
-            font: { size: 12 }
+            font: { size: 11.5 },
+            maxTicksLimit: 5,
+            padding: 6,
+            callback: (val) => {
+              const num = Number(val);
+              if (!Number.isFinite(num)) return val;
+              return Number.isInteger(num) ? String(num) : String(Number(num.toFixed(1)));
+            }
           },
           grid: { color: '#EFECE4' }
         }
