@@ -157,51 +157,6 @@
 
     <!-- 分頁 3：設定與成員管理 -->
     <section id="view-settings" class="page-view hidden space-y-4">
-      <!-- 語言、單位與時區設定（預設收合並顯示精簡摘要，點擊再展開編輯） -->
-      <div id="region-settings-card" class="journal-card p-4 rounded-2xl">
-        <button id="btn-toggle-region-settings" type="button" aria-expanded="false" aria-controls="region-settings-panel" class="w-full text-left flex items-start justify-between gap-3 group">
-          <div class="min-w-0 flex-1">
-            <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
-              <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M3.6 9h16.8M3.6 15h16.8" />
-                <path d="M12 3a13 13 0 0 0 0 18M12 3a13 13 0 0 1 0 18" />
-              </svg>
-              <span data-i18n="settings.regionTitle">語言、單位與時區</span>
-            </h2>
-            <div id="region-settings-summary" class="flex flex-wrap items-center gap-1.5 mt-2"></div>
-          </div>
-          <span class="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sage-700 bg-sage-50 group-hover:bg-sage-100 border border-sage-200/80 px-2.5 py-1 rounded-xl transition">
-            <span id="region-settings-toggle-text" data-i18n="settings.regionEdit">變更</span>
-            <svg id="region-settings-chevron" class="w-3.5 h-3.5 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </span>
-        </button>
-
-        <div id="region-settings-panel" class="hidden pt-3.5 mt-3.5 border-t border-oat-200/80 space-y-3.5">
-          <div>
-            <label for="select-language" data-i18n="settings.languageLabel" class="text-xs text-ink-500">顯示語言</label>
-            <select id="select-language" class="w-full border rounded-xl p-2.5 text-sm mt-1.5"></select>
-          </div>
-
-          <div>
-            <span data-i18n="settings.unitLabel" class="block text-xs text-ink-500">體重顯示單位</span>
-            <div class="flex bg-oat-100 border border-oat-200 p-1 rounded-2xl mt-1.5 gap-1">
-              <button id="btn-unit-kg" type="button" data-i18n="settings.unitKg" class="flex-1 py-2 rounded-xl text-xs font-medium bg-linen text-sage-700 shadow-sm transition">公斤 (kg)</button>
-              <button id="btn-unit-lb" type="button" data-i18n="settings.unitLb" class="flex-1 py-2 rounded-xl text-xs font-medium text-ink-500 transition">磅 (lb)</button>
-            </div>
-            <p data-i18n="settings.unitNote" class="text-[11px] text-ink-400 mt-1.5 leading-snug">資料庫統一以 kg 儲存，切換單位時自動換算顯示與輸入</p>
-          </div>
-
-          <div>
-            <label for="select-timezone" data-i18n="settings.timezoneLabel" class="text-xs text-ink-500">時區設定</label>
-            <select id="select-timezone" class="w-full border rounded-xl p-2.5 text-sm mt-1.5"></select>
-            <p id="settings-timezone-status" class="text-[11px] text-ink-400 mt-1.5 tabular-nums leading-snug"></p>
-          </div>
-        </div>
-      </div>
-
       <div class="journal-card p-4 rounded-2xl space-y-3.5">
         <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
           <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -247,6 +202,51 @@
           </button>
         </div>
         <ul id="settings-member-list" class="divide-y divide-oat-100 text-sm"></ul>
+      </div>
+
+      <!-- 語言、單位與時區設定（預設收合並顯示精簡摘要，點擊再展開編輯） -->
+      <div id="region-settings-card" class="journal-card p-4 rounded-2xl">
+        <button id="btn-toggle-region-settings" type="button" aria-expanded="false" aria-controls="region-settings-panel" class="w-full text-left flex items-start justify-between gap-3 group">
+          <div class="min-w-0 flex-1">
+            <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
+              <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M3.6 9h16.8M3.6 15h16.8" />
+                <path d="M12 3a13 13 0 0 0 0 18M12 3a13 13 0 0 1 0 18" />
+              </svg>
+              <span data-i18n="settings.regionTitle">語言、單位與時區</span>
+            </h2>
+            <div id="region-settings-summary" class="flex flex-wrap items-center gap-1.5 mt-2"></div>
+          </div>
+          <span class="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sage-700 bg-sage-50 group-hover:bg-sage-100 border border-sage-200/80 px-2.5 py-1 rounded-xl transition">
+            <span id="region-settings-toggle-text" data-i18n="settings.regionEdit">變更</span>
+            <svg id="region-settings-chevron" class="w-3.5 h-3.5 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </button>
+
+        <div id="region-settings-panel" class="hidden pt-3.5 mt-3.5 border-t border-oat-200/80 space-y-3.5">
+          <div>
+            <label for="select-language" data-i18n="settings.languageLabel" class="text-xs text-ink-500">顯示語言</label>
+            <select id="select-language" class="w-full border rounded-xl p-2.5 text-sm mt-1.5"></select>
+          </div>
+
+          <div>
+            <span data-i18n="settings.unitLabel" class="block text-xs text-ink-500">體重顯示單位</span>
+            <div class="flex bg-oat-100 border border-oat-200 p-1 rounded-2xl mt-1.5 gap-1">
+              <button id="btn-unit-kg" type="button" data-i18n="settings.unitKg" class="flex-1 py-2 rounded-xl text-xs font-medium bg-linen text-sage-700 shadow-sm transition">公斤 (kg)</button>
+              <button id="btn-unit-lb" type="button" data-i18n="settings.unitLb" class="flex-1 py-2 rounded-xl text-xs font-medium text-ink-500 transition">磅 (lb)</button>
+            </div>
+            <p data-i18n="settings.unitNote" class="text-[11px] text-ink-400 mt-1.5 leading-snug">資料庫統一以 kg 儲存，切換單位時自動換算顯示與輸入</p>
+          </div>
+
+          <div>
+            <label for="select-timezone" data-i18n="settings.timezoneLabel" class="text-xs text-ink-500">時區設定</label>
+            <select id="select-timezone" class="w-full border rounded-xl p-2.5 text-sm mt-1.5"></select>
+            <p id="settings-timezone-status" class="text-[11px] text-ink-400 mt-1.5 tabular-nums leading-snug"></p>
+          </div>
+        </div>
       </div>
     </section>
   </main>
