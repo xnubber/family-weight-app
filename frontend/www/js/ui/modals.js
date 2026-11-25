@@ -40,6 +40,7 @@ import {
 } from '../utils/metrics.js';
 import {
   checkWeightAnomaly,
+  computePetHoldWeight,
   isTempId,
   isValidBirthDate,
   isValidRecordedDate,
@@ -93,6 +94,7 @@ function getBcsOptions() {
 
 let recordModalMode = 'batch'; // 'batch' | 'single'
 let singleWeightRevealed = false;
+let singlePetCalcExpanded = false;
 let hasProfileHealthCard = false;
 let memberAvatarManuallyPicked = false;
 let activePinRequest = null; // { member, onUnlocked }
@@ -243,6 +245,161 @@ function syncWeightVisibilityButton(btn, revealed) {
   btn.replaceChildren(createIcon(revealed ? 'eyeOff' : 'eye', 'w-4 h-4'));
 }
 
+function getQuickOwnerWeights({ preferBatchInputs = false } = {}) {
+  const unitLabel = getWeightUnitLabel();
+  const batchInputs = preferBatchInputs
+    ? Array.from(document.querySelectorAll('#batch-member-rows .batch-weight-input'))
+    : [];
+
+  return state.appData.members
+    .filter((m) => m.type === 'human' && !isMemberWeightHidden(m))
+    .map((m) => {
+      if (preferBatchInputs) {
+        const matchedInput = batchInputs.find((inp) => inp.dataset.memberId === String(m.id));
+        const rawBatch = matchedInput ? matchedInput.value.trim() : '';
+        if (rawBatch) {
+          const parsed = parseWeightValue(rawBatch, { required: false });
+          if (!parsed.error && parsed.displayValue !== null) {
+            return {
+              id: m.id,
+              name: String(m.name ?? ''),
+              displayValue: parsed.displayValue.toFixed(2).replace(/\.?0+$/, ''),
+              unitLabel
+            };
+          }
+        }
+      }
+      const recs = state.appData.records.filter((r) => r.member_id === m.id);
+      const latest = recs[recs.length - 1];
+      if (!latest) return null;
+      return {
+        id: m.id,
+        name: String(m.name ?? ''),
+        displayValue: formatWeightNumber(latest.weight_kg, { trimTrailingZeros: true }),
+        unitLabel
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderQuickOwnerChips(container, ownerInput, { preferBatchInputs = false, onPicked = () => {} } = {}) {
+  if (!container) return;
+  const owners = getQuickOwnerWeights({ preferBatchInputs });
+  if (owners.length === 0) {
+    container.classList.add('hidden');
+    container.replaceChildren();
+    return;
+  }
+
+  container.classList.remove('hidden');
+  const label = createEl('span', 'text-[11px] text-ink-400', t('record.petCalcQuickOwner'));
+  const chips = owners.map((owner) => {
+    const btn = createEl(
+      'button',
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium bg-linen hover:bg-sage-50 text-ink-700 hover:text-sage-700 border border-oat-200 hover:border-sage-200 transition tabular-nums',
+      `${owner.name} ${owner.displayValue} ${owner.unitLabel}`
+    );
+    btn.type = 'button';
+    btn.onclick = () => {
+      ownerInput.value = owner.displayValue;
+      setWeightInputErrorState(ownerInput, false);
+      onPicked();
+    };
+    return btn;
+  });
+  container.replaceChildren(label, ...chips);
+}
+
+function applyPetHoldCalculation({ withInput, ownerInput, targetInput, feedbackEl }) {
+  if (!withInput || !ownerInput || !targetInput || !feedbackEl) return;
+  const result = computePetHoldWeight(withInput.value, ownerInput.value);
+
+  if (result.status === 'incomplete') {
+    setWeightInputErrorState(withInput, false);
+    setWeightInputErrorState(ownerInput, false);
+    feedbackEl.textContent = t('record.petCalcHint');
+    feedbackEl.className = 'text-[11px] text-ink-400 leading-snug tabular-nums';
+    return;
+  }
+
+  if (result.status === 'error') {
+    setWeightInputErrorState(withInput, true);
+    setWeightInputErrorState(ownerInput, false);
+    feedbackEl.textContent = result.error;
+    feedbackEl.className = 'text-[11px] text-rosewood-600 leading-snug tabular-nums';
+    return;
+  }
+
+  setWeightInputErrorState(withInput, false);
+  setWeightInputErrorState(ownerInput, false);
+  targetInput.value = result.inputValue;
+  setWeightInputErrorState(targetInput, false);
+  feedbackEl.textContent = t('record.petCalcResult', {
+    withVal: result.withPet.toFixed(2).replace(/\.?0+$/, ''),
+    ownerVal: result.owner.toFixed(2).replace(/\.?0+$/, ''),
+    petVal: result.inputValue,
+    unit: result.unitLabel
+  });
+  feedbackEl.className = 'text-[11px] text-sage-700 font-medium leading-snug tabular-nums';
+}
+
+function syncSinglePetCalcUI({ reset = false, animate = false } = {}) {
+  const select = document.getElementById('rec-member');
+  const wrap = document.getElementById('rec-pet-calc-wrap');
+  const toggleBtn = document.getElementById('btn-rec-pet-calc-toggle');
+  const chevron = document.getElementById('rec-pet-calc-chevron');
+  const panel = document.getElementById('rec-pet-calc-panel');
+  const quickOwners = document.getElementById('rec-pet-quick-owners');
+  const withLabel = document.getElementById('rec-pet-with-label');
+  const ownerLabel = document.getElementById('rec-pet-owner-label');
+  const withInput = document.getElementById('rec-pet-with-weight');
+  const ownerInput = document.getElementById('rec-pet-owner-weight');
+  const feedbackEl = document.getElementById('rec-pet-calc-feedback');
+  const targetInput = document.getElementById('rec-weight');
+  if (!select || !wrap) return;
+
+  const member = state.appData.members.find((m) => m.id === select.value);
+  const isPet = isPetType(member?.type);
+  const unitLabel = getWeightUnitLabel();
+
+  if (withLabel) withLabel.textContent = t('record.petCalcWithLabel', { unit: unitLabel });
+  if (ownerLabel) ownerLabel.textContent = t('record.petCalcOwnerLabel', { unit: unitLabel });
+
+  if (reset || !isPet) {
+    singlePetCalcExpanded = false;
+    if (withInput) {
+      withInput.value = '';
+      setWeightInputErrorState(withInput, false);
+    }
+    if (ownerInput) {
+      ownerInput.value = '';
+      setWeightInputErrorState(ownerInput, false);
+    }
+    if (feedbackEl) {
+      feedbackEl.textContent = t('record.petCalcHint');
+      feedbackEl.className = 'text-[11px] text-ink-400 leading-snug tabular-nums';
+    }
+  }
+
+  wrap.classList.toggle('hidden', !isPet);
+  if (toggleBtn) toggleBtn.setAttribute('aria-expanded', singlePetCalcExpanded ? 'true' : 'false');
+  if (chevron) chevron.classList.toggle('rotate-180', singlePetCalcExpanded);
+  if (panel) {
+    panel.classList.toggle('hidden', !singlePetCalcExpanded);
+    if (singlePetCalcExpanded && animate) {
+      playSoftFade(panel);
+    }
+  }
+
+  if (isPet && singlePetCalcExpanded) {
+    renderQuickOwnerChips(quickOwners, ownerInput, {
+      preferBatchInputs: false,
+      onPicked: () => applyPetHoldCalculation({ withInput, ownerInput, targetInput, feedbackEl })
+    });
+    applyPetHoldCalculation({ withInput, ownerInput, targetInput, feedbackEl });
+  }
+}
+
 function updateSingleWeightInputMask({ resetReveal = false } = {}) {
   const select = document.getElementById('rec-member');
   const weightInput = document.getElementById('rec-weight');
@@ -303,6 +460,7 @@ function setRecordModalMode(mode, animate = false) {
     : t('record.saveSingle');
   if (!isBatch) {
     updateSingleWeightInputMask({ resetReveal: true });
+    syncSinglePetCalcUI({ reset: false });
   }
 }
 
@@ -313,17 +471,22 @@ function renderBatchMemberRows() {
     const recs = state.appData.records.filter((r) => r.member_id === m.id);
     const latest = recs[recs.length - 1];
     const isHidden = isMemberWeightHidden(m);
+    const isPet = isPetType(m.type);
 
-    const row = createEl('div', 'py-2.5 flex items-center justify-between gap-2.5');
+    const rowWrap = createEl('div', 'py-2.5');
+    const row = createEl('div', 'flex items-center justify-between gap-2.5');
     const leftGroup = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
     const labelWrap = createEl('div', 'min-w-0 flex-1');
     const subtitleText = isHidden
       ? (latest ? `${MASKED_WEIGHT} ${unitLabel}` : t('settings.privacyHideSuffix'))
       : (latest ? formatWeight(latest.weight_kg, { trimTrailingZeros: true }) : t('overview.noRecords'));
 
+    const subLine = createEl('div', 'flex flex-wrap items-center gap-1.5 mt-0.5');
+    subLine.append(createEl('span', 'text-fluid-label text-ink-400 tabular-nums', subtitleText));
+
     labelWrap.append(
       createEl('div', 'font-medium text-sm text-ink leading-snug break-words', String(m.name ?? '')),
-      createEl('div', 'text-fluid-label text-ink-400 tabular-nums mt-0.5', subtitleText)
+      subLine
     );
     leftGroup.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), labelWrap);
 
@@ -364,7 +527,73 @@ function renderBatchMemberRows() {
     }
 
     row.append(leftGroup, inputWrap);
-    return row;
+    rowWrap.append(row);
+
+    // 毛孩專屬：批量模式內嵌「抱著量」自動相減小面板（並支援一鍵帶入上方剛輸入或最新的主人體重）
+    if (isPet) {
+      let calcOpen = false;
+      const calcToggleBtn = createEl(
+        'button',
+        'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-sage-50 hover:bg-sage-100 text-sage-700 border border-sage-200/80 transition',
+        t('record.petCalcShortBtn')
+      );
+      calcToggleBtn.type = 'button';
+      calcToggleBtn.setAttribute('aria-expanded', 'false');
+      subLine.append(calcToggleBtn);
+
+      const calcPanel = createEl('div', 'hidden mt-2 bg-oat-50 border border-oat-200 rounded-xl p-2.5 space-y-2');
+      const quickOwnersEl = createEl('div', 'hidden flex flex-wrap items-center gap-1.5');
+      const grid = createEl('div', 'grid grid-cols-2 gap-2');
+
+      const withBox = createEl('div');
+      withBox.append(createEl('label', 'block text-[11px] text-ink-500', t('record.petCalcWithLabel', { unit: unitLabel })));
+      const withInput = document.createElement('input');
+      withInput.type = 'text';
+      withInput.inputMode = 'decimal';
+      withInput.autocomplete = 'off';
+      withInput.placeholder = t('record.petCalcWithPlaceholder');
+      withInput.className = 'w-full border rounded-lg px-2 py-1.5 text-xs tabular-nums mt-1 bg-linen';
+      attachWeightInputGuard(withInput);
+      withBox.append(withInput);
+
+      const ownerBox = createEl('div');
+      ownerBox.append(createEl('label', 'block text-[11px] text-ink-500', t('record.petCalcOwnerLabel', { unit: unitLabel })));
+      const ownerInput = document.createElement('input');
+      ownerInput.type = 'text';
+      ownerInput.inputMode = 'decimal';
+      ownerInput.autocomplete = 'off';
+      ownerInput.placeholder = t('record.petCalcOwnerPlaceholder');
+      ownerInput.className = 'w-full border rounded-lg px-2 py-1.5 text-xs tabular-nums mt-1 bg-linen';
+      attachWeightInputGuard(ownerInput);
+      ownerBox.append(ownerInput);
+
+      grid.append(withBox, ownerBox);
+      const feedbackEl = createEl('p', 'text-[11px] text-ink-400 leading-snug tabular-nums', t('record.petCalcHint'));
+      calcPanel.append(quickOwnersEl, grid, feedbackEl);
+      rowWrap.append(calcPanel);
+
+      const recalc = () =>
+        applyPetHoldCalculation({ withInput, ownerInput, targetInput: input, feedbackEl });
+
+      withInput.addEventListener('input', recalc);
+      ownerInput.addEventListener('input', recalc);
+
+      calcToggleBtn.onclick = () => {
+        calcOpen = !calcOpen;
+        calcToggleBtn.setAttribute('aria-expanded', calcOpen ? 'true' : 'false');
+        calcPanel.classList.toggle('hidden', !calcOpen);
+        if (calcOpen) {
+          renderQuickOwnerChips(quickOwnersEl, ownerInput, {
+            preferBatchInputs: true,
+            onPicked: recalc
+          });
+          playSoftFade(calcPanel);
+          recalc();
+        }
+      };
+    }
+
+    return rowWrap;
   });
 
   container.replaceChildren(...rows);
@@ -376,9 +605,13 @@ export function syncModalDynamicLabels() {
   const memTargetLabel = document.getElementById('mem-target-label');
   const profTargetLabel = document.getElementById('prof-target-label');
   const recWeightLabel = document.getElementById('rec-weight-label');
+  const recPetWithLabel = document.getElementById('rec-pet-with-label');
+  const recPetOwnerLabel = document.getElementById('rec-pet-owner-label');
   if (memTargetLabel) memTargetLabel.textContent = t('memberModal.targetWeight', { unit: unitLabel });
   if (profTargetLabel) profTargetLabel.textContent = t('memberModal.targetWeight', { unit: unitLabel });
   if (recWeightLabel) recWeightLabel.textContent = t('record.weightLabel', { unit: unitLabel });
+  if (recPetWithLabel) recPetWithLabel.textContent = t('record.petCalcWithLabel', { unit: unitLabel });
+  if (recPetOwnerLabel) recPetOwnerLabel.textContent = t('record.petCalcOwnerLabel', { unit: unitLabel });
 
   const bcsOpts = getBcsOptions();
   ['mem-bcs', 'prof-bcs'].forEach((id) => {
@@ -421,6 +654,7 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
   singleWeightInput.value = '';
   setWeightInputErrorState(singleWeightInput, false);
   singleWeightRevealed = false;
+  syncSinglePetCalcUI({ reset: true });
   document.getElementById('rec-note').value = '';
   document.getElementById('rec-date').value = today;
 
@@ -1712,7 +1946,10 @@ export function initModals() {
   // 記錄體重彈窗：批量／單筆模式切換、單筆成員遮蔽輸入與可視切換、全站體重即時防呆
   document.getElementById('btn-rec-mode-batch').onclick = () => setRecordModalMode('batch', true);
   document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single', true);
-  document.getElementById('rec-member').onchange = () => updateSingleWeightInputMask({ resetReveal: true });
+  document.getElementById('rec-member').onchange = () => {
+    updateSingleWeightInputMask({ resetReveal: true });
+    syncSinglePetCalcUI({ reset: true });
+  };
   const singleVisBtn = document.getElementById('btn-rec-weight-visibility');
   if (singleVisBtn) {
     singleVisBtn.onclick = () => {
@@ -1720,7 +1957,31 @@ export function initModals() {
       updateSingleWeightInputMask();
     };
   }
-  attachWeightInputGuard(document.getElementById('rec-weight'));
+  const recPetCalcToggle = document.getElementById('btn-rec-pet-calc-toggle');
+  if (recPetCalcToggle) {
+    recPetCalcToggle.onclick = () => {
+      singlePetCalcExpanded = !singlePetCalcExpanded;
+      syncSinglePetCalcUI({ reset: false, animate: true });
+    };
+  }
+  const recPetWithInput = document.getElementById('rec-pet-with-weight');
+  const recPetOwnerInput = document.getElementById('rec-pet-owner-weight');
+  const recPetFeedback = document.getElementById('rec-pet-calc-feedback');
+  const recWeightInput = document.getElementById('rec-weight');
+  if (recPetWithInput && recPetOwnerInput) {
+    attachWeightInputGuard(recPetWithInput);
+    attachWeightInputGuard(recPetOwnerInput);
+    const recalcSinglePet = () =>
+      applyPetHoldCalculation({
+        withInput: recPetWithInput,
+        ownerInput: recPetOwnerInput,
+        targetInput: recWeightInput,
+        feedbackEl: recPetFeedback
+      });
+    recPetWithInput.addEventListener('input', recalcSinglePet);
+    recPetOwnerInput.addEventListener('input', recalcSinglePet);
+  }
+  attachWeightInputGuard(recWeightInput);
   attachWeightInputGuard(document.getElementById('mem-target'));
   attachWeightInputGuard(document.getElementById('prof-target'));
 

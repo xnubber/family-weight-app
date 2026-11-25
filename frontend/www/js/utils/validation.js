@@ -147,6 +147,58 @@ export function parseWeightValue(raw, { required = false, unit = getWeightUnit()
   return { value: kgValue, displayValue };
 }
 
+// 抱毛孩相減計算：輸入「抱著毛孩總重」與「主人單獨體重」，自動防浮點誤差相減並驗證範圍（依目前顯示單位 kg / lb）
+export function computePetHoldWeight(withPetRaw, ownerRaw, { unit = getWeightUnit() } = {}) {
+  const withTrimmed = normalizeDecimalSymbols(withPetRaw).trim();
+  const ownerTrimmed = normalizeDecimalSymbols(ownerRaw).trim();
+  if (withTrimmed === '' || ownerTrimmed === '') {
+    return { status: 'incomplete' };
+  }
+
+  const bounds = getWeightInputBounds(unit);
+  const unitLabel = getWeightUnitLabel(unit);
+  const formatRegex = new RegExp(`^\\d{1,${bounds.maxIntDigits}}(\\.\\d{1,2})?$`);
+  if (!formatRegex.test(withTrimmed) || !formatRegex.test(ownerTrimmed)) {
+    return { status: 'error', error: t('record.petCalcErrInvalid') };
+  }
+
+  const withNum = Number(withTrimmed);
+  const ownerNum = Number(ownerTrimmed);
+  if (!Number.isFinite(withNum) || !Number.isFinite(ownerNum) || withNum <= 0 || ownerNum <= 0) {
+    return { status: 'error', error: t('record.petCalcErrInvalid') };
+  }
+  if (withNum > bounds.max || ownerNum > bounds.max) {
+    return {
+      status: 'error',
+      error: t('record.petCalcErrRange', { min: bounds.min, max: bounds.max, unit: unitLabel })
+    };
+  }
+  if (withNum <= ownerNum) {
+    return { status: 'error', error: t('record.petCalcErrOrder') };
+  }
+
+  // 以整數分位（×100）運算避免 72.85 - 68.5 = 4.349999999999994 浮點誤差
+  const diffDisplay = Math.round((withNum - ownerNum) * 100) / 100;
+  const diffKg = displayToKg(diffDisplay, unit);
+  if (diffDisplay < bounds.min || diffDisplay > bounds.max || diffKg < 0.1 || diffKg > 500) {
+    return {
+      status: 'error',
+      error: t('record.petCalcErrRange', { min: bounds.min, max: bounds.max, unit: unitLabel })
+    };
+  }
+
+  const cleanInputStr = diffDisplay.toFixed(2).replace(/\.?0+$/, '');
+  return {
+    status: 'ok',
+    withPet: withNum,
+    owner: ownerNum,
+    displayValue: diffDisplay,
+    inputValue: cleanInputStr,
+    kgValue: diffKg,
+    unitLabel
+  };
+}
+
 // 異常體重／漏打小數點防呆提醒（以底層 kg 判定，提示文字自動換算為目前顯示單位；隱私模式絕不洩漏數值）
 export function checkWeightAnomaly({ member, weightKg, latestWeightKg = null, isHidden = false, unit = getWeightUnit() }) {
   const name = member?.name || t('memberType.human');
