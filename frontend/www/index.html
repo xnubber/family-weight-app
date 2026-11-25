@@ -231,7 +231,10 @@
       <!-- 單筆模式：針對單一成員記錄體重與備註 -->
       <div id="rec-single-fields" class="hidden space-y-3">
         <select id="rec-member" class="w-full border rounded-xl p-2.5 text-sm"></select>
-        <input id="rec-weight" type="number" min="0.1" max="500" step="0.01" placeholder="體重 (kg)，例：62.5 或 4.35" class="w-full border rounded-xl p-2.5 text-sm" />
+        <div class="relative">
+          <input id="rec-weight" type="text" inputmode="decimal" autocomplete="off" placeholder="體重 (kg)，例：62.5 或 4.35" class="w-full border rounded-xl p-2.5 text-sm tabular-nums" />
+          <button id="btn-rec-weight-visibility" type="button" class="hidden absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-oat-100" aria-label="顯示輸入體重" title="暫時顯示輸入內容"></button>
+        </div>
         <input id="rec-date" type="date" min="2000-01-01" class="w-full border rounded-xl p-2.5 text-sm" />
         <input id="rec-note" type="text" maxlength="200" placeholder="備註（選填，例：飯後、換飼料、散步後）" class="w-full border rounded-xl p-2.5 text-sm" />
       </div>
@@ -297,7 +300,7 @@
       </div>
       <div id="mem-target-wrap">
         <label class="text-xs text-ink-500">目標體重 (kg)</label>
-        <input id="mem-target" type="number" min="0.1" max="500" step="0.01" placeholder="選填" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        <input id="mem-target" type="text" inputmode="decimal" autocomplete="off" placeholder="選填" class="w-full border rounded-xl p-2.5 text-sm mt-1 tabular-nums" />
       </div>
 
       <!-- 隱私保護設定（可選配個人 4 位數 PIN 密碼） -->
@@ -429,7 +432,7 @@
 
         <div id="prof-target-wrap">
           <label class="text-xs text-ink-500">目標體重 (kg)</label>
-          <input id="prof-target" type="number" min="0.1" max="500" step="0.01" placeholder="例：65.0" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+          <input id="prof-target" type="text" inputmode="decimal" autocomplete="off" placeholder="例：65.0" class="w-full border rounded-xl p-2.5 text-sm mt-1 tabular-nums" />
         </div>
 
         <!-- 編輯模式：隱私保護設定 -->

@@ -37,11 +37,14 @@ import {
   getLocalTodayDate
 } from '../utils/metrics.js';
 import {
+  checkWeightAnomaly,
   isTempId,
   isValidBirthDate,
   isValidRecordedDate,
   isValidResourceId,
-  parseStrictNumber
+  parseStrictNumber,
+  parseWeightValue,
+  sanitizeWeightInputValue
 } from '../utils/validation.js';
 
 const CAT_FACTORS = [
@@ -75,6 +78,7 @@ const BCS_OPTIONS = [
 ];
 
 let recordModalMode = 'batch'; // 'batch' | 'single'
+let singleWeightRevealed = false;
 let hasProfileHealthCard = false;
 let memberAvatarManuallyPicked = false;
 let activePinRequest = null; // { member, onUnlocked }
@@ -182,21 +186,77 @@ export function refreshOpenProfileModalIfAny() {
   });
 }
 
-function updateSingleWeightInputMask() {
+function setWeightInputErrorState(input, hasError) {
+  if (!input?.classList) return;
+  input.classList.toggle('border-rosewood-500', Boolean(hasError));
+}
+
+function attachWeightInputGuard(input, { min = 0.1, max = 500 } = {}) {
+  if (!input || input.dataset?.weightGuardBound === 'true') return;
+  if (input.dataset) input.dataset.weightGuardBound = 'true';
+
+  input.addEventListener('input', () => {
+    const cleaned = sanitizeWeightInputValue(input.value);
+    if (input.value !== cleaned) {
+      input.value = cleaned;
+    }
+    if (cleaned === '') {
+      setWeightInputErrorState(input, false);
+      return;
+    }
+    const num = Number(cleaned);
+    setWeightInputErrorState(input, Number.isFinite(num) && num > max);
+  });
+
+  input.addEventListener('blur', () => {
+    const raw = input.value.trim();
+    if (raw === '') {
+      setWeightInputErrorState(input, false);
+      return;
+    }
+    const parsed = parseWeightValue(raw, { required: false, min, max });
+    setWeightInputErrorState(input, Boolean(parsed.error));
+  });
+}
+
+function syncWeightVisibilityButton(btn, revealed) {
+  if (!btn) return;
+  const label = revealed ? '隱藏輸入體重' : '顯示輸入體重';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', revealed ? '重新隱藏輸入內容' : '暫時顯示輸入內容');
+  btn.replaceChildren(createIcon(revealed ? 'eyeOff' : 'eye', 'w-4 h-4'));
+}
+
+function updateSingleWeightInputMask({ resetReveal = false } = {}) {
   const select = document.getElementById('rec-member');
   const weightInput = document.getElementById('rec-weight');
+  const toggleBtn = document.getElementById('btn-rec-weight-visibility');
   if (!select || !weightInput) return;
+  if (resetReveal) singleWeightRevealed = false;
+
   const member = state.appData.members.find((m) => m.id === select.value);
   const masked = isMemberWeightHidden(member);
+
+  weightInput.inputMode = 'decimal';
+  weightInput.autocomplete = 'off';
+
   if (masked) {
-    weightInput.type = 'password';
-    weightInput.inputMode = 'decimal';
-    weightInput.autocomplete = 'off';
+    weightInput.type = singleWeightRevealed ? 'text' : 'password';
     weightInput.placeholder = '輸入體重 (kg)（隱私遮蔽輸入）';
+    weightInput.classList.add('pr-10');
+    if (toggleBtn) {
+      toggleBtn.classList.remove('hidden');
+      syncWeightVisibilityButton(toggleBtn, singleWeightRevealed);
+    }
   } else {
-    weightInput.type = 'number';
-    weightInput.inputMode = 'decimal';
+    singleWeightRevealed = false;
+    weightInput.type = 'text';
     weightInput.placeholder = '體重 (kg)，例：62.5 或 4.35';
+    weightInput.classList.remove('pr-10');
+    if (toggleBtn) {
+      toggleBtn.classList.add('hidden');
+      toggleBtn.replaceChildren();
+    }
   }
 }
 
@@ -223,7 +283,7 @@ function setRecordModalMode(mode, animate = false) {
 
   document.getElementById('btn-rec-submit').textContent = isBatch ? '一次儲存' : '儲存';
   if (!isBatch) {
-    updateSingleWeightInputMask();
+    updateSingleWeightInputMask({ resetReveal: true });
   }
 }
 
@@ -249,23 +309,37 @@ function renderBatchMemberRows() {
 
     const inputWrap = createEl('div', 'flex items-center gap-1.5 shrink-0');
     const input = document.createElement('input');
-    if (isHidden) {
-      input.type = 'password';
-      input.inputMode = 'decimal';
-      input.autocomplete = 'off';
-      input.placeholder = '隱私輸入';
-    } else {
-      input.type = 'number';
-      input.min = '0.1';
-      input.max = '500';
-      input.step = '0.01';
-      input.placeholder = latest ? String(latest.weight_kg) : '體重';
-    }
+    input.type = isHidden ? 'password' : 'text';
+    input.inputMode = 'decimal';
+    input.autocomplete = 'off';
+    input.placeholder = isHidden ? '隱私輸入' : (latest ? String(latest.weight_kg) : '體重');
     input.dataset.memberId = String(m.id);
     input.dataset.memberName = String(m.name ?? '');
-    input.className = 'batch-weight-input w-24 border rounded-xl px-2.5 py-1.5 text-sm text-right tabular-nums';
+    input.className = isHidden
+      ? 'batch-weight-input w-28 border rounded-xl pl-2.5 pr-8 py-1.5 text-sm text-right tabular-nums'
+      : 'batch-weight-input w-24 border rounded-xl px-2.5 py-1.5 text-sm text-right tabular-nums';
+    attachWeightInputGuard(input);
 
-    inputWrap.append(input, createEl('span', 'text-xs text-ink-400', 'kg'));
+    if (isHidden) {
+      let revealed = false;
+      const fieldBox = createEl('div', 'relative');
+      const eyeBtn = createEl(
+        'button',
+        'absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-ink-400 hover:text-ink-700 hover:bg-oat-100'
+      );
+      eyeBtn.type = 'button';
+      syncWeightVisibilityButton(eyeBtn, revealed);
+      eyeBtn.onclick = () => {
+        revealed = !revealed;
+        input.type = revealed ? 'text' : 'password';
+        syncWeightVisibilityButton(eyeBtn, revealed);
+      };
+      fieldBox.append(input, eyeBtn);
+      inputWrap.append(fieldBox, createEl('span', 'text-xs text-ink-400', 'kg'));
+    } else {
+      inputWrap.append(input, createEl('span', 'text-xs text-ink-400', 'kg'));
+    }
+
     row.append(leftGroup, inputWrap);
     return row;
   });
@@ -292,7 +366,10 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
     select.value = String(preselectedMemberId);
   }
 
-  document.getElementById('rec-weight').value = '';
+  const singleWeightInput = document.getElementById('rec-weight');
+  singleWeightInput.value = '';
+  setWeightInputErrorState(singleWeightInput, false);
+  singleWeightRevealed = false;
   document.getElementById('rec-note').value = '';
   document.getElementById('rec-date').value = today;
 
@@ -846,7 +923,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         payload = { bcs_score: parsed.value };
         toastMsg = parsed.value ? '體態評分已更新' : '已清除體態評分';
       } else if (fieldKey === 'target_weight') {
-        const parsed = parseStrictNumber(rawVal, {
+        const parsed = parseWeightValue(rawVal, {
           required: false,
           min: 0.1,
           max: 500,
@@ -919,12 +996,12 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
             controlEl.placeholder = '例：172.5（留空可清除）';
             controlEl.value = m.height_cm ?? '';
           } else if (field.key === 'target_weight') {
-            controlEl.type = 'number';
-            controlEl.min = '0.1';
-            controlEl.max = '500';
-            controlEl.step = '0.01';
+            controlEl.type = 'text';
+            controlEl.inputMode = 'decimal';
+            controlEl.autocomplete = 'off';
             controlEl.placeholder = '例：65.0（留空可清除）';
             controlEl.value = m.target_weight ?? '';
+            attachWeightInputGuard(controlEl);
           }
         }
 
@@ -1378,10 +1455,20 @@ export function initModals() {
   bindPrivacyControlEvents('mem');
   bindPrivacyControlEvents('prof');
 
-  // 記錄體重彈窗：批量／單筆模式切換與單筆成員遮蔽輸入切換
+  // 記錄體重彈窗：批量／單筆模式切換、單筆成員遮蔽輸入與可視切換、全站體重即時防呆
   document.getElementById('btn-rec-mode-batch').onclick = () => setRecordModalMode('batch', true);
   document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single', true);
-  document.getElementById('rec-member').onchange = () => updateSingleWeightInputMask();
+  document.getElementById('rec-member').onchange = () => updateSingleWeightInputMask({ resetReveal: true });
+  const singleVisBtn = document.getElementById('btn-rec-weight-visibility');
+  if (singleVisBtn) {
+    singleVisBtn.onclick = () => {
+      singleWeightRevealed = !singleWeightRevealed;
+      updateSingleWeightInputMask();
+    };
+  }
+  attachWeightInputGuard(document.getElementById('rec-weight'));
+  attachWeightInputGuard(document.getElementById('mem-target'));
+  attachWeightInputGuard(document.getElementById('prof-target'));
 
   // 切換成員類型時自動切換家人（身高）與毛孩（品種、BCS）欄位，並在未手動挑頭像時貼心帶入對應風格頭像
   document.getElementById('mem-type').onchange = (e) => {
@@ -1411,7 +1498,12 @@ export function initModals() {
     openMemberModal(null);
   };
 
-  // 表單送出：支援批量與單筆樂觀新增體重
+  const getLatestWeightForMember = (memberId) => {
+    const recs = state.appData.records.filter((r) => r.member_id === memberId);
+    return recs.length > 0 ? recs[recs.length - 1].weight_kg : null;
+  };
+
+  // 表單送出：支援批量與單筆樂觀新增體重（含前端格式／範圍防呆與異常值確認）
   document.getElementById('form-record').onsubmit = (e) => {
     e.preventDefault();
 
@@ -1424,18 +1516,38 @@ export function initModals() {
 
       for (const input of inputs) {
         const raw = input.value.trim();
-        if (raw === '') continue; // 未填寫者自動略過
+        if (raw === '') {
+          setWeightInputErrorState(input, false);
+          continue; // 未填寫者自動略過
+        }
         const memberId = input.dataset.memberId || '';
         const memberName = input.dataset.memberName || '成員';
         if (!isValidResourceId(memberId)) return showToast(`無效的成員識別碼：${memberName}`, true);
 
-        const parsed = parseStrictNumber(raw, {
+        const parsed = parseWeightValue(raw, {
           required: true,
           min: 0.1,
           max: 500,
           label: `${memberName} 體重 (kg)`
         });
-        if (parsed.error) return showToast(parsed.error, true);
+        if (parsed.error) {
+          setWeightInputErrorState(input, true);
+          input.focus();
+          return showToast(parsed.error, true);
+        }
+        setWeightInputErrorState(input, false);
+
+        const member = state.appData.members.find((m) => m.id === memberId);
+        const warning = checkWeightAnomaly({
+          member,
+          weightKg: parsed.value,
+          latestWeightKg: getLatestWeightForMember(memberId),
+          isHidden: isMemberWeightHidden(member)
+        });
+        if (warning && !confirm(warning)) {
+          input.focus();
+          return;
+        }
 
         toSubmit.push({
           member_id: memberId,
@@ -1458,7 +1570,8 @@ export function initModals() {
 
     // 單筆模式
     const memberId = document.getElementById('rec-member').value.trim();
-    const weightParsed = parseStrictNumber(document.getElementById('rec-weight').value, {
+    const weightInput = document.getElementById('rec-weight');
+    const weightParsed = parseWeightValue(weightInput.value, {
       required: true,
       min: 0.1,
       max: 500,
@@ -1468,10 +1581,28 @@ export function initModals() {
     const note = document.getElementById('rec-note').value.trim();
 
     if (!isValidResourceId(memberId)) return showToast('請選擇有效的成員', true);
-    if (weightParsed.error) return showToast(weightParsed.error, true);
+    if (weightParsed.error) {
+      setWeightInputErrorState(weightInput, true);
+      weightInput.focus();
+      return showToast(weightParsed.error, true);
+    }
+    setWeightInputErrorState(weightInput, false);
     if (!isValidRecordedDate(recordedAt)) return showToast('日期格式不正確或超出合理範圍', true);
     if (note.length > 200) return showToast('備註不可超過 200 字元', true);
 
+    const member = state.appData.members.find((m) => m.id === memberId);
+    const warning = checkWeightAnomaly({
+      member,
+      weightKg: weightParsed.value,
+      latestWeightKg: getLatestWeightForMember(memberId),
+      isHidden: isMemberWeightHidden(member)
+    });
+    if (warning && !confirm(warning)) {
+      weightInput.focus();
+      return;
+    }
+
+    singleWeightRevealed = false;
     closeModal('modal-record');
     e.target.reset();
     optimisticAddRecord({
@@ -1509,9 +1640,10 @@ export function initModals() {
     const privacyData = extractPrivacySubmitPayload('mem', existingMember);
     if (privacyData.error) return showToast(privacyData.error, true);
 
+    const memTargetInput = document.getElementById('mem-target');
     const targetParsed = privacyData.locked
       ? { value: undefined }
-      : parseStrictNumber(document.getElementById('mem-target').value, {
+      : parseWeightValue(memTargetInput.value, {
           required: false,
           min: 0.1,
           max: 500,
@@ -1524,7 +1656,12 @@ export function initModals() {
     if (birthParsed.error) return showToast(birthParsed.error, true);
     if (bcsParsed.error) return showToast(bcsParsed.error, true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
-    if (targetParsed.error) return showToast(targetParsed.error, true);
+    if (targetParsed.error) {
+      setWeightInputErrorState(memTargetInput, true);
+      memTargetInput.focus();
+      return showToast(targetParsed.error, true);
+    }
+    setWeightInputErrorState(memTargetInput, false);
 
     if (editId) {
       if (!isValidResourceId(editId)) return showToast('無效的成員識別碼', true);
@@ -1600,9 +1737,10 @@ export function initModals() {
     const privacyData = extractPrivacySubmitPayload('prof', member);
     if (privacyData.error) return showToast(privacyData.error, true);
 
+    const profTargetInput = document.getElementById('prof-target');
     const targetParsed = privacyData.locked
       ? { value: undefined }
-      : parseStrictNumber(document.getElementById('prof-target').value, {
+      : parseWeightValue(profTargetInput.value, {
           required: false,
           min: 0.1,
           max: 500,
@@ -1615,7 +1753,12 @@ export function initModals() {
     if (birthParsed.error) return showToast(birthParsed.error, true);
     if (bcsParsed.error) return showToast(bcsParsed.error, true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
-    if (targetParsed.error) return showToast(targetParsed.error, true);
+    if (targetParsed.error) {
+      setWeightInputErrorState(profTargetInput, true);
+      profTargetInput.focus();
+      return showToast(targetParsed.error, true);
+    }
+    setWeightInputErrorState(profTargetInput, false);
 
     const updatePayload = {
       name,
