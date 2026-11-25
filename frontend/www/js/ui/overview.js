@@ -428,7 +428,7 @@ function bindGlobalDragListeners() {
   });
 }
 
-export function renderOverview({ onSelectMember, onReorderMembers = null }) {
+export function renderOverview({ onSelectMember, onReorderMembers = null, onTogglePrivacy = null }) {
   const container = document.getElementById('member-cards');
   activeReorderCallback = onReorderMembers;
   cancelPendingSettle();
@@ -486,6 +486,7 @@ export function renderOverview({ onSelectMember, onReorderMembers = null }) {
 
       const beginDragSession = (inputKind, clientX, clientY, target) => {
         if (pendingSettle) return;
+        if (target?.closest?.('button, [data-card-action]')) return;
         const fromHandle = Boolean(target?.closest?.('[data-drag-handle]'));
         cancelCardDrag();
         dragState = {
@@ -543,13 +544,34 @@ export function renderOverview({ onSelectMember, onReorderMembers = null }) {
       createEl('span', `shrink-0 max-w-[9rem] truncate text-[12px] px-2 py-0.5 rounded-full font-medium leading-none ${typeMeta.pillClass}`, badgeLabel)
     );
     if (isPrivacyOn) {
-      const privBadge = createEl(
-        'span',
-        'shrink-0 inline-flex items-center gap-0.5 text-[12px] px-1.5 py-0.5 rounded-full bg-oat-100 text-ink-500 border border-oat-200 leading-none'
+      const canToggle = typeof onTogglePrivacy === 'function';
+      const privToggle = createEl(
+        canToggle ? 'button' : 'span',
+        isHidden
+          ? 'shrink-0 inline-flex items-center gap-1 text-[12px] px-2 py-0.5 rounded-full bg-oat-100 hover:bg-oat-200/80 text-ink-600 border border-oat-200 font-medium leading-none'
+          : 'shrink-0 inline-flex items-center gap-1 text-[12px] px-2 py-0.5 rounded-full bg-sage-50 hover:bg-sage-100 text-sage-700 border border-sage-200 font-medium leading-none'
       );
-      privBadge.setAttribute('title', hasPin ? '已開啟密碼隱私保護' : '已開啟體重隱私保護');
-      privBadge.appendChild(createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-3 h-3'));
-      nameLine.appendChild(privBadge);
+      if (canToggle) {
+        privToggle.type = 'button';
+        privToggle.dataset.cardAction = 'privacy';
+        const actionLabel = isHidden
+          ? (hasPin ? '輸入密碼解鎖體重' : '點擊暫時解鎖顯示體重')
+          : '點擊立即上鎖隱藏體重';
+        privToggle.setAttribute('title', actionLabel);
+        privToggle.setAttribute('aria-label', actionLabel);
+        privToggle.onclick = (e) => {
+          e.stopPropagation();
+          if (Date.now() < suppressCardClickUntil) return;
+          onTogglePrivacy(m);
+        };
+      } else {
+        privToggle.setAttribute('title', hasPin ? '已開啟密碼隱私保護' : '已開啟體重隱私保護');
+      }
+      privToggle.append(
+        createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-3 h-3 shrink-0'),
+        createEl('span', '', isHidden ? '解鎖' : '上鎖')
+      );
+      nameLine.appendChild(privToggle);
     }
 
     textWrap.append(

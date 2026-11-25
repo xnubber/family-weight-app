@@ -7,13 +7,14 @@ import { renderCharts, initChartRangeControls, resizeChart } from './js/ui/chart
 import {
   openProfileModal,
   openMemberModal,
+  requestMemberUnlock,
   initModals,
   refreshOpenProfileModalIfAny,
   hasOpenModal,
   handleModalBackAction
 } from './js/ui/modals.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
-import { initPrivacyLifecycle } from './js/utils/privacy.js';
+import { initPrivacyLifecycle, isMemberWeightHidden, lockMember } from './js/utils/privacy.js';
 import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 import { initSwipeBackGesture } from './js/utils/swipeBack.js';
 import { initOverviewPullToRefresh } from './js/utils/pullToRefresh.js';
@@ -183,6 +184,14 @@ function renderAll() {
     onReorderMembers: (orderedIds) => {
       optimisticReorderMembers(orderedIds);
       showToast('已更新成員順序');
+    },
+    onTogglePrivacy: (member) => {
+      if (isMemberWeightHidden(member)) {
+        requestMemberUnlock(member);
+      } else {
+        lockMember(member.id);
+        showToast('已重新隱藏真實體重');
+      }
     }
   });
   renderCharts();
