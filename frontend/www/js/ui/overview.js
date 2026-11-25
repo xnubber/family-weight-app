@@ -184,8 +184,8 @@ function startAutoScrollLoop() {
     if (vh > 0) {
       if (y < 92) {
         delta = -Math.max(3, Math.round(((92 - y) / 92) * 14));
-      } else if (y > vh - 104) {
-        delta = Math.max(3, Math.round(((y - (vh - 104)) / 104) * 14));
+      } else if (y > vh - 156) {
+        delta = Math.max(3, Math.round(((y - (vh - 156)) / 156) * 14));
       }
     }
 

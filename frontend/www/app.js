@@ -83,9 +83,17 @@ function switchTab(tabName, { pushHistory = true } = {}) {
     if (tabHistory.length > 20) tabHistory.shift();
   }
 
-  // 先更新底部導覽列狀態，給予即時視覺回饋
+  // 先更新底部導覽列與總覽懸浮記錄按鈕狀態，給予即時視覺回饋
   document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('tab-active'));
   document.querySelector(`.nav-btn[data-tab="${tabName}"]`)?.classList.add('tab-active');
+  const recordDock = document.getElementById('overview-record-dock');
+  if (recordDock) {
+    const showDock = tabName === 'overview';
+    recordDock.classList.toggle('is-hidden', !showDock);
+    recordDock.setAttribute('aria-hidden', showDock ? 'false' : 'true');
+    const dockBtn = document.getElementById('btn-open-record-modal');
+    if (dockBtn) dockBtn.tabIndex = showDock ? 0 : -1;
+  }
 
   // 清除其他非相關分頁的殘留動畫狀態（防止快速連點重疊）
   document.querySelectorAll('main > section').forEach((sec) => {
