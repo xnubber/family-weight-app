@@ -16,6 +16,7 @@ import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
 import { initPrivacyLifecycle } from './js/utils/privacy.js';
 import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 import { initSwipeBackGesture } from './js/utils/swipeBack.js';
+import { initOverviewPullToRefresh } from './js/utils/pullToRefresh.js';
 
 const TAB_ORDER = ['overview', 'charts', 'settings'];
 const PAGE_ANIM_CLASSES = [
@@ -228,10 +229,12 @@ async function syncData() {
       state.historyPage = 1;
     }
     renderAll();
+    return true;
   } catch (err) {
     renderAll();
     const hasCachedData = state.appData.members.length > 0;
     showToast(hasCachedData ? `暫時無法連線雲端，目前顯示本機快取（${err.message}）` : err.message, true);
+    return false;
   } finally {
     if (reqId === syncRequestSeq) {
       isFetching = false;
@@ -299,6 +302,14 @@ initTapFeedback();
 initSwipeBackGesture({
   canGoBack,
   onBack: handleAppBack
+});
+initOverviewPullToRefresh({
+  canPull: () => currentTab === 'overview' && !hasOpenModal(),
+  isSyncing: () => isFetching,
+  onRefresh: async () => {
+    const ok = await syncData();
+    if (ok) showToast('已同步最新資料');
+  }
 });
 initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
