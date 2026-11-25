@@ -18,5 +18,5 @@
   - `frontend/www/icons/`：網頁 Favicon、Apple Touch Icon 與 PWA 圖示（SVG / 192px / 512px）。
   - `frontend/resources/`：Capacitor 原生 App 圖示母檔（`icon-only.png`、`icon-foreground.png`、`icon-background.png`，可透過 `npx @capacitor/assets generate` 一鍵產生 Android / iOS 圖示）。
 - `backend/`：Express + Supabase + Zod v4 嚴格驗證後端 API。
-  - `backend/sql/`：Supabase 資料庫遷移腳本（請依序執行 `001` → `002` → `003` → `004`）。
+  - `backend/sql/`：Supabase 資料庫建表與遷移腳本（全新建置請先執行 `000_init_schema.sql` 與 `001_target_weight_history.sql`；舊庫升級請依序執行 `001` → `002` → `003` → `004` → `005`）。
 - [CHANGELOG.md](./CHANGELOG.md)：完整版本號與更新紀錄表。
