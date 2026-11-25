@@ -615,28 +615,37 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   );
 
   const items = pageRecords.map((r, idx) => {
-    const li = createEl('li', 'py-2.5 flex justify-between items-start gap-2.5');
+    const li = createEl('li', 'py-2.5');
+    const mainRow = createEl('div', 'flex items-center justify-between gap-2');
     const info = createEl('div', 'min-w-0 flex-1');
 
-    // 第 1 行：體重 + 精簡目標差距膠囊（取代固定寬度橫排，避免折行錯位）
-    const topRow = createEl('div', 'flex items-center flex-wrap gap-x-2 gap-y-1');
+    const numericWeight = Number(r.weight_kg);
+    const weightDisplay = isHidden
+      ? `${MASKED_WEIGHT} kg`
+      : Number.isFinite(numericWeight)
+        ? `${numericWeight.toFixed(2)} kg`
+        : `${r.weight_kg} kg`;
+
+    // 第 1 行：固定欄寬體重（小數兩位等寬對齊）＋ 垂直對齊之目標差距膠囊
+    const topRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-2');
     topRow.appendChild(
       createEl(
         'span',
-        `font-semibold text-sm tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
-        isHidden ? `${MASKED_WEIGHT} kg` : `${r.weight_kg} kg`
+        `font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+        weightDisplay
       )
     );
 
+    const pillSlot = createEl('div', 'flex items-center min-w-0');
     const activeTarget = recordTargetSeries.values[idx];
     const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
     if (targetGap) {
       if (isHidden) {
         if (targetGap.isAchieved) {
-          topRow.appendChild(
+          pillSlot.appendChild(
             createEl(
               'span',
-              'rounded-full px-2 py-0.5 text-[12px] font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
+              'inline-flex items-center rounded-full px-2 py-0.5 text-[12px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
               '已達標'
             )
           );
@@ -647,29 +656,25 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
           : targetGap.gap > 0
             ? 'bg-ochre-50 text-ochre-700 border border-ochre-200/80'
             : 'bg-sage-50 text-sage-700 border border-sage-200/80';
-        topRow.appendChild(
+        pillSlot.appendChild(
           createEl(
             'span',
-            `rounded-full px-2 py-0.5 text-[12px] font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
+            `inline-flex items-center rounded-full px-2 py-0.5 text-[12px] leading-4 font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
             targetGap.compactLabel
           )
         );
       }
     }
+    topRow.appendChild(pillSlot);
 
-    // 第 2 行：量測日期（獨立成行保持左側整齊）
-    const dateRow = createEl('div', 'text-fluid-label text-ink-400 tabular-nums mt-0.5', String(r.recorded_at ?? ''));
-
+    // 第 2 行：量測日期（與左側體重精準對齊）
+    const dateRow = createEl('div', 'text-fluid-label text-ink-400 tabular-nums mt-0.5 leading-4', String(r.recorded_at ?? ''));
     info.append(topRow, dateRow);
-
-    if (r.note) {
-      info.appendChild(createEl('p', 'text-xs text-ink-500 mt-1 leading-relaxed break-words', String(r.note)));
-    }
 
     if (!isHidden) {
       const delBtn = createEl(
         'button',
-        'shrink-0 whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2 py-1 rounded-lg',
+        '-mr-2 shrink-0 whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2 py-1.5 rounded-lg',
         '刪除'
       );
       delBtn.type = 'button';
@@ -684,9 +689,15 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
           showToast('已刪除紀錄');
         }
       };
-      li.append(info, delBtn);
+      mainRow.append(info, delBtn);
     } else {
-      li.append(info);
+      mainRow.append(info);
+    }
+
+    li.appendChild(mainRow);
+
+    if (r.note) {
+      li.appendChild(createEl('p', 'text-xs text-ink-500 mt-1.5 leading-relaxed break-words', String(r.note)));
     }
     return li;
   });
@@ -709,7 +720,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   const isLast = state.historyPage >= totalPages;
   const isMulti = totalPages > 2;
 
-  const leftGroup = createEl('div', 'flex items-center gap-1');
+  const leftGroup = createEl('div', 'flex items-center justify-start gap-1');
   if (isMulti) {
     leftGroup.appendChild(
       createPagerButton({ iconName: 'chevronsLeft', ariaLabel: '第一頁', disabled: isFirst, onClick: () => goToPage(1), compact: true })
@@ -729,11 +740,11 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
   const pageLabel = createEl(
     'span',
-    'text-ink-500 font-medium tabular-nums whitespace-nowrap',
+    'text-ink-500 font-medium tabular-nums whitespace-nowrap text-center',
     isMulti ? `${state.historyPage} / ${totalPages}` : `第 ${state.historyPage} / ${totalPages} 頁`
   );
 
-  const rightGroup = createEl('div', 'flex items-center gap-1');
+  const rightGroup = createEl('div', 'flex items-center justify-end gap-1');
   rightGroup.appendChild(
     createPagerButton({
       label: isMulti ? '下頁' : '下一頁',
