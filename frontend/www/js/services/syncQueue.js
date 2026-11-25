@@ -12,6 +12,7 @@ import {
   unlockMember,
   isMemberWeightHidden
 } from '../utils/privacy.js';
+import { t } from '../utils/i18n.js';
 
 let tempSeq = 0;
 const idMap = new Map(); // tempId -> 後端回傳之正式 UUID
@@ -181,7 +182,7 @@ export function optimisticAddMember(payload) {
 
   enqueue({
     familyCode: targetFamilyCode,
-    errorPrefix: '新增成員同步失敗，已還原',
+    errorPrefix: t('sync.addMemberFailed'),
     run: async () => {
       const created = await FamilyAPI.addMember(targetFamilyCode, payload);
       if (state.familyCode === targetFamilyCode) {
@@ -272,11 +273,11 @@ export function optimisticUpdateMember(rawMemberId, payload) {
 
   enqueue({
     familyCode: targetFamilyCode,
-    errorPrefix: '更新成員資料同步失敗，已還原',
+    errorPrefix: t('sync.updateMemberFailed'),
     run: async () => {
       const realId = resolveId(rawMemberId);
       if (isTempId(realId)) {
-        throw new Error('原成員尚未建立完成');
+        throw new Error(t('sync.memberPending'));
       }
       const updated = await FamilyAPI.updateMember(targetFamilyCode, realId, payload);
       if (state.familyCode === targetFamilyCode) {
@@ -348,7 +349,7 @@ export function optimisticDeleteMember(rawMemberId) {
 
   enqueue({
     familyCode: targetFamilyCode,
-    errorPrefix: '刪除成員同步失敗，已還原',
+    errorPrefix: t('sync.deleteMemberFailed'),
     run: async () => {
       const realId = resolveId(rawMemberId);
       // 若為尚未建立成功的暫時成員，直接結束無需呼叫後端
@@ -390,11 +391,11 @@ export function optimisticAddRecord(payload) {
 
   enqueue({
     familyCode: targetFamilyCode,
-    errorPrefix: '體重紀錄同步失敗，已還原',
+    errorPrefix: t('sync.addRecordFailed'),
     run: async () => {
       const realMemberId = resolveId(payload.member_id);
       if (isTempId(realMemberId)) {
-        throw new Error('所屬成員尚未建立完成');
+        throw new Error(t('sync.ownerPending'));
       }
       const created = await FamilyAPI.addRecord(targetFamilyCode, {
         ...payload,
@@ -426,7 +427,7 @@ export function optimisticDeleteRecord(rawRecordId) {
 
   const owner = state.appData.members.find((m) => m.id === record.member_id);
   if (isMemberWeightHidden(owner)) {
-    showToast('隱藏體重狀態下無法刪除紀錄，請先解鎖顯示', true);
+    showToast(t('history.deleteHiddenBlocked'), true);
     return false;
   }
 
@@ -436,7 +437,7 @@ export function optimisticDeleteRecord(rawRecordId) {
 
   enqueue({
     familyCode: targetFamilyCode,
-    errorPrefix: '刪除紀錄同步失敗，已還原',
+    errorPrefix: t('sync.deleteRecordFailed'),
     run: async () => {
       const realId = resolveId(rawRecordId);
       if (isTempId(realId)) return;
@@ -483,7 +484,7 @@ export function optimisticReorderMembers(orderedIds) {
 
   enqueue({
     familyCode: targetFamilyCode,
-    errorPrefix: '成員排序同步失敗，已還原',
+    errorPrefix: t('sync.reorderFailed'),
     run: async () => {
       const resolvedIds = nextOrderIds
         .map((id) => resolveId(id))

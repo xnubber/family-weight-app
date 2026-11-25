@@ -1,4 +1,5 @@
 import { createIcon } from './icons.js';
+import { t } from './i18n.js';
 
 // 建立純文字 DOM 元素的共用輔助函式，徹底避免使用 innerHTML 導致 XSS
 export function createEl(tag, className = '', text = '') {
@@ -17,19 +18,19 @@ export function updateSyncIndicator({ pendingCount = 0, isFetching = false } = {
     btn.className = 'inline-flex items-center gap-1.5 text-xs bg-sage-50 text-sage-700 border border-sage-200 px-3 py-1.5 rounded-full font-medium transition';
     btn.replaceChildren(
       createIcon('cloud', 'w-3.5 h-3.5 shrink-0'),
-      createEl('span', '', `同步中 (${pendingCount})`)
+      createEl('span', '', t('header.syncingCount', { count: pendingCount }))
     );
   } else if (isFetching) {
     btn.className = 'inline-flex items-center gap-1.5 text-xs bg-oat-100 text-ink-500 border border-oat-200 px-3 py-1.5 rounded-full font-medium transition';
     btn.replaceChildren(
       createIcon('refresh', 'w-3.5 h-3.5 shrink-0 animate-spin'),
-      createEl('span', '', '同步中')
+      createEl('span', '', t('header.syncing'))
     );
   } else {
     btn.className = 'inline-flex items-center gap-1.5 text-xs bg-linen hover:bg-oat-100 text-ink-700 border border-oat-200 px-3 py-1.5 rounded-full font-medium transition';
     btn.replaceChildren(
       createIcon('refresh', 'w-3.5 h-3.5 shrink-0'),
-      createEl('span', '', '同步')
+      createEl('span', '', t('header.sync'))
     );
   }
 }

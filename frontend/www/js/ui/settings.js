@@ -6,17 +6,114 @@ import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { isMemberPrivacyEnabled, lockAllMembers, memberHasPrivacyPin } from '../utils/privacy.js';
 import { clearFamilyCache } from '../utils/cache.js';
 import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
+import {
+  LANGUAGE_DISPLAY_NAMES,
+  detectDeviceLocale,
+  getLanguageSetting,
+  setLanguageSetting,
+  t
+} from '../utils/i18n.js';
+import {
+  COMMON_TIMEZONES,
+  getActiveTimeZone,
+  getDeviceTimeZone,
+  getTimeZoneOffsetLabel,
+  getTimezoneSetting,
+  getTodayInTimeZone,
+  setTimezoneSetting
+} from '../utils/timezone.js';
+import { getWeightUnit, setWeightUnit } from '../utils/units.js';
 
 function getMemberTypeLabel(type) {
-  if (type === 'cat') return '貓咪';
-  if (type === 'dog') return '狗狗';
-  return '家人';
+  if (type === 'cat') return t('memberType.cat');
+  if (type === 'dog') return t('memberType.dog');
+  return t('memberType.human');
+}
+
+export function renderRegionSettings() {
+  const langSelect = document.getElementById('select-language');
+  if (langSelect) {
+    const detected = detectDeviceLocale();
+    const detectedName = LANGUAGE_DISPLAY_NAMES[detected] || detected;
+    const langOptions = [
+      { value: 'auto', label: t('settings.languageAuto', { lang: detectedName }) },
+      { value: 'zh-TW', label: LANGUAGE_DISPLAY_NAMES['zh-TW'] },
+      { value: 'en', label: LANGUAGE_DISPLAY_NAMES.en },
+      { value: 'ja', label: LANGUAGE_DISPLAY_NAMES.ja }
+    ];
+    langSelect.replaceChildren(
+      ...langOptions.map((opt) => {
+        const el = document.createElement('option');
+        el.value = opt.value;
+        el.textContent = opt.label;
+        return el;
+      })
+    );
+    langSelect.value = getLanguageSetting();
+  }
+
+  const unit = getWeightUnit();
+  const kgBtn = document.getElementById('btn-unit-kg');
+  const lbBtn = document.getElementById('btn-unit-lb');
+  if (kgBtn && lbBtn) {
+    const activeCls = 'flex-1 py-2 rounded-xl text-xs font-medium bg-linen text-sage-700 shadow-sm transition';
+    const inactiveCls = 'flex-1 py-2 rounded-xl text-xs font-medium text-ink-500 transition';
+    kgBtn.className = unit === 'kg' ? activeCls : inactiveCls;
+    lbBtn.className = unit === 'lb' ? activeCls : inactiveCls;
+    kgBtn.setAttribute('aria-pressed', unit === 'kg' ? 'true' : 'false');
+    lbBtn.setAttribute('aria-pressed', unit === 'lb' ? 'true' : 'false');
+  }
+
+  const tzSelect = document.getElementById('select-timezone');
+  const tzStatus = document.getElementById('settings-timezone-status');
+  const deviceTz = getDeviceTimeZone();
+  const deviceOffset = getTimeZoneOffsetLabel(deviceTz);
+  const currentSetting = getTimezoneSetting();
+  const activeTz = getActiveTimeZone();
+  const activeOffset = getTimeZoneOffsetLabel(activeTz);
+
+  if (tzSelect) {
+    const options = [
+      {
+        value: 'auto',
+        label: t('settings.timezoneAuto', { tz: deviceTz, offset: deviceOffset })
+      },
+      ...COMMON_TIMEZONES.map((item) => ({
+        value: item.id,
+        label: `${t(item.labelKey)} · ${getTimeZoneOffsetLabel(item.id)}`
+      }))
+    ];
+    if (currentSetting !== 'auto' && !COMMON_TIMEZONES.some((item) => item.id === currentSetting)) {
+      options.push({
+        value: currentSetting,
+        label: `${currentSetting} · ${activeOffset}`
+      });
+    }
+    tzSelect.replaceChildren(
+      ...options.map((opt) => {
+        const el = document.createElement('option');
+        el.value = opt.value;
+        el.textContent = opt.label;
+        return el;
+      })
+    );
+    tzSelect.value = currentSetting;
+  }
+
+  if (tzStatus) {
+    const today = getTodayInTimeZone(activeTz);
+    tzStatus.textContent = t('settings.timezoneStatus', {
+      today,
+      tz: activeTz,
+      offset: activeOffset
+    });
+  }
 }
 
 export function renderSettingsMembers({ onEditMember }) {
   const list = document.getElementById('settings-member-list');
   if (state.appData.members.length === 0) {
-    list.replaceChildren(createEl('li', 'py-3 text-center text-ink-400', '尚無成員'));
+    list.replaceChildren(createEl('li', 'py-3 text-center text-ink-400', t('settings.noMembers')));
     return;
   }
 
@@ -27,7 +124,7 @@ export function renderSettingsMembers({ onEditMember }) {
     const nameGroup = createEl('div', 'min-w-0');
     const breedSuffix = m.type !== 'human' && m.breed ? ` · ${String(m.breed).trim()}` : '';
     const privSuffix = isMemberPrivacyEnabled(m)
-      ? (memberHasPrivacyPin(m) ? ' · 密碼隱私' : ' · 體重隱私')
+      ? ` · ${memberHasPrivacyPin(m) ? t('settings.privacyPinSuffix') : t('settings.privacyHideSuffix')}`
       : '';
     nameGroup.append(
       createEl('div', 'font-medium text-ink leading-snug break-words', String(m.name ?? '')),
@@ -37,16 +134,16 @@ export function renderSettingsMembers({ onEditMember }) {
 
     const actions = createEl('div', 'flex items-center gap-1.5 shrink-0');
 
-    const editBtn = createEl('button', 'whitespace-nowrap text-xs text-sage-700 hover:bg-sage-50 px-2.5 py-1 rounded-lg font-medium', '編輯');
+    const editBtn = createEl('button', 'whitespace-nowrap text-xs text-sage-700 hover:bg-sage-50 px-2.5 py-1 rounded-lg font-medium', t('common.edit'));
     editBtn.type = 'button';
     editBtn.onclick = () => onEditMember(m);
 
-    const delBtn = createEl('button', 'whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1 rounded-lg font-medium', '刪除');
+    const delBtn = createEl('button', 'whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1 rounded-lg font-medium', t('common.delete'));
     delBtn.type = 'button';
     delBtn.onclick = () => {
-      if (!confirm('刪除成員會連同所有體重紀錄一起刪除，確定嗎？')) return;
+      if (!confirm(t('settings.deleteMemberConfirm'))) return;
       optimisticDeleteMember(m.id);
-      showToast('已刪除成員');
+      showToast(t('settings.memberDeleted'));
     };
 
     actions.append(editBtn, delBtn);
@@ -56,7 +153,40 @@ export function renderSettingsMembers({ onEditMember }) {
   list.replaceChildren(...items);
 }
 
-export function initSettings({ onSync }) {
+export function initSettings({ onSync, onPreferencesChange = () => {} }) {
+  renderRegionSettings();
+
+  const langSelect = document.getElementById('select-language');
+  if (langSelect) {
+    langSelect.onchange = () => {
+      setLanguageSetting(langSelect.value);
+      onPreferencesChange({ type: 'language' });
+      showToast(t('settings.languageUpdated'));
+    };
+  }
+
+  const handleUnitPick = (nextUnit) => {
+    if (getWeightUnit() === nextUnit) return;
+    setWeightUnit(nextUnit);
+    onPreferencesChange({ type: 'unit' });
+    showToast(t('settings.unitUpdated', { unit: nextUnit }));
+  };
+
+  const kgBtn = document.getElementById('btn-unit-kg');
+  const lbBtn = document.getElementById('btn-unit-lb');
+  if (kgBtn) kgBtn.onclick = () => handleUnitPick('kg');
+  if (lbBtn) lbBtn.onclick = () => handleUnitPick('lb');
+
+  const tzSelect = document.getElementById('select-timezone');
+  if (tzSelect) {
+    tzSelect.onchange = () => {
+      setTimezoneSetting(tzSelect.value);
+      onPreferencesChange({ type: 'timezone' });
+      showToast(t('settings.timezoneUpdated'));
+      onSync();
+    };
+  }
+
   // 若未透過 config.js 注入 API Key，顯示設定頁的金鑰輸入欄位
   const wrap = document.getElementById('api-key-setting-wrap');
   const input = document.getElementById('input-api-key');
@@ -68,14 +198,14 @@ export function initSettings({ onSync }) {
   // 隨機產生新的高強度同步碼
   document.getElementById('btn-generate-code').onclick = () => {
     document.getElementById('input-family-code').value = generateFamilyCode();
-    showToast('已產生新同步碼，請點擊儲存生效');
+    showToast(t('settings.codeGenerated'));
   };
 
   // 儲存家庭同步碼（與本機 API 金鑰設定）
   document.getElementById('btn-save-settings').onclick = () => {
     const nextCode = document.getElementById('input-family-code').value.trim();
     if (!isValidFamilyCode(nextCode)) {
-      showToast('同步碼需為 12-64 字元英數字、- 或 _，且不可使用舊預設碼', true);
+      showToast(t('settings.invalidFamilyCode'), true);
       return;
     }
 
@@ -96,7 +226,7 @@ export function initSettings({ onSync }) {
     state.selectedMemberId = null;
     state.historyPage = 1;
     localStorage.setItem('familySyncCode', state.familyCode);
-    showToast('設定已儲存');
+    showToast(t('settings.saved'));
     onSync();
   };
 }

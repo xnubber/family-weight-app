@@ -1,6 +1,7 @@
 import { config } from '../config/env.js';
 import logger from '../utils/logger.js';
 import { safeEqual, maskSensitiveUrl } from '../utils/security.js';
+import { getBackendMessage } from '../utils/messages.js';
 import { isValidFamilyCode } from '../schemas/validation.js';
 
 // API 金鑰驗證中介層
@@ -11,7 +12,7 @@ export function apiKeyAuth(req, res, next) {
   const clientKey = req.headers['x-api-key'];
   if (!safeEqual(clientKey, config.appApiKey)) {
     logger.warn('無效的 API Key 存取嘗試', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
-    return res.status(401).json({ error: '未授權的存取' });
+    return res.status(401).json({ error: getBackendMessage(req, 'unauthorized') });
   }
   next();
 }
@@ -24,12 +25,12 @@ export function resolveFamilyCode(req, bodyCode) {
   const candidate = headerCode || (typeof bodyCode === 'string' ? bodyCode.trim() : '');
 
   if (headerCode && typeof bodyCode === 'string' && bodyCode.trim() && headerCode !== bodyCode.trim()) {
-    return { errorStatus: 403, errorMessage: '家庭同步碼不一致，拒絕存取' };
+    return { errorStatus: 403, errorMessage: getBackendMessage(req, 'familyCodeMismatch') };
   }
   if (!isValidFamilyCode(candidate)) {
     return {
       errorStatus: 400,
-      errorMessage: '無效的家庭同步碼（需為 12-64 字元英數字、- 或 _，且不可使用舊預設碼）'
+      errorMessage: getBackendMessage(req, 'invalidFamilyCode')
     };
   }
   return { familyCode: candidate };

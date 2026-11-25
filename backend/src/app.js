@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { config } from './config/env.js';
 import { corsMiddleware } from './middleware/cors.js';
+import { clientLocaleMiddleware } from './middleware/locale.js';
 import { apiLimiter, authFailLimiter } from './middleware/rateLimit.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { apiKeyAuth } from './middleware/auth.js';
@@ -23,6 +24,9 @@ export function createApp() {
   // 3. 嚴格 CORS 與 OPTIONS 預檢處理
   app.use(corsMiddleware);
   app.options('*', corsMiddleware);
+
+  // 3.5 解析客戶端語系（Accept-Language）與時區（X-Timezone）
+  app.use(clientLocaleMiddleware);
 
   // 4. 限制單筆請求大小為 10kb
   app.use(express.json({ limit: '10kb' }));

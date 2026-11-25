@@ -1,5 +1,6 @@
 import { createEl } from './dom.js';
 import { createIcon } from './icons.js';
+import { t } from './i18n.js';
 
 const LOCK_THRESHOLD_PX = 10;
 const PULL_VISIBLE_PX = 16;
@@ -45,10 +46,10 @@ export function initOverviewPullToRefresh({ canPull, isSyncing, onRefresh }) {
         : 'pull-refresh-icon w-3.5 h-3.5 shrink-0';
     const label =
       phase === 'syncing'
-        ? '同步最新資料中…'
+        ? t('pull.syncing')
         : phase === 'ready'
-          ? '放開立即同步'
-          : '下拉同步雲端資料';
+          ? t('pull.ready')
+          : t('pull.pulling');
 
     pill.append(createIcon('refresh', iconClass), createEl('span', '', label));
     slot.replaceChildren(pill);

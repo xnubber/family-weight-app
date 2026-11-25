@@ -16,7 +16,7 @@ export const corsOptions = {
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'X-API-Key', 'X-Family-Code']
+  allowedHeaders: ['Content-Type', 'X-API-Key', 'X-Family-Code', 'X-Timezone', 'Accept-Language']
 };
 
 export const corsMiddleware = cors(corsOptions);

@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 const LOCAL_PRIVACY_STORAGE_KEY = 'memberPrivacy';
 const UNLOCK_TTL_MS = 5 * 60 * 1000; // 5 分鐘後自動重新遮蔽
 
@@ -28,16 +30,16 @@ export function validatePinConfirmation(rawPin, rawPinConfirm) {
     return { status: 'empty', pin: null };
   }
   if (pin === '' && confirm !== '') {
-    return { error: '請先輸入個人 4 位數密碼', focusField: 'pin' };
+    return { error: t('privacy.pinFirstRequiredSubmit'), focusField: 'pin' };
   }
   if (!isValidPinFormat(pin)) {
-    return { error: '個人隱私密碼須為 4 位數字（例如 1234）', focusField: 'pin' };
+    return { error: t('privacy.pinFormatError'), focusField: 'pin' };
   }
   if (confirm === '') {
-    return { error: '請再次輸入 4 位數密碼以確認', focusField: 'confirm' };
+    return { error: t('privacy.pinConfirmRequired'), focusField: 'confirm' };
   }
   if (pin !== confirm) {
-    return { error: '兩次輸入的密碼不一致，請重新確認', focusField: 'confirm' };
+    return { error: t('privacy.pinMismatchSubmit'), focusField: 'confirm' };
   }
   return { status: 'valid', pin };
 }

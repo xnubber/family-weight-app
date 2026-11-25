@@ -48,36 +48,48 @@ import {
   parseWeightValue,
   sanitizeWeightInputValue
 } from '../utils/validation.js';
+import { t } from '../utils/i18n.js';
+import {
+  formatWeight,
+  formatWeightDelta,
+  formatWeightNumber,
+  getWeightInputBounds,
+  getWeightUnitLabel
+} from '../utils/units.js';
 
-const CAT_FACTORS = [
-  { value: '1.2', label: '已結紮成貓 (1.2x)' },
-  { value: '1.4', label: '未結紮成貓 (1.4x)' },
-  { value: '0.8', label: '減重中貓咪 (0.8x)' },
-  { value: '2.5', label: '幼貓成長期 (2.5x)' }
+const CAT_FACTOR_DEFS = [
+  { value: '1.2', key: 'petFactor.cat12' },
+  { value: '1.4', key: 'petFactor.cat14' },
+  { value: '0.8', key: 'petFactor.cat08' },
+  { value: '2.5', key: 'petFactor.cat25' }
 ];
 
-const DOG_FACTORS = [
-  { value: '1.6', label: '已結紮成犬 (1.6x)' },
-  { value: '1.8', label: '未結紮成犬 (1.8x)' },
-  { value: '1.0', label: '減重中狗狗 (1.0x)' },
-  { value: '2.0', label: '活潑／高活動量成犬 (2.0x)' },
-  { value: '3.0', label: '幼犬成長期 (3.0x)' }
+const DOG_FACTOR_DEFS = [
+  { value: '1.6', key: 'petFactor.dog16' },
+  { value: '1.8', key: 'petFactor.dog18' },
+  { value: '1.0', key: 'petFactor.dog10' },
+  { value: '2.0', key: 'petFactor.dog20' },
+  { value: '3.0', key: 'petFactor.dog30' }
 ];
 
 const VALID_MEMBER_TYPES = new Set(['human', 'cat', 'dog']);
 
-const BCS_OPTIONS = [
-  { value: '', label: '未評分（總覽顯示一週體重變化）' },
-  { value: '1', label: '1 分 · 極瘦（肋骨腰椎極明顯）' },
-  { value: '2', label: '2 分 · 過瘦（幾乎無脂肪覆蓋）' },
-  { value: '3', label: '3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）' },
-  { value: '4', label: '4 分 · 適中偏瘦（輕摸可感肋骨）' },
-  { value: '5', label: '5 分 · 理想體態（肋骨好摸、腰身自然）' },
-  { value: '6', label: '6 分 · 略重（肋骨需稍用力才摸到）' },
-  { value: '7', label: '7 分 · 過重（肋骨難摸、腰身不明顯）' },
-  { value: '8', label: '8 分 · 肥胖（摸不到肋骨、腹部下垂）' },
-  { value: '9', label: '9 分 · 重度肥胖（明顯脂肪堆積）' }
+const BCS_OPTION_KEYS = [
+  { value: '', key: 'bcsOpt.none' },
+  { value: '1', key: 'bcsOpt.1' },
+  { value: '2', key: 'bcsOpt.2' },
+  { value: '3', key: 'bcsOpt.3' },
+  { value: '4', key: 'bcsOpt.4' },
+  { value: '5', key: 'bcsOpt.5' },
+  { value: '6', key: 'bcsOpt.6' },
+  { value: '7', key: 'bcsOpt.7' },
+  { value: '8', key: 'bcsOpt.8' },
+  { value: '9', key: 'bcsOpt.9' }
 ];
+
+function getBcsOptions() {
+  return BCS_OPTION_KEYS.map((item) => ({ value: item.value, label: t(item.key) }));
+}
 
 let recordModalMode = 'batch'; // 'batch' | 'single'
 let singleWeightRevealed = false;
@@ -89,9 +101,9 @@ let activeProfileInlineField = null; // 'name' | 'breed' | 'birth_date' | 'heigh
 let isInlineAvatarDrawerOpen = false;
 
 function getMemberTypeLabel(type) {
-  if (type === 'cat') return '貓咪';
-  if (type === 'dog') return '狗狗';
-  return '家人';
+  if (type === 'cat') return t('memberType.cat');
+  if (type === 'dog') return t('memberType.dog');
+  return t('memberType.human');
 }
 
 function isPetType(type) {
@@ -99,7 +111,8 @@ function isPetType(type) {
 }
 
 function getPetFactors(type) {
-  return type === 'dog' ? DOG_FACTORS : CAT_FACTORS;
+  const defs = type === 'dog' ? DOG_FACTOR_DEFS : CAT_FACTOR_DEFS;
+  return defs.map((d) => ({ value: d.value, label: t(d.key) }));
 }
 
 function getDefaultPetFactorNumber(type) {
@@ -126,7 +139,7 @@ function parseOptionalBcsInput(rawValue) {
   if (trimmed === '') return { value: null };
   const num = Number(trimmed);
   if (!Number.isInteger(num) || num < 1 || num > 9) {
-    return { error: '體態評分 BCS 須為 1–9 的整數' };
+    return { error: t('val.bcsInvalid') };
   }
   return { value: num };
 }
@@ -135,7 +148,7 @@ function parseOptionalBirthDateInput(rawValue) {
   const trimmed = String(rawValue ?? '').trim();
   if (trimmed === '') return { value: null };
   if (!isValidBirthDate(trimmed)) {
-    return { error: '生日格式不正確或超出合理範圍' };
+    return { error: t('val.birthDateInvalid') };
   }
   return { value: trimmed };
 }
@@ -150,7 +163,7 @@ export function requestMemberUnlock(member, onUnlocked = null) {
 
   if (!memberHasPrivacyPin(member)) {
     unlockMember(member.id, null);
-    showToast('已暫時顯示真實體重');
+    showToast(t('privacy.tempUnlockedToast'));
     if (onUnlocked) onUnlocked();
     return;
   }
@@ -162,13 +175,13 @@ export function requestMemberUnlock(member, onUnlocked = null) {
   const errEl = document.getElementById('pin-modal-error');
   const submitBtn = document.getElementById('btn-pin-submit');
 
-  titleEl.textContent = `解鎖 ${member.name || '成員'} 的體重`;
-  descEl.textContent = '請輸入 4 位數個人密碼，驗證後將暫時顯示 5 分鐘（離開畫面即自動隱藏）。';
+  titleEl.textContent = t('pinModal.titleMember', { name: member.name || t('memberType.human') });
+  descEl.textContent = t('pinModal.desc');
   inputEl.value = '';
   errEl.textContent = '';
   errEl.classList.add('hidden');
   submitBtn.disabled = false;
-  submitBtn.textContent = '解鎖檢視';
+  submitBtn.textContent = t('pinModal.submit');
 
   openModal('modal-pin');
   inputEl.focus();
@@ -193,11 +206,12 @@ function setWeightInputErrorState(input, hasError) {
   input.classList.toggle('border-rosewood-500', Boolean(hasError));
 }
 
-function attachWeightInputGuard(input, { min = 0.1, max = 500 } = {}) {
+function attachWeightInputGuard(input) {
   if (!input || input.dataset?.weightGuardBound === 'true') return;
   if (input.dataset) input.dataset.weightGuardBound = 'true';
 
   input.addEventListener('input', () => {
+    const bounds = getWeightInputBounds();
     const cleaned = sanitizeWeightInputValue(input.value);
     if (input.value !== cleaned) {
       input.value = cleaned;
@@ -207,7 +221,7 @@ function attachWeightInputGuard(input, { min = 0.1, max = 500 } = {}) {
       return;
     }
     const num = Number(cleaned);
-    setWeightInputErrorState(input, Number.isFinite(num) && num > max);
+    setWeightInputErrorState(input, Number.isFinite(num) && num > bounds.max);
   });
 
   input.addEventListener('blur', () => {
@@ -216,16 +230,16 @@ function attachWeightInputGuard(input, { min = 0.1, max = 500 } = {}) {
       setWeightInputErrorState(input, false);
       return;
     }
-    const parsed = parseWeightValue(raw, { required: false, min, max });
+    const parsed = parseWeightValue(raw, { required: false });
     setWeightInputErrorState(input, Boolean(parsed.error));
   });
 }
 
 function syncWeightVisibilityButton(btn, revealed) {
   if (!btn) return;
-  const label = revealed ? '隱藏輸入體重' : '顯示輸入體重';
+  const label = revealed ? t('record.toggleHideWeight') : t('record.toggleShowWeight');
   btn.setAttribute('aria-label', label);
-  btn.setAttribute('title', revealed ? '重新隱藏輸入內容' : '暫時顯示輸入內容');
+  btn.setAttribute('title', label);
   btn.replaceChildren(createIcon(revealed ? 'eyeOff' : 'eye', 'w-4 h-4'));
 }
 
@@ -238,13 +252,14 @@ function updateSingleWeightInputMask({ resetReveal = false } = {}) {
 
   const member = state.appData.members.find((m) => m.id === select.value);
   const masked = isMemberWeightHidden(member);
+  const unitLabel = getWeightUnitLabel();
 
   weightInput.inputMode = 'decimal';
   weightInput.autocomplete = 'off';
 
   if (masked) {
     weightInput.type = singleWeightRevealed ? 'text' : 'password';
-    weightInput.placeholder = '輸入體重 (kg)（隱私遮蔽輸入）';
+    weightInput.placeholder = t('record.weightPlaceholderHidden');
     weightInput.classList.add('pr-10');
     if (toggleBtn) {
       toggleBtn.classList.remove('hidden');
@@ -253,7 +268,7 @@ function updateSingleWeightInputMask({ resetReveal = false } = {}) {
   } else {
     singleWeightRevealed = false;
     weightInput.type = 'text';
-    weightInput.placeholder = '體重 (kg)，例：62.5 或 4.35';
+    weightInput.placeholder = t('record.weightPlaceholder', { unit: unitLabel });
     weightInput.classList.remove('pr-10');
     if (toggleBtn) {
       toggleBtn.classList.add('hidden');
@@ -283,7 +298,9 @@ function setRecordModalMode(mode, animate = false) {
     ? 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-linen text-sage-700 shadow-sm'
     : 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-ink-500';
 
-  document.getElementById('btn-rec-submit').textContent = isBatch ? '一次儲存' : '儲存';
+  document.getElementById('btn-rec-submit').textContent = isBatch
+    ? t('record.saveBatch')
+    : t('record.saveSingle');
   if (!isBatch) {
     updateSingleWeightInputMask({ resetReveal: true });
   }
@@ -291,6 +308,7 @@ function setRecordModalMode(mode, animate = false) {
 
 function renderBatchMemberRows() {
   const container = document.getElementById('batch-member-rows');
+  const unitLabel = getWeightUnitLabel();
   const rows = state.appData.members.map((m) => {
     const recs = state.appData.records.filter((r) => r.member_id === m.id);
     const latest = recs[recs.length - 1];
@@ -300,8 +318,8 @@ function renderBatchMemberRows() {
     const leftGroup = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
     const labelWrap = createEl('div', 'min-w-0 flex-1');
     const subtitleText = isHidden
-      ? (latest ? '已隱藏上次體重' : '隱私模式')
-      : (latest ? `上次 ${latest.weight_kg} kg` : '尚未有紀錄');
+      ? (latest ? `${MASKED_WEIGHT} ${unitLabel}` : t('settings.privacyHideSuffix'))
+      : (latest ? formatWeight(latest.weight_kg, { trimTrailingZeros: true }) : t('overview.noRecords'));
 
     labelWrap.append(
       createEl('div', 'font-medium text-sm text-ink leading-snug break-words', String(m.name ?? '')),
@@ -314,7 +332,10 @@ function renderBatchMemberRows() {
     input.type = isHidden ? 'password' : 'text';
     input.inputMode = 'decimal';
     input.autocomplete = 'off';
-    input.placeholder = isHidden ? '隱私輸入' : (latest ? String(latest.weight_kg) : '體重');
+    const latestDisplay = latest ? formatWeightNumber(latest.weight_kg, { trimTrailingZeros: true }) : '';
+    input.placeholder = isHidden
+      ? t('record.batchPlaceholderHidden', { unit: unitLabel })
+      : (latestDisplay || t('record.batchPlaceholder', { unit: unitLabel }));
     input.dataset.memberId = String(m.id);
     input.dataset.memberName = String(m.name ?? '');
     input.className = isHidden
@@ -337,9 +358,9 @@ function renderBatchMemberRows() {
         syncWeightVisibilityButton(eyeBtn, revealed);
       };
       fieldBox.append(input, eyeBtn);
-      inputWrap.append(fieldBox, createEl('span', 'text-xs text-ink-400', 'kg'));
+      inputWrap.append(fieldBox, createEl('span', 'text-xs text-ink-400', unitLabel));
     } else {
-      inputWrap.append(input, createEl('span', 'text-xs text-ink-400', 'kg'));
+      inputWrap.append(input, createEl('span', 'text-xs text-ink-400', unitLabel));
     }
 
     row.append(leftGroup, inputWrap);
@@ -349,9 +370,37 @@ function renderBatchMemberRows() {
   container.replaceChildren(...rows);
 }
 
+// 同步各彈窗的體重單位標籤（kg / lb）與 BCS 下拉選項
+export function syncModalDynamicLabels() {
+  const unitLabel = getWeightUnitLabel();
+  const memTargetLabel = document.getElementById('mem-target-label');
+  const profTargetLabel = document.getElementById('prof-target-label');
+  const recWeightLabel = document.getElementById('rec-weight-label');
+  if (memTargetLabel) memTargetLabel.textContent = t('memberModal.targetWeight', { unit: unitLabel });
+  if (profTargetLabel) profTargetLabel.textContent = t('memberModal.targetWeight', { unit: unitLabel });
+  if (recWeightLabel) recWeightLabel.textContent = t('record.weightLabel', { unit: unitLabel });
+
+  const bcsOpts = getBcsOptions();
+  ['mem-bcs', 'prof-bcs'].forEach((id) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prevVal = sel.value;
+    sel.replaceChildren(
+      ...bcsOpts.map((item) => {
+        const opt = document.createElement('option');
+        opt.value = item.value;
+        opt.textContent = item.label;
+        return opt;
+      })
+    );
+    sel.value = prevVal;
+  });
+}
+
 // 開啟新增體重彈窗（預設批量模式；從個人資訊面板點入則預設單筆模式並預選該成員）
 export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
-  if (state.appData.members.length === 0) return showToast('請先到設定頁新增成員', true);
+  if (state.appData.members.length === 0) return showToast(t('record.noMembers'), true);
+  syncModalDynamicLabels();
   const today = getLocalTodayDate();
 
   // 準備單筆模式欄位
@@ -359,7 +408,7 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
   const options = state.appData.members.map((m) => {
     const opt = document.createElement('option');
     opt.value = String(m.id);
-    opt.textContent = `${m.name ?? ''}（${getMemberTypeLabel(m.type)}）`;
+    opt.textContent = `${m.name ?? ''} (${getMemberTypeLabel(m.type)})`;
     return opt;
   });
   select.replaceChildren(...options);
@@ -444,21 +493,21 @@ function syncPrivacyPinConfirmState(prefix) {
 
   if (pin.length === 0 && confirm.length > 0) {
     pinInput.classList.add('border-rosewood-500');
-    setPinFeedbackMessage(feedbackEl, '請先在上方輸入 4 位數密碼', 'error');
+    setPinFeedbackMessage(feedbackEl, t('privacy.pinFirstRequired'), 'error');
   } else if (pin.length < 4 && confirm.length > 0) {
     pinInput.classList.add('border-rosewood-500');
-    setPinFeedbackMessage(feedbackEl, '個人隱私密碼須為 4 位數字', 'error');
+    setPinFeedbackMessage(feedbackEl, t('privacy.pinMustBe4'), 'error');
   } else if (pin.length < 4) {
-    setPinFeedbackMessage(feedbackEl, `請輸入 4 位數字（${pin.length}/4），完成後需再次輸入確認`, 'muted');
+    setPinFeedbackMessage(feedbackEl, t('privacy.pinProgress', { count: pin.length }), 'muted');
   } else if (confirm.length === 0) {
-    setPinFeedbackMessage(feedbackEl, '請再次輸入 4 位數密碼以確認', 'muted');
+    setPinFeedbackMessage(feedbackEl, t('privacy.pinConfirmRequired'), 'muted');
   } else if (confirm.length === 4 && confirm === pin) {
-    setPinFeedbackMessage(feedbackEl, '兩次輸入的密碼一致', 'success');
+    setPinFeedbackMessage(feedbackEl, t('privacy.pinMatched'), 'success');
   } else if (!pin.startsWith(confirm) || confirm.length === 4) {
     pinConfirmInput.classList.add('border-rosewood-500');
-    setPinFeedbackMessage(feedbackEl, '兩次輸入的密碼不一致', 'error');
+    setPinFeedbackMessage(feedbackEl, t('privacy.pinMismatch'), 'error');
   } else {
-    setPinFeedbackMessage(feedbackEl, `請繼續輸入確認密碼（${confirm.length}/4）`, 'muted');
+    setPinFeedbackMessage(feedbackEl, t('privacy.pinConfirmProgress', { count: confirm.length }), 'muted');
   }
 }
 
@@ -508,10 +557,8 @@ function syncPrivacyFormUI(prefix, member) {
   clearCheckbox.checked = false;
   pinInput.disabled = false;
 
-  pinLabel.textContent = hasPin
-    ? '變更 4 位數個人密碼（留空表示維持現有密碼）'
-    : '個人 4 位數密碼（選填，建議共用同步碼時設定）';
-  pinInput.placeholder = hasPin ? '輸入新 4 位數字，或留空維持不變' : '留空表示不設密碼，或輸入 4 位數字';
+  pinLabel.textContent = hasPin ? t('privacy.pinLabelChange') : t('privacy.pinLabelNew');
+  pinInput.placeholder = hasPin ? t('privacy.pinPlaceholderChange') : t('privacy.pinPlaceholderNew');
 
   pinWrap.classList.toggle('hidden', !hideEnabled);
   clearWrap.classList.toggle('hidden', !hideEnabled || !hasPin);
@@ -520,6 +567,7 @@ function syncPrivacyFormUI(prefix, member) {
 
 // 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、頭像、品種、生日、BCS、隱私設定、身高與目標體重）
 export function openMemberModal(member = null) {
+  syncModalDynamicLabels();
   const form = document.getElementById('form-member');
   const titleEl = document.getElementById('mem-modal-title');
   const submitBtn = document.getElementById('btn-mem-submit');
@@ -541,9 +589,12 @@ export function openMemberModal(member = null) {
   if (member) {
     const isPet = isPetType(member.type);
     const isLockedWithPin = memberHasPrivacyPin(member) && !isMemberUnlocked(member.id);
+    const targetDisplay = member.target_weight !== null && member.target_weight !== undefined
+      ? formatWeightNumber(member.target_weight, { trimTrailingZeros: true })
+      : '';
     memberAvatarManuallyPicked = true;
-    titleEl.textContent = '編輯成員';
-    submitBtn.textContent = '儲存修改';
+    titleEl.textContent = t('memberModal.editTitle');
+    submitBtn.textContent = t('common.saveChanges');
     idInput.value = member.id;
     nameInput.value = member.name || '';
     typeSelect.value = VALID_MEMBER_TYPES.has(member.type) ? member.type : 'human';
@@ -555,20 +606,20 @@ export function openMemberModal(member = null) {
     heightInput.value = isPet ? '' : (member.height_cm ?? '');
     bcsWrap.classList.toggle('hidden', !isPet);
     bcsSelect.value = isPet && member.bcs_score ? String(member.bcs_score) : '';
-    targetInput.value = isLockedWithPin ? '' : (member.target_weight ?? '');
+    targetInput.value = isLockedWithPin ? '' : targetDisplay;
     setMemberModalAvatar(resolveMemberAvatar(member));
     syncPrivacyFormUI('mem', member);
 
     document.getElementById('btn-mem-unlock').onclick = () => {
       requestMemberUnlock(member, () => {
-        targetInput.value = member.target_weight ?? '';
+        targetInput.value = targetDisplay;
         syncPrivacyFormUI('mem', member);
       });
     };
   } else {
     memberAvatarManuallyPicked = false;
-    titleEl.textContent = '新增成員';
-    submitBtn.textContent = '新增';
+    titleEl.textContent = t('memberModal.addTitle');
+    submitBtn.textContent = t('common.add');
     idInput.value = '';
     typeSelect.value = 'human';
     typeSelect.disabled = false;
@@ -612,17 +663,16 @@ function renderProfileHealthCard(member, latest) {
     const titleWrap = createEl('span', 'font-medium text-sage-700 text-xs inline-flex items-center gap-1.5');
     titleWrap.append(
       createIcon('leaf', 'w-3.5 h-3.5 shrink-0'),
-      createEl('span', '', '衛福部成人健康指標')
+      createEl('span', '', t('health.humanTitle'))
     );
     header.appendChild(titleWrap);
 
     if (bmiRes) {
-      const badgeClass = bmiRes.status === '正常範圍'
+      const badgeClass = bmiRes.statusKey === 'normal'
         ? 'bg-sage-100 text-sage-700 border border-sage-200'
-        : bmiRes.status === '過輕'
+        : bmiRes.statusKey === 'under'
           ? 'bg-oat-100 text-ink-700 border border-oat-200'
           : 'bg-ochre-100 text-ochre-700 border border-ochre-200';
-      // 隱私模式下僅呈現衛福部狀態（如「正常範圍」），遮蔽精確 BMI 數值防止反推體重
       const badgeText = isHidden
         ? bmiRes.status
         : `BMI ${bmiRes.bmi.toFixed(1)} · ${bmiRes.status}`;
@@ -633,10 +683,12 @@ function renderProfileHealthCard(member, latest) {
 
     const children = [header];
     if (range) {
+      const minDisp = formatWeightNumber(range.minKg, { decimals: 1, trimTrailingZeros: true });
+      const maxDisp = formatWeight(range.maxKg, { decimals: 1, trimTrailingZeros: true });
       const row = createEl('div', 'flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5 text-xs text-ink-500');
       row.append(
-        createEl('span', '', '建議健康區間（BMI 18.5–24）'),
-        createEl('strong', 'text-ink font-semibold tabular-nums whitespace-nowrap', `${range.minKg}–${range.maxKg} kg`)
+        createEl('span', '', 'BMI 18.5–24.0'),
+        createEl('strong', 'text-ink font-semibold tabular-nums whitespace-nowrap', `${minDisp}–${maxDisp}`)
       );
       children.push(row);
     }
@@ -670,14 +722,14 @@ function renderProfileHealthCard(member, latest) {
     );
     titleWrap.append(
       createIcon('paw', 'w-3.5 h-3.5 shrink-0'),
-      createEl('span', '', isDog ? '狗狗每日熱量建議' : '貓咪每日熱量建議')
+      createEl('span', '', isDog ? t('health.dogTitle') : t('health.catTitle'))
     );
     header.appendChild(titleWrap);
 
     if (isHidden) {
       children.push(
         header,
-        createEl('p', 'text-xs text-ink-500 leading-relaxed', '已開啟體重隱私保護，解鎖後可檢視每日熱量建議（RER / DER）。')
+        createEl('p', 'text-xs text-ink-500 leading-relaxed', t('health.petHiddenHint'))
       );
     } else {
       const factors = getPetFactors(member.type);
@@ -697,12 +749,12 @@ function renderProfileHealthCard(member, latest) {
         if (!res) return;
         const colRer = createEl('div', 'min-w-0');
         colRer.append(
-          createEl('div', 'text-fluid-label text-ink-400', '基礎代謝 RER'),
+          createEl('div', 'text-fluid-label text-ink-400', t('health.rerLabel')),
           createEl('div', 'text-fluid-metric font-semibold text-ink tabular-nums whitespace-nowrap mt-0.5', `${res.rer} kcal`)
         );
         const colDer = createEl('div', 'min-w-0');
         colDer.append(
-          createEl('div', 'text-fluid-label text-ink-400', '每日建議 DER'),
+          createEl('div', 'text-fluid-label text-ink-400', t('health.derLabel')),
           createEl('div', `text-fluid-metric font-semibold tabular-nums whitespace-nowrap mt-0.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, `${res.der} kcal`)
         );
         resultGrid.replaceChildren(colRer, colDer);
@@ -730,7 +782,7 @@ function renderProfileHealthCard(member, latest) {
     );
     const bcsHead = createEl('div', 'flex flex-wrap items-center justify-between gap-1.5');
     bcsHead.append(
-      createEl('span', `text-xs font-medium ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, 'WSAVA 體態評分'),
+      createEl('span', `text-xs font-medium ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, t('profile.fieldBcs')),
       createEl('span', `text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${bcsMeta.badgeClass}`, bcsMeta.compact)
     );
     bcsBox.append(
@@ -779,6 +831,7 @@ function setProfileEditMode(isEditing, animate = false) {
 export function openProfileModal(memberId, { onNavigateToChart, initialInlineField = null } = {}) {
   const m = state.appData.members.find((x) => x.id === memberId);
   if (!m) return;
+  syncModalDynamicLabels();
   activeProfileContext = { memberId, onNavigateToChart };
   activeProfileInlineField = initialInlineField || null;
   setInlineAvatarDrawer(false);
@@ -794,6 +847,10 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
   const ageInfo = calculateAgeInfo(m.birth_date, m.type);
   const bcsMeta = isPet ? getBcsMeta(m.bcs_score) : null;
   const weeklyPct = isPet ? calculateWeeklyWeightChangePct(recs) : null;
+  const unitLabel = getWeightUnitLabel();
+  const targetDisplay = m.target_weight !== null && m.target_weight !== undefined
+    ? formatWeightNumber(m.target_weight, { trimTrailingZeros: true })
+    : '';
 
   const renderProfileAvatarPreview = (avatarId) => {
     const slot = document.getElementById('prof-avatar-slot');
@@ -816,7 +873,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         return;
       }
       optimisticUpdateMember(m.id, { avatar: picked });
-      showToast('頭像已更新');
+      showToast(t('profile.avatarUpdated'));
       openProfileModal(m.id, { onNavigateToChart });
     });
   };
@@ -847,7 +904,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     profBirthEl.value = m.birth_date ? String(m.birth_date).slice(0, 10) : '';
     document.getElementById('prof-height').value = isPet ? '' : (m.height_cm ?? '');
     document.getElementById('prof-bcs').value = isPet && m.bcs_score ? String(m.bcs_score) : '';
-    document.getElementById('prof-target').value = isLockedWithPin ? '' : (m.target_weight ?? '');
+    document.getElementById('prof-target').value = isLockedWithPin ? '' : targetDisplay;
     document.getElementById('prof-avatar').value = initialAvatar;
     renderProfileAvatarPreview(initialAvatar);
     renderAvatarPicker(document.getElementById('prof-avatar-picker'), initialAvatar, (picked) => {
@@ -865,14 +922,14 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     const fieldDefs = [
       {
         key: 'name',
-        label: '成員名稱',
+        label: t('profile.fieldName'),
         value: m.name || '--',
         editable: true,
         valueClass: 'font-medium text-ink text-right break-words min-w-0'
       },
       {
         key: 'type',
-        label: '成員類型',
+        label: t('profile.fieldType'),
         value: getMemberTypeLabel(m.type),
         editable: false,
         valueClass: 'font-medium text-ink-500 text-right break-words min-w-0'
@@ -882,8 +939,8 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     if (isPet) {
       fieldDefs.push({
         key: 'breed',
-        label: '品種',
-        value: m.breed ? String(m.breed).trim() : '未設定',
+        label: t('profile.fieldBreed'),
+        value: m.breed ? String(m.breed).trim() : t('common.unset'),
         isEmpty: !m.breed,
         editable: true,
         valueClass: 'font-medium text-right break-words min-w-0'
@@ -892,8 +949,8 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
 
     fieldDefs.push({
       key: 'birth_date',
-      label: '生日與年齡',
-      value: ageInfo ? ageInfo.displayText : '未設定',
+      label: t('profile.fieldBirthDate'),
+      value: ageInfo ? ageInfo.displayText : t('common.unset'),
       isEmpty: !ageInfo,
       editable: true,
       valueClass: 'font-medium text-right break-words min-w-0'
@@ -902,8 +959,8 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     if (!isPet) {
       fieldDefs.push({
         key: 'height_cm',
-        label: '身高',
-        value: m.height_cm ? `${m.height_cm} cm` : '未設定',
+        label: t('profile.fieldHeight'),
+        value: m.height_cm ? `${m.height_cm} cm` : t('common.unset'),
         isEmpty: !m.height_cm,
         editable: true,
         valueClass: 'font-medium text-right tabular-nums whitespace-nowrap'
@@ -913,8 +970,8 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     if (isPet) {
       fieldDefs.push({
         key: 'bcs_score',
-        label: '體態評分 BCS',
-        value: bcsMeta ? bcsMeta.compact : '未評分',
+        label: t('profile.fieldBcs'),
+        value: bcsMeta ? bcsMeta.compact : t('common.unrated'),
         isEmpty: !bcsMeta,
         editable: true,
         valueClass: `font-medium text-right whitespace-nowrap ${bcsMeta ? bcsMeta.colorClass : ''}`
@@ -924,20 +981,20 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     fieldDefs.push(
       {
         key: 'target_weight',
-        label: '目標體重',
+        label: t('profile.fieldTargetWeight'),
         value: isHidden
-          ? (m.target_weight ? `${MASKED_WEIGHT} kg` : '未設定')
-          : (m.target_weight ? `${m.target_weight} kg` : '未設定'),
+          ? (m.target_weight ? `${MASKED_WEIGHT} ${unitLabel}` : t('common.unset'))
+          : (m.target_weight ? formatWeight(m.target_weight, { trimTrailingZeros: true }) : t('common.unset')),
         isEmpty: !m.target_weight,
         editable: true,
         valueClass: `font-medium text-right tabular-nums whitespace-nowrap ${isHidden && m.target_weight ? 'text-ink-400' : ''}`.trim()
       },
       {
         key: 'privacy',
-        label: '體重隱私',
+        label: t('profile.fieldPrivacy'),
         value: !isPrivacyOn
-          ? '公開顯示'
-          : (hasPin ? '已隱藏（密碼保護）' : '已隱藏（點擊可檢視）'),
+          ? t('profile.privacyPublic')
+          : (hasPin ? t('profile.privacyHiddenPin') : t('profile.privacyHiddenClick')),
         editable: true,
         valueClass: 'font-medium text-ink text-right break-words min-w-0'
       }
@@ -972,24 +1029,24 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
 
     const commitInlineField = (fieldKey, rawVal) => {
       let payload = null;
-      let toastMsg = '資料已更新';
+      let toastMsg = t('common.updated');
 
       if (fieldKey === 'name') {
         const nextName = String(rawVal ?? '').trim();
         if (!nextName || nextName.length > 50) {
-          showToast('名稱須為 1–50 字元', true);
+          showToast(t('val.nameLength'), true);
           return false;
         }
         payload = { name: nextName };
-        toastMsg = '成員名稱已更新';
+        toastMsg = t('profile.nameUpdated');
       } else if (fieldKey === 'breed') {
         const nextBreed = String(rawVal ?? '').trim();
         if (nextBreed.length > 40) {
-          showToast('品種不可超過 40 字元', true);
+          showToast(t('val.breedLength'), true);
           return false;
         }
         payload = { breed: nextBreed || null };
-        toastMsg = '品種已更新';
+        toastMsg = t('profile.breedUpdated');
       } else if (fieldKey === 'birth_date') {
         const parsed = parseOptionalBirthDateInput(rawVal);
         if (parsed.error) {
@@ -997,20 +1054,20 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           return false;
         }
         payload = { birth_date: parsed.value };
-        toastMsg = parsed.value ? '生日已更新' : '已清除生日';
+        toastMsg = parsed.value ? t('profile.birthUpdated') : t('profile.birthCleared');
       } else if (fieldKey === 'height_cm') {
         const parsed = parseStrictNumber(rawVal, {
           required: false,
           min: 20,
           max: 300,
-          label: '身高 (cm)'
+          label: t('memberModal.height')
         });
         if (parsed.error) {
           showToast(parsed.error, true);
           return false;
         }
         payload = { height_cm: parsed.value };
-        toastMsg = '身高已更新';
+        toastMsg = t('profile.heightUpdated');
       } else if (fieldKey === 'bcs_score') {
         const parsed = parseOptionalBcsInput(rawVal);
         if (parsed.error) {
@@ -1018,13 +1075,11 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           return false;
         }
         payload = { bcs_score: parsed.value };
-        toastMsg = parsed.value ? '體態評分已更新' : '已清除體態評分';
+        toastMsg = parsed.value ? t('profile.bcsUpdated') : t('profile.bcsCleared');
       } else if (fieldKey === 'target_weight') {
         const parsed = parseWeightValue(rawVal, {
           required: false,
-          min: 0.1,
-          max: 500,
-          label: '目標體重 (kg)'
+          label: t('memberModal.targetWeight', { unit: unitLabel })
         });
         if (parsed.error) {
           showToast(parsed.error, true);
@@ -1038,7 +1093,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           const currentPin = getUnlockedPin(m.id);
           if (currentPin) payload.current_pin = currentPin;
         }
-        toastMsg = parsed.value !== null ? '目標體重已更新' : '已清除目標體重';
+        toastMsg = parsed.value !== null ? t('profile.targetUpdated') : t('profile.targetCleared');
       }
 
       if (!payload) return false;
@@ -1060,7 +1115,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         if (field.key === 'bcs_score') {
           controlEl = document.createElement('select');
           controlEl.className = 'w-full border border-sage-500/50 rounded-xl px-2.5 py-2 text-sm bg-linen text-ink';
-          BCS_OPTIONS.forEach((optCfg) => {
+          getBcsOptions().forEach((optCfg) => {
             const opt = document.createElement('option');
             opt.value = optCfg.value;
             opt.textContent = optCfg.label;
@@ -1073,12 +1128,12 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           if (field.key === 'name') {
             controlEl.type = 'text';
             controlEl.maxLength = 50;
-            controlEl.placeholder = '輸入成員名稱';
+            controlEl.placeholder = t('profile.namePlaceholder');
             controlEl.value = m.name || '';
           } else if (field.key === 'breed') {
             controlEl.type = 'text';
             controlEl.maxLength = 40;
-            controlEl.placeholder = '例：橘貓、米克斯、柴犬、貴賓';
+            controlEl.placeholder = t('memberModal.breedPlaceholder');
             controlEl.value = m.breed || '';
           } else if (field.key === 'birth_date') {
             controlEl.type = 'date';
@@ -1090,14 +1145,16 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
             controlEl.min = '20';
             controlEl.max = '300';
             controlEl.step = '0.1';
-            controlEl.placeholder = '例：172.5（留空可清除）';
+            controlEl.placeholder = t('profile.heightInlinePlaceholder');
             controlEl.value = m.height_cm ?? '';
           } else if (field.key === 'target_weight') {
             controlEl.type = 'text';
             controlEl.inputMode = 'decimal';
             controlEl.autocomplete = 'off';
-            controlEl.placeholder = '例：65.0（留空可清除）';
-            controlEl.value = m.target_weight ?? '';
+            controlEl.placeholder = t('profile.targetInlinePlaceholder', {
+              sample: unitLabel === 'lb' ? '145.0' : '65.0'
+            });
+            controlEl.value = targetDisplay;
             attachWeightInputGuard(controlEl);
           }
         }
@@ -1120,7 +1177,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           const clearBtn = createEl(
             'button',
             'mr-auto text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1.5 rounded-xl font-medium',
-            '清除'
+            t('common.clear')
           );
           clearBtn.type = 'button';
           clearBtn.onclick = () => commitInlineField('birth_date', '');
@@ -1130,7 +1187,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         const cancelBtn = createEl(
           'button',
           'text-xs bg-oat-100 text-ink-700 px-3 py-1.5 rounded-xl font-medium',
-          '取消'
+          t('common.cancel')
         );
         cancelBtn.type = 'button';
         cancelBtn.onclick = () => {
@@ -1141,7 +1198,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         const saveBtn = createEl(
           'button',
           'text-xs bg-sage-600 text-linen px-3.5 py-1.5 rounded-xl font-medium',
-          '儲存'
+          t('common.save')
         );
         saveBtn.type = 'button';
         saveBtn.onclick = () => commitInlineField(field.key, controlEl.value);
@@ -1149,7 +1206,6 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         btnRow.append(cancelBtn, saveBtn);
         editRow.append(labelRow, controlEl, btnRow);
 
-        // 使用者主動點擊欄位後才聚焦輸入框（日期與下拉選單則由使用者點選展開）
         if (field.key !== 'birth_date' && field.key !== 'bcs_score') {
           queueMicrotask(() => {
             if (typeof controlEl.focus === 'function') {
@@ -1177,7 +1233,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
       );
       rowBtn.type = 'button';
       rowBtn.dataset.inlineField = field.key;
-      rowBtn.setAttribute('aria-label', `編輯${field.label}`);
+      rowBtn.setAttribute('aria-label', t('profile.editFieldAria', { label: field.label }));
 
       const rightWrap = createEl('span', 'flex items-center justify-end gap-1.5 min-w-0');
       const valColor = field.isEmpty
@@ -1202,7 +1258,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
   }
 
   document.getElementById('prof-id').value = m.id;
-  document.getElementById('prof-title').textContent = m.name || '個人資訊';
+  document.getElementById('prof-title').textContent = m.name || t('profile.titleFallback');
 
   const subtitleParts = [getMemberTypeLabel(m.type)];
   if (isPet && m.breed) subtitleParts.push(String(m.breed).trim());
@@ -1212,7 +1268,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     subtitleParts.push(ageInfo.shortText);
   }
   document.getElementById('prof-subtitle').textContent =
-    subtitleParts.length > 1 ? subtitleParts.join(' · ') : `${subtitleParts[0]}檔案`;
+    subtitleParts.length > 1 ? subtitleParts.join(' · ') : t('profile.fileSubtitle', { type: subtitleParts[0] });
 
   // 頂部快速解鎖／隱藏按鈕
   const toggleBtn = document.getElementById('btn-prof-privacy-toggle');
@@ -1220,14 +1276,14 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     toggleBtn.classList.remove('hidden');
     toggleBtn.replaceChildren(
       createIcon(isHidden ? (hasPin ? 'lock' : 'eye') : 'eyeOff', 'w-3.5 h-3.5 shrink-0'),
-      createEl('span', '', isHidden ? '檢視' : '隱藏')
+      createEl('span', '', isHidden ? t('profile.viewToggleShow') : t('profile.viewToggleHide'))
     );
     toggleBtn.onclick = () => {
       if (isHidden) {
         requestMemberUnlock(m, () => openProfileModal(m.id, { onNavigateToChart }));
       } else {
         lockMember(m.id);
-        showToast('已重新隱藏真實體重');
+        showToast(t('privacy.relockedToast'));
         openProfileModal(m.id, { onNavigateToChart });
       }
     };
@@ -1251,23 +1307,23 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
 
   document.getElementById('btn-prof-unlock-edit').onclick = () => {
     requestMemberUnlock(m, () => {
-      document.getElementById('prof-target').value = m.target_weight ?? '';
+      document.getElementById('prof-target').value = targetDisplay;
       syncPrivacyFormUI('prof', m);
     });
   };
 
-  let metricLabel = '目標差距';
+  let metricLabel = t('profile.targetGap');
   let metricVal = '--';
   let metricColor = 'text-sage-700';
   const bmiRes = !isPet && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
   const goalProgress = calculateGoalProgress(recs, m.target_weight);
   if (isPet) {
     if (bcsMeta) {
-      metricLabel = '體態 BCS';
+      metricLabel = t('overview.bcs');
       metricVal = bcsMeta.compact;
       metricColor = bcsMeta.colorClass;
     } else if (weeklyPct) {
-      metricLabel = '一週變化';
+      metricLabel = t('overview.weeklyChange');
       metricVal = weeklyPct.signedText;
       metricColor = weeklyPct.isAlert
         ? 'text-rosewood-600'
@@ -1277,39 +1333,41 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
             ? 'text-sage-700'
             : 'text-ink-700';
     } else if (isHidden) {
-      metricLabel = '目標進度';
-      metricVal = goalProgress ? (goalProgress.isAchieved ? '已達標' : `${goalProgress.percent}%`) : '--';
+      metricLabel = t('overview.goalProgress');
+      metricVal = goalProgress ? (goalProgress.isAchieved ? t('overview.achieved') : `${goalProgress.percent}%`) : '--';
     } else if (latest && m.target_weight) {
       const gapNum = Number((Number(latest.weight_kg) - Number(m.target_weight)).toFixed(2));
-      metricVal = `${gapNum > 0 ? '+' : ''}${gapNum.toFixed(2)} kg`;
+      metricVal = formatWeightDelta(gapNum);
     }
   } else if (isHidden) {
     if (bmiRes) {
-      metricLabel = '體位狀態';
+      metricLabel = t('profile.bodyStatus');
       metricVal = bmiRes.status;
     } else if (goalProgress) {
-      metricLabel = '目標進度';
-      metricVal = goalProgress.isAchieved ? '已達標' : `${goalProgress.percent}%`;
+      metricLabel = t('overview.goalProgress');
+      metricVal = goalProgress.isAchieved ? t('overview.achieved') : `${goalProgress.percent}%`;
     } else {
-      metricLabel = '目標進度';
+      metricLabel = t('overview.goalProgress');
       metricVal = '--';
     }
   } else if (bmiRes) {
-    metricLabel = '目前 BMI';
+    metricLabel = t('overview.bmi');
     metricVal = bmiRes.bmi.toFixed(1);
   } else if (latest && m.target_weight) {
     const gapNum = Number((Number(latest.weight_kg) - Number(m.target_weight)).toFixed(2));
-    metricVal = `${gapNum > 0 ? '+' : ''}${gapNum.toFixed(2)} kg`;
+    metricVal = formatWeightDelta(gapNum);
   }
 
   const summary = document.getElementById('prof-summary');
   const col1 = createEl('div');
   col1.append(
-    createEl('div', 'text-xs text-ink-400', '最新體重'),
+    createEl('div', 'text-xs text-ink-400', t('profile.latestWeight')),
     createEl(
       'div',
       `font-semibold text-base tabular-nums mt-0.5 ${isHidden ? 'text-ink-400' : 'text-ink'}`,
-      latest ? (isHidden ? `${MASKED_WEIGHT} kg` : `${latest.weight_kg} kg`) : '--'
+      latest
+        ? (isHidden ? `${MASKED_WEIGHT} ${unitLabel}` : formatWeight(latest.weight_kg, { trimTrailingZeros: true }))
+        : '--'
     )
   );
   const col2 = createEl('div');
@@ -1442,8 +1500,8 @@ export function openPrivacySettingsModal(memberId) {
   const isLockedWithPin = memberHasPrivacyPin(m) && !isMemberUnlocked(m.id);
   document.getElementById('priv-member-id').value = m.id;
   document.getElementById('priv-modal-subtitle').textContent = m.name
-    ? `${m.name} 的體重隱私與密碼保護`
-    : '管理個人體重顯示與密碼保護';
+    ? t('privacy.modalSubtitleMember', { name: m.name })
+    : t('privacy.modalSubtitle');
   syncPrivacyFormUI('priv', m);
   document.getElementById('btn-priv-submit')?.classList.toggle('hidden', isLockedWithPin);
 
@@ -1554,13 +1612,13 @@ export function initModals() {
     const submitBtn = document.getElementById('btn-pin-submit');
 
     if (!isValidPinFormat(pin)) {
-      errEl.textContent = '請輸入 4 位數字密碼';
+      errEl.textContent = t('pinModal.errFormat');
       errEl.classList.remove('hidden');
       return;
     }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = '驗證中...';
+    submitBtn.textContent = t('pinModal.verifying');
 
     try {
       let verified = false;
@@ -1577,7 +1635,7 @@ export function initModals() {
       }
 
       if (!verified) {
-        errEl.textContent = '個人密碼不正確，請再試一次';
+        errEl.textContent = t('pinModal.errIncorrect');
         errEl.classList.remove('hidden');
         pinInput.value = '';
         pinInput.focus();
@@ -1587,16 +1645,16 @@ export function initModals() {
       closeModal('modal-pin');
       activePinRequest = null;
       unlockMember(member.id, pin);
-      showToast('已暫時解鎖真實體重（5 分鐘後自動隱藏）');
+      showToast(t('privacy.pinUnlockedToast'));
       if (onUnlocked) onUnlocked();
     } catch (err) {
-      errEl.textContent = err.message || '驗證失敗，請稍後再試';
+      errEl.textContent = err.message || t('pinModal.errFailed');
       errEl.classList.remove('hidden');
       pinInput.value = '';
       pinInput.focus();
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = '解鎖檢視';
+      submitBtn.textContent = t('pinModal.submit');
     }
   };
 
@@ -1612,15 +1670,15 @@ export function initModals() {
   document.getElementById('form-privacy').onsubmit = (e) => {
     e.preventDefault();
     const id = document.getElementById('priv-member-id').value.trim();
-    if (!isValidResourceId(id)) return showToast('無效的成員識別碼', true);
+    if (!isValidResourceId(id)) return showToast(t('val.invalidMemberId'), true);
     const member = state.appData.members.find((x) => x.id === id);
-    if (!member) return showToast('找不到該成員資料', true);
+    if (!member) return showToast(t('val.memberNotFound'), true);
 
     const privacyData = extractPrivacySubmitPayload('priv', member);
     if (privacyData.locked) {
       syncPrivacyFormUI('priv', member);
       document.getElementById('btn-priv-submit')?.classList.add('hidden');
-      return showToast('隱私解鎖已逾時，請先解鎖後再修改設定', true);
+      return showToast(t('privacy.sessionExpired'), true);
     }
     if (privacyData.error) {
       showPrivacyPinSubmitError('priv', privacyData.error, privacyData.focusField);
@@ -1637,13 +1695,13 @@ export function initModals() {
     optimisticUpdateMember(id, updatePayload);
 
     if (!updatePayload.hide_weight) {
-      showToast('已關閉體重隱私模式');
+      showToast(t('privacy.disabledToast'));
     } else if (updatePayload.privacy_pin) {
-      showToast('已儲存隱私設定與個人密碼');
+      showToast(t('privacy.savedWithPinToast'));
     } else if (updatePayload.privacy_pin === null) {
-      showToast('已清除個人密碼（維持隱藏體重）');
+      showToast(t('privacy.clearedPinToast'));
     } else {
-      showToast('體重隱私設定已更新');
+      showToast(t('privacy.updatedToast'));
     }
 
     if (activeProfileContext?.memberId === id && isModalOpen('modal-profile')) {
@@ -1702,10 +1760,11 @@ export function initModals() {
   // 表單送出：支援批量與單筆樂觀新增體重（含前端格式／範圍防呆與異常值確認）
   document.getElementById('form-record').onsubmit = (e) => {
     e.preventDefault();
+    const unitLabel = getWeightUnitLabel();
 
     if (recordModalMode === 'batch') {
       const batchDate = document.getElementById('batch-date').value.trim();
-      if (!isValidRecordedDate(batchDate)) return showToast('日期格式不正確或超出合理範圍', true);
+      if (!isValidRecordedDate(batchDate)) return showToast(t('record.errInvalidDate'), true);
 
       const inputs = Array.from(document.querySelectorAll('#batch-member-rows .batch-weight-input'));
       const toSubmit = [];
@@ -1717,14 +1776,12 @@ export function initModals() {
           continue; // 未填寫者自動略過
         }
         const memberId = input.dataset.memberId || '';
-        const memberName = input.dataset.memberName || '成員';
-        if (!isValidResourceId(memberId)) return showToast(`無效的成員識別碼：${memberName}`, true);
+        const memberName = input.dataset.memberName || t('memberType.human');
+        if (!isValidResourceId(memberId)) return showToast(t('val.invalidMemberId'), true);
 
         const parsed = parseWeightValue(raw, {
           required: true,
-          min: 0.1,
-          max: 500,
-          label: `${memberName} 體重 (kg)`
+          label: `${memberName} ${t('record.weightLabel', { unit: unitLabel })}`
         });
         if (parsed.error) {
           setWeightInputErrorState(input, true);
@@ -1754,13 +1811,13 @@ export function initModals() {
       }
 
       if (toSubmit.length === 0) {
-        return showToast('請至少輸入一位成員的體重', true);
+        return showToast(t('record.errNoBatchEntries'), true);
       }
 
       closeModal('modal-record');
       e.target.reset();
       toSubmit.forEach((payload) => optimisticAddRecord(payload));
-      showToast(`已記錄 ${toSubmit.length} 筆體重`);
+      showToast(t('record.savedBatch', { count: toSubmit.length }));
       return;
     }
 
@@ -1769,22 +1826,20 @@ export function initModals() {
     const weightInput = document.getElementById('rec-weight');
     const weightParsed = parseWeightValue(weightInput.value, {
       required: true,
-      min: 0.1,
-      max: 500,
-      label: '體重 (kg)'
+      label: t('record.weightLabel', { unit: unitLabel })
     });
     const recordedAt = document.getElementById('rec-date').value.trim();
     const note = document.getElementById('rec-note').value.trim();
 
-    if (!isValidResourceId(memberId)) return showToast('請選擇有效的成員', true);
+    if (!isValidResourceId(memberId)) return showToast(t('record.errMember'), true);
     if (weightParsed.error) {
       setWeightInputErrorState(weightInput, true);
       weightInput.focus();
       return showToast(weightParsed.error, true);
     }
     setWeightInputErrorState(weightInput, false);
-    if (!isValidRecordedDate(recordedAt)) return showToast('日期格式不正確或超出合理範圍', true);
-    if (note.length > 200) return showToast('備註不可超過 200 字元', true);
+    if (!isValidRecordedDate(recordedAt)) return showToast(t('record.errInvalidDate'), true);
+    if (note.length > 200) return showToast(t('record.errNoteLength'), true);
 
     const member = state.appData.members.find((m) => m.id === memberId);
     const warning = checkWeightAnomaly({
@@ -1807,12 +1862,13 @@ export function initModals() {
       recorded_at: recordedAt,
       note
     });
-    showToast('體重已記錄');
+    showToast(t('record.savedSingle'));
   };
 
   // 表單送出：樂觀新增或編輯成員（含自訂頭像、品種、生日、BCS 與隱私設定）
   document.getElementById('form-member').onsubmit = (e) => {
     e.preventDefault();
+    const unitLabel = getWeightUnitLabel();
     const editId = document.getElementById('mem-id').value.trim();
     const existingMember = editId ? state.appData.members.find((x) => x.id === editId) : null;
     const name = document.getElementById('mem-name').value.trim();
@@ -1830,7 +1886,7 @@ export function initModals() {
           required: false,
           min: 20,
           max: 300,
-          label: '身高 (cm)'
+          label: t('memberModal.height')
         });
 
     const privacyData = extractPrivacySubmitPayload('mem', existingMember);
@@ -1844,14 +1900,12 @@ export function initModals() {
       ? { value: undefined }
       : parseWeightValue(memTargetInput.value, {
           required: false,
-          min: 0.1,
-          max: 500,
-          label: '目標體重 (kg)'
+          label: t('memberModal.targetWeight', { unit: unitLabel })
         });
 
-    if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
-    if (!VALID_MEMBER_TYPES.has(type)) return showToast('成員類型不正確', true);
-    if (rawBreed.length > 40) return showToast('品種不可超過 40 字元', true);
+    if (!name || name.length > 50) return showToast(t('val.nameLength'), true);
+    if (!VALID_MEMBER_TYPES.has(type)) return showToast(t('val.memberTypeInvalid'), true);
+    if (rawBreed.length > 40) return showToast(t('val.breedLength'), true);
     if (birthParsed.error) return showToast(birthParsed.error, true);
     if (bcsParsed.error) return showToast(bcsParsed.error, true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
@@ -1863,7 +1917,7 @@ export function initModals() {
     setWeightInputErrorState(memTargetInput, false);
 
     if (editId) {
-      if (!isValidResourceId(editId)) return showToast('無效的成員識別碼', true);
+      if (!isValidResourceId(editId)) return showToast(t('val.invalidMemberId'), true);
       const updatePayload = {
         name,
         avatar,
@@ -1885,7 +1939,7 @@ export function initModals() {
       closeModal('modal-member');
       e.target.reset();
       optimisticUpdateMember(editId, updatePayload);
-      showToast('成員資料已更新');
+      showToast(t('memberModal.updated'));
     } else {
       const addPayload = {
         name,
@@ -1907,13 +1961,14 @@ export function initModals() {
       closeModal('modal-member');
       e.target.reset();
       optimisticAddMember(addPayload);
-      showToast('成員已新增');
+      showToast(t('memberModal.added'));
     }
   };
 
   // 表單送出：樂觀更新個人資訊（含名稱、頭像、品種、生日、BCS、隱私設定、身高、目標體重）
   document.getElementById('form-profile').onsubmit = (e) => {
     e.preventDefault();
+    const unitLabel = getWeightUnitLabel();
     const id = document.getElementById('prof-id').value.trim();
     const member = state.appData.members.find((x) => x.id === id);
     const isPet = isPetType(member?.type);
@@ -1930,7 +1985,7 @@ export function initModals() {
           required: false,
           min: 20,
           max: 300,
-          label: '身高 (cm)'
+          label: t('memberModal.height')
         });
 
     const privacyData = extractPrivacySubmitPayload('prof', member);
@@ -1944,14 +1999,12 @@ export function initModals() {
       ? { value: undefined }
       : parseWeightValue(profTargetInput.value, {
           required: false,
-          min: 0.1,
-          max: 500,
-          label: '目標體重 (kg)'
+          label: t('memberModal.targetWeight', { unit: unitLabel })
         });
 
-    if (!isValidResourceId(id)) return showToast('無效的成員識別碼', true);
-    if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
-    if (rawBreed.length > 40) return showToast('品種不可超過 40 字元', true);
+    if (!isValidResourceId(id)) return showToast(t('val.invalidMemberId'), true);
+    if (!name || name.length > 50) return showToast(t('val.nameLength'), true);
+    if (rawBreed.length > 40) return showToast(t('val.breedLength'), true);
     if (birthParsed.error) return showToast(birthParsed.error, true);
     if (bcsParsed.error) return showToast(bcsParsed.error, true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
@@ -1983,6 +2036,6 @@ export function initModals() {
     closeModal('modal-profile');
     activeProfileContext = null;
     optimisticUpdateMember(id, updatePayload);
-    showToast('個人資訊已更新');
+    showToast(t('profile.updated'));
   };
 }

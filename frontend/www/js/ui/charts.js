@@ -23,6 +23,15 @@ import {
   filterRecordsByDateRange
 } from '../utils/metrics.js';
 import { addCalendarYears, validateHistoryDateRange } from '../utils/validation.js';
+import { formatLocalizedHistoryDate, t } from '../utils/i18n.js';
+import { getCurrentYearInTimeZone, getWeekdayFromYmd } from '../utils/timezone.js';
+import {
+  formatWeight,
+  formatWeightDelta,
+  getWeightUnit,
+  getWeightUnitLabel,
+  kgToDisplay
+} from '../utils/units.js';
 
 const HISTORY_PAGE_SIZE = 10;
 const LONG_PRESS_MS = 260;
@@ -179,8 +188,8 @@ function renderInspectBar() {
     bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400';
     bar.classList.remove('hidden');
     bar.replaceChildren(
-      createEl('span', 'font-medium text-ink-500 min-w-0 leading-snug', ctxData?.rangeSummary || '體重趨勢'),
-      createEl('span', 'shrink-0 whitespace-nowrap text-ink-400', '尚無資料')
+      createEl('span', 'font-medium text-ink-500 min-w-0 leading-snug', ctxData?.rangeSummary || t('charts.trendTitle')),
+      createEl('span', 'shrink-0 whitespace-nowrap text-ink-400', t('common.noData'))
     );
     return;
   }
@@ -190,9 +199,9 @@ function renderInspectBar() {
 
   if (idx === null || idx < 0 || idx >= ctxData.values.length) {
     bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400';
-    const hintText = ctxData.isHidden ? '長按檢視趨勢' : '長按左右拖曳檢視';
+    const hintText = ctxData.isHidden ? t('charts.hintHidden') : t('charts.hintVisible');
     bar.replaceChildren(
-      createEl('span', 'font-medium text-ink-600 min-w-0 leading-snug', ctxData.rangeSummary || '體重趨勢'),
+      createEl('span', 'font-medium text-ink-600 min-w-0 leading-snug', ctxData.rangeSummary || t('charts.trendTitle')),
       createEl('span', 'shrink-0 whitespace-nowrap text-ink-400', hintText)
     );
     return;
@@ -201,11 +210,10 @@ function renderInspectBar() {
   const { labels, detailLabels, bucketCounts, values, pointDates, isHidden, theme, range } = ctxData;
   const val = Number(values[idx]);
   const count = bucketCounts?.[idx] || 1;
-  const baseDateLabel = detailLabels?.[idx] || (range === 'day'
-    ? String(pointDates[idx] || labels[idx] || '')
-    : `${labels[idx] || ''}（平均）`);
+  const unitLabel = getWeightUnitLabel();
+  const baseDateLabel = detailLabels?.[idx] || String(pointDates[idx] || labels[idx] || '');
   const dateDisplay = range !== 'day' && count > 1
-    ? `${baseDateLabel} · ${count}筆`
+    ? `${baseDateLabel} · ${t('charts.bucketCountCompact', { count })}`
     : baseDateLabel;
 
   bar.className = `min-h-[34px] rounded-xl px-3 py-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs border transition-colors ${theme.inspectBarClass}`;
@@ -220,27 +228,25 @@ function renderInspectBar() {
 
   if (isHidden) {
     const baseline = Number(values[0]);
-    let relText = '區間起點';
+    let relText = t('charts.periodStart');
     if (idx > 0 && Number.isFinite(val) && Number.isFinite(baseline)) {
-      const delta = Number((val - baseline).toFixed(2));
-      const sign = delta > 0 ? '+' : '';
-      relText = `較起點 ${sign}${delta.toFixed(2)} kg`;
+      const deltaKg = Number((val - baseline).toFixed(2));
+      relText = t('charts.deltaFromStart', { delta: formatWeightDelta(deltaKg) });
     }
     rightWrap.append(
       createEl('span', 'text-fluid-label opacity-80', relText),
-      createEl('span', 'font-semibold text-sm text-ink-400 inline-flex items-center gap-1', `${MASKED_WEIGHT} kg`)
+      createEl('span', 'font-semibold text-sm text-ink-400 inline-flex items-center gap-1', `${MASKED_WEIGHT} ${unitLabel}`)
     );
   } else {
     if (idx > 0 && Number.isFinite(val) && Number.isFinite(Number(values[idx - 1]))) {
-      const stepDelta = Number((val - Number(values[idx - 1])).toFixed(2));
-      const sign = stepDelta > 0 ? '+' : '';
-      const deltaClass = stepDelta > 0 ? 'text-rosewood-600' : 'text-sage-700';
+      const stepDeltaKg = Number((val - Number(values[idx - 1])).toFixed(2));
+      const deltaClass = stepDeltaKg > 0 ? 'text-rosewood-600' : 'text-sage-700';
       rightWrap.appendChild(
-        createEl('span', `text-fluid-label font-medium ${deltaClass}`, `${sign}${stepDelta.toFixed(2)}`)
+        createEl('span', `text-fluid-label font-medium ${deltaClass}`, formatWeightDelta(stepDeltaKg, { withUnit: false }))
       );
     }
     rightWrap.appendChild(
-      createEl('span', 'font-semibold text-sm text-ink', `${val} kg`)
+      createEl('span', 'font-semibold text-sm text-ink', formatWeight(val, { trimTrailingZeros: true }))
     );
   }
 
@@ -422,8 +428,8 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
         'span',
         'leading-snug',
         isHidden
-          ? '隱私模式：已遮蔽體重並鎖定刪除'
-          : '已暫時顯示（5 分鐘或離頁自動隱藏）'
+          ? t('charts.privacyLockedBanner')
+          : t('charts.privacyUnlockedBanner')
       )
     );
 
@@ -436,14 +442,14 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     toggleBtn.type = 'button';
     toggleBtn.append(
       createIcon(isHidden ? 'eye' : 'eyeOff', 'w-3.5 h-3.5 shrink-0'),
-      createEl('span', '', isHidden ? (hasPin ? '密碼解鎖' : '暫時顯示') : '立即隱藏')
+      createEl('span', '', isHidden ? (hasPin ? t('charts.btnPinUnlock') : t('charts.btnTempShow')) : t('charts.btnHideNow'))
     );
     toggleBtn.onclick = () => {
       if (isHidden) {
         requestMemberUnlock(member, () => renderCharts());
       } else {
         lockMember(member.id);
-        showToast('已重新隱藏真實體重');
+        showToast(t('privacy.relockedToast'));
       }
     };
 
@@ -464,23 +470,23 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
         'span',
         'min-w-0 break-words',
         daysSince === null
-          ? `${member.name} 尚未有體重紀錄，回總覽寫下第一筆紀錄吧。`
-          : `${member.name} 已 ${daysSince} 天未記錄體重，記得定期量測追蹤變化喔。`
+          ? t('charts.remindNoRecord', { name: member.name })
+          : t('charts.remindDays', { name: member.name, days: daysSince })
       )
     );
     blocks.push(notice);
   }
 
   // 2. 區間統計摘要（2 × 2 格狀，避免窄螢幕擠壓裁切；隱私模式保留區間變化）
+  const unitLabel = getWeightUnitLabel();
+  const maskedDisplay = `${MASKED_WEIGHT} ${unitLabel}`;
   const stats = calculatePeriodStats(filteredRecords);
   const statsCard = createEl(
     'div',
     'journal-card p-3 rounded-2xl grid grid-cols-2 gap-2'
   );
   if (stats) {
-    const deltaText = stats.delta === null
-      ? '--'
-      : `${stats.delta > 0 ? '+' : ''}${stats.delta.toFixed(2)}`;
+    const deltaText = stats.delta === null ? '--' : formatWeightDelta(stats.delta);
     const deltaColor = stats.delta === null
       ? 'text-ink-400'
       : stats.delta > 0
@@ -488,22 +494,22 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
         : 'text-sage-600';
 
     statsCard.append(
-      createStatCell('區間平均', isHidden ? `${MASKED_WEIGHT} kg` : `${stats.avg} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
-      createStatCell('區間變化', deltaText === '--' ? '--' : `${deltaText} kg`, deltaColor),
-      createStatCell('區間最低', isHidden ? `${MASKED_WEIGHT} kg` : `${stats.min} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
-      createStatCell('區間最高', isHidden ? `${MASKED_WEIGHT} kg` : `${stats.max} kg`, isHidden ? 'text-ink-400' : 'text-ink')
+      createStatCell(t('charts.statAvg'), isHidden ? maskedDisplay : formatWeight(stats.avg, { trimTrailingZeros: true }), isHidden ? 'text-ink-400' : 'text-ink'),
+      createStatCell(t('charts.statDelta'), deltaText, deltaColor),
+      createStatCell(t('charts.statMin'), isHidden ? maskedDisplay : formatWeight(stats.min, { trimTrailingZeros: true }), isHidden ? 'text-ink-400' : 'text-ink'),
+      createStatCell(t('charts.statMax'), isHidden ? maskedDisplay : formatWeight(stats.max, { trimTrailingZeros: true }), isHidden ? 'text-ink-400' : 'text-ink')
     );
   } else {
     statsCard.append(
-      createStatCell('區間平均', '--', 'text-ink-400'),
-      createStatCell('區間變化', '--', 'text-ink-400'),
-      createStatCell('區間最低', '--', 'text-ink-400'),
-      createStatCell('區間最高', '--', 'text-ink-400')
+      createStatCell(t('charts.statAvg'), '--', 'text-ink-400'),
+      createStatCell(t('charts.statDelta'), '--', 'text-ink-400'),
+      createStatCell(t('charts.statMin'), '--', 'text-ink-400'),
+      createStatCell(t('charts.statMax'), '--', 'text-ink-400')
     );
   }
   blocks.push(statsCard);
 
-  // 3. 目標體重達成進度條（隱私模式保留百分比，隱藏絕對公斤數）
+  // 3. 目標體重達成進度條（隱私模式保留百分比，隱藏絕對數值）
   const progress = calculateGoalProgress(allMemberRecs, member.target_weight);
   if (progress) {
     const progCard = createEl('div', 'journal-card p-3.5 rounded-2xl space-y-2');
@@ -512,7 +518,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     const titleWrap = createEl('span', 'font-medium text-ink-700 inline-flex items-center gap-1.5');
     titleWrap.append(
       createIcon('target', `w-3.5 h-3.5 shrink-0 ${theme.accentText}`),
-      createEl('span', '', '目標達成進度')
+      createEl('span', '', t('charts.goalProgressTitle'))
     );
 
     const statusWrap = createEl(
@@ -522,7 +528,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     if (progress.isAchieved) {
       statusWrap.append(
         createIcon('check', 'w-3.5 h-3.5 shrink-0'),
-        createEl('span', '', '已達標 (100%)')
+        createEl('span', '', t('charts.achieved100'))
       );
     } else {
       statusWrap.textContent = `${progress.percent}%`;
@@ -538,15 +544,15 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     const footRow = createEl('div', 'flex flex-wrap justify-between gap-x-2 gap-y-0.5 text-fluid-label text-ink-400 tabular-nums');
     if (isHidden) {
       footRow.append(
-        createEl('span', 'whitespace-nowrap', `起始 ${MASKED_WEIGHT} kg`),
-        createEl('span', 'text-ink-500 font-medium whitespace-nowrap', `目前 ${MASKED_WEIGHT} kg`),
-        createEl('span', 'whitespace-nowrap', `目標 ${MASKED_WEIGHT} kg`)
+        createEl('span', 'whitespace-nowrap', t('charts.goalStart', { value: maskedDisplay })),
+        createEl('span', 'text-ink-500 font-medium whitespace-nowrap', t('charts.goalCurrent', { value: maskedDisplay })),
+        createEl('span', 'whitespace-nowrap', t('charts.goalTarget', { value: maskedDisplay }))
       );
     } else {
       footRow.append(
-        createEl('span', 'whitespace-nowrap', `起始 ${progress.startWeight} kg`),
-        createEl('span', 'text-ink-700 font-medium whitespace-nowrap', `目前 ${progress.currentWeight} kg`),
-        createEl('span', 'whitespace-nowrap', `目標 ${progress.targetWeight} kg`)
+        createEl('span', 'whitespace-nowrap', t('charts.goalStart', { value: formatWeight(progress.startWeight, { trimTrailingZeros: true }) })),
+        createEl('span', 'text-ink-700 font-medium whitespace-nowrap', t('charts.goalCurrent', { value: formatWeight(progress.currentWeight, { trimTrailingZeros: true }) })),
+        createEl('span', 'whitespace-nowrap', t('charts.goalTarget', { value: formatWeight(progress.targetWeight, { trimTrailingZeros: true }) }))
       );
     }
 
@@ -645,8 +651,8 @@ function syncHistoryFilterUI() {
         'p-0.5 rounded-md hover:bg-sage-100 text-sage-700 shrink-0'
       );
       clearBtn.type = 'button';
-      clearBtn.setAttribute('aria-label', '清除查詢區間');
-      clearBtn.setAttribute('title', '清除查詢區間');
+      clearBtn.setAttribute('aria-label', t('history.clearFilterAria'));
+      clearBtn.setAttribute('title', t('history.clearFilterAria'));
       clearBtn.appendChild(createIcon('close', 'w-3.5 h-3.5'));
       clearBtn.onclick = () => {
         state.historyFilter = { active: false, startDate: '', endDate: '' };
@@ -657,7 +663,7 @@ function syncHistoryFilterUI() {
       };
       pill.append(
         createIcon('calendar', 'w-3.5 h-3.5 shrink-0'),
-        createEl('span', 'tabular-nums truncate font-medium', `${filter.startDate} ～ ${filter.endDate}`),
+        createEl('span', 'tabular-nums truncate font-medium', `${filter.startDate} – ${filter.endDate}`),
         clearBtn
       );
       activeBar.replaceChildren(pill);
@@ -665,19 +671,8 @@ function syncHistoryFilterUI() {
   }
 }
 
-const WEEKDAY_LABELS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-
 function formatHistoryDateWithWeekday(ymd, currentYear) {
-  const str = String(ymd || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-  const [y, m, d] = str.split('-').map(Number);
-  const weekday = WEEKDAY_LABELS[new Date(y, m - 1, d).getDay()] || '';
-  const mm = String(m).padStart(2, '0');
-  const dd = String(d).padStart(2, '0');
-  if (y !== currentYear) {
-    return `${String(y).slice(-2)}/${mm}/${dd} ${weekday}`;
-  }
-  return `${mm}/${dd} ${weekday}`;
+  return formatLocalizedHistoryDate(ymd, currentYear, getWeekdayFromYmd(ymd));
 }
 
 function buildPreviousWeightMap(allMemberRecs) {
@@ -889,10 +884,10 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
   if (total === 0) {
     state.historyPage = 1;
-    if (countEl) countEl.textContent = '共 0 筆';
+    if (countEl) countEl.textContent = t('history.countTotal', { total: 0 });
     const emptyText = state.historyFilter?.active
-      ? '查詢區間內尚無紀錄'
-      : '此區間尚無紀錄';
+      ? t('history.emptyFiltered')
+      : t('history.emptyPeriod');
     list.replaceChildren(createEl('li', 'py-3 text-center text-ink-400', emptyText));
     if (pagerEl) {
       pagerEl.classList.add('hidden');
@@ -902,7 +897,8 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
   }
 
   const isHidden = isMemberWeightHidden(member);
-  const currentYear = new Date().getFullYear();
+  const currentYear = getCurrentYearInTimeZone();
+  const unitLabel = getWeightUnitLabel();
   const prevWeightMap = buildPreviousWeightMap(allMemberRecs);
   const totalPages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
   state.historyPage = Math.min(Math.max(1, Number(state.historyPage) || 1), totalPages);
@@ -913,8 +909,8 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
   if (countEl) {
     countEl.textContent = totalPages > 1
-      ? `第 ${startIdx + 1}–${endIdx} / ${total} 筆`
-      : `共 ${total} 筆`;
+      ? t('history.countRange', { start: startIdx + 1, end: endIdx, total })
+      : t('history.countTotal', { total });
   }
 
   // 僅針對目前分頁顯示的紀錄計算「當下生效的目標體重」，與趨勢圖表規則完全一致
@@ -931,25 +927,25 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
     const numericWeight = Number(r.weight_kg);
     const weightDisplay = isHidden
-      ? `${MASKED_WEIGHT} kg`
+      ? `${MASKED_WEIGHT} ${unitLabel}`
       : Number.isFinite(numericWeight)
-        ? `${numericWeight.toFixed(2)} kg`
-        : `${r.weight_kg} kg`;
+        ? formatWeight(numericWeight)
+        : `${r.weight_kg} ${unitLabel}`;
 
     // 較前次紀錄變化（依完整時間序列計算，跨分頁也精準；隱私模式僅顯相對漲跌、不洩露真實體重）
     const prevWeight = prevWeightMap.has(r.id) ? prevWeightMap.get(r.id) : null;
-    let deltaText = '首次紀錄';
+    let deltaText = t('history.firstRecord');
     let deltaColor = 'text-ink-400';
     if (prevWeight !== null && Number.isFinite(numericWeight)) {
       const diff = Number((numericWeight - prevWeight).toFixed(2));
       if (diff === 0) {
-        deltaText = '— 持平';
+        deltaText = t('history.flat');
         deltaColor = 'text-ink-400';
       } else if (diff > 0) {
-        deltaText = `↗ +${diff.toFixed(2)} kg`;
+        deltaText = `↗ ${formatWeightDelta(diff)}`;
         deltaColor = 'text-rosewood-600';
       } else {
-        deltaText = `↘ ${diff.toFixed(2)} kg`;
+        deltaText = `↘ ${formatWeightDelta(diff)}`;
         deltaColor = 'text-sage-600';
       }
     }
@@ -960,7 +956,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
     topLeft.appendChild(
       createEl(
         'span',
-        `w-[5rem] shrink-0 font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+        `w-[5.25rem] shrink-0 font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
         weightDisplay
       )
     );
@@ -975,7 +971,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
             createEl(
               'span',
               'inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
-              '已達標'
+              t('overview.achieved')
             )
           );
         }
@@ -1004,7 +1000,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
     topRow.append(topLeft, deltaEl);
 
     // 第 2 行：量測日期（含星期幾）＋ 單行省略備註（同欄寬對齊且固定高度，確保每筆歷史紀錄版面完全一致）
-    const bottomRow = createEl('div', 'grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-1.5 h-4 mt-1');
+    const bottomRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-1.5 h-4 mt-1');
     const dateCell = createEl(
       'span',
       'text-[12px] text-ink-400 tabular-nums leading-4 whitespace-nowrap',
@@ -1022,7 +1018,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
       );
       noteBtn.type = 'button';
       noteBtn.setAttribute('title', noteText);
-      noteBtn.setAttribute('aria-label', `查看備註：${noteText}`);
+      noteBtn.setAttribute('aria-label', t('history.viewNoteAria', { note: noteText }));
       noteBtn.onclick = (e) => {
         if (Date.now() < suppressHistoryClickUntil) return;
         if (openHistorySwipeRow?.row === li) {
@@ -1030,7 +1026,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
           closeOpenHistorySwipeRow();
           return;
         }
-        showToast(`${r.recorded_at} 備註：${noteText}`, false, 4000);
+        showToast(t('history.noteToast', { date: r.recorded_at, note: noteText }), false, 4000);
       };
       noteSlot.appendChild(noteBtn);
     }
@@ -1049,13 +1045,13 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
       const triggerDelete = () => {
         if (isMemberWeightHidden(member)) {
-          showToast('隱藏體重狀態下無法刪除紀錄，請先解鎖顯示', true);
+          showToast(t('history.deleteHiddenBlocked'), true);
           renderCharts();
           return false;
         }
-        if (!confirm('確定刪除此筆體重紀錄？')) return false;
+        if (!confirm(t('history.deleteConfirm'))) return false;
         if (optimisticDeleteRecord(r.id)) {
-          showToast('已刪除紀錄');
+          showToast(t('history.deleted'));
           return true;
         }
         return false;
@@ -1063,8 +1059,8 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
       const actionBtn = createEl('button', 'history-swipe-action');
       actionBtn.type = 'button';
-      actionBtn.setAttribute('aria-label', '刪除此筆體重紀錄');
-      actionBtn.setAttribute('title', '刪除此筆體重紀錄');
+      actionBtn.setAttribute('aria-label', t('history.deleteAria'));
+      actionBtn.setAttribute('title', t('history.deleteAria'));
       actionBtn.appendChild(createIcon('trash', 'w-4 h-4 shrink-0'));
       actionBtn.onclick = (e) => {
         e.stopPropagation();
@@ -1142,15 +1138,15 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
   const leftGroup = createEl('div', 'flex items-center justify-start gap-1');
   if (isMulti) {
     leftGroup.appendChild(
-      createPagerButton({ iconName: 'chevronsLeft', ariaLabel: '第一頁', disabled: isFirst, onClick: () => goToPage(1), compact: true })
+      createPagerButton({ iconName: 'chevronsLeft', ariaLabel: t('history.firstPage'), disabled: isFirst, onClick: () => goToPage(1), compact: true })
     );
   }
   leftGroup.appendChild(
     createPagerButton({
-      label: isMulti ? '上頁' : '上一頁',
+      label: isMulti ? t('history.prevShort') : t('history.prevPage'),
       iconName: 'chevronLeft',
       iconPosition: 'left',
-      ariaLabel: '上一頁',
+      ariaLabel: t('history.prevPage'),
       disabled: isFirst,
       onClick: () => goToPage(state.historyPage - 1),
       compact: isMulti,
@@ -1160,16 +1156,16 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
   const pageLabel = createEl(
     'span',
     'text-ink-500 font-medium tabular-nums whitespace-nowrap text-center',
-    isMulti ? `${state.historyPage} / ${totalPages}` : `第 ${state.historyPage} / ${totalPages} 頁`
+    isMulti ? `${state.historyPage} / ${totalPages}` : t('history.pageOf', { page: state.historyPage, total: totalPages })
   );
 
   const rightGroup = createEl('div', 'flex items-center justify-end gap-1');
   rightGroup.appendChild(
     createPagerButton({
-      label: isMulti ? '下頁' : '下一頁',
+      label: isMulti ? t('history.nextShort') : t('history.nextPage'),
       iconName: 'chevronRight',
       iconPosition: 'right',
-      ariaLabel: '下一頁',
+      ariaLabel: t('history.nextPage'),
       disabled: isLast,
       onClick: () => goToPage(state.historyPage + 1),
       compact: isMulti,
@@ -1177,7 +1173,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
   );
   if (isMulti) {
     rightGroup.appendChild(
-      createPagerButton({ iconName: 'chevronsRight', ariaLabel: '最後一頁', disabled: isLast, onClick: () => goToPage(totalPages), compact: true })
+      createPagerButton({ iconName: 'chevronsRight', ariaLabel: t('history.lastPage'), disabled: isLast, onClick: () => goToPage(totalPages), compact: true })
     );
   }
 
@@ -1277,14 +1273,18 @@ export function renderCharts() {
   }
 
   const ctx = canvas.getContext('2d');
-  const baselineWeight = Number(values[0]);
+  const unit = getWeightUnit();
+  const unitLabel = getWeightUnitLabel(unit);
+  const displayValues = values.map((v) => kgToDisplay(v, unit, 2));
+  const displayTargetValues = targetSeries.values.map((v) => (v === null ? null : kgToDisplay(v, unit, 2)));
+  const baselineDisplayWeight = Number(displayValues[0]);
   const isDaily = state.selectedRange === 'day';
   const pointRadius = values.length <= 12 ? 3 : 2;
   const datasets = [{
     label: isHidden
-      ? (isDaily ? '體重趨勢' : '平均趨勢')
-      : (isDaily ? '體重 (kg)' : '平均體重 (kg)'),
-    data: values,
+      ? (isDaily ? t('charts.legendTrendDaily') : t('charts.legendTrendAvg'))
+      : (isDaily ? t('charts.legendWeightDaily', { unit: unitLabel }) : t('charts.legendWeightAvg', { unit: unitLabel })),
+    data: displayValues,
     borderColor: theme.lineColor,
     backgroundColor: theme.fillColor,
     borderWidth: 2.2,
@@ -1299,13 +1299,13 @@ export function renderCharts() {
 
   if (targetSeries.hasAnyTarget && labels.length > 0) {
     const targetLabel = isHidden
-      ? '目標線'
+      ? t('charts.legendTargetHidden')
       : member?.target_weight
-        ? `目標 ${member.target_weight} kg`
-        : '歷史目標';
+        ? t('charts.legendTarget', { value: formatWeight(member.target_weight, { unit, trimTrailingZeros: true }) })
+        : t('charts.legendTargetHistory');
     datasets.push({
       label: targetLabel,
-      data: targetSeries.values,
+      data: displayTargetValues,
       borderColor: '#A8A295',
       backgroundColor: '#A8A295',
       borderWidth: 1.6,
@@ -1358,21 +1358,24 @@ export function renderCharts() {
               if (i === undefined || i === null) return '';
               const base = detailLabels?.[i] || labels[i] || '';
               const cnt = bucketCounts?.[i] || 1;
-              return !isDaily && cnt > 1 ? `${base}（${cnt} 筆）` : base;
+              return !isDaily && cnt > 1 ? `${base} (${t('charts.bucketCount', { count: cnt })})` : base;
             },
             label: (ctxItem) => {
               if (!isHidden) {
+                const valStr = `${ctxItem.parsed.y} ${unitLabel}`;
                 if (ctxItem.datasetIndex === 0) {
-                  return `${isDaily ? '體重' : '平均體重'}：${ctxItem.parsed.y} kg`;
+                  return isDaily
+                    ? t('charts.tooltipWeight', { value: valStr })
+                    : t('charts.tooltipAvgWeight', { value: valStr });
                 }
-                return `目標體重：${ctxItem.parsed.y} kg`;
+                return t('charts.tooltipTarget', { value: valStr });
               }
-              if (ctxItem.datasetIndex === 0 && baselineWeight !== null && Number.isFinite(ctxItem.parsed.y)) {
-                const delta = Number((ctxItem.parsed.y - baselineWeight).toFixed(2));
+              if (ctxItem.datasetIndex === 0 && Number.isFinite(baselineDisplayWeight) && Number.isFinite(ctxItem.parsed.y)) {
+                const delta = Number((ctxItem.parsed.y - baselineDisplayWeight).toFixed(2));
                 const sign = delta > 0 ? '+' : '';
-                return `較區間起點：${sign}${delta.toFixed(2)} kg`;
+                return t('charts.tooltipFromStart', { delta: `${sign}${delta.toFixed(2)} ${unitLabel}` });
               }
-              return `目標體重：${MASKED_WEIGHT} kg`;
+              return t('charts.tooltipTarget', { value: `${MASKED_WEIGHT} ${unitLabel}` });
             }
           }
         }
@@ -1491,7 +1494,7 @@ export function initChartRangeControls({ onRangeChange }) {
           endInput.value = clampedMax;
         } else if (endInput.value > clampedMax) {
           endInput.value = clampedMax;
-          showToast('查詢區間最多一年，已自動調整結束日期');
+          showToast(t('history.autoAdjustEnd'));
         }
       }
     };
@@ -1508,7 +1511,7 @@ export function initChartRangeControls({ onRangeChange }) {
           if (adjustedStart) {
             startInput.value = adjustedStart;
             syncHistoryDateInputBounds();
-            showToast('查詢區間最多一年，已自動調整開始日期');
+            showToast(t('history.autoAdjustStart'));
           }
         }
       }
@@ -1536,7 +1539,7 @@ export function initChartRangeControls({ onRangeChange }) {
       isHistoryFilterPanelOpen = false;
       syncHistoryFilterUI();
       refreshCurrentMemberHistoryOnly(true);
-      showToast('已重設為跟隨圖表區間');
+      showToast(t('history.filterReset'));
     };
   }
 }

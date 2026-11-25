@@ -24,15 +24,15 @@
 <body class="bg-paper text-ink">
 
   <!-- 冷啟動「晨露扉頁」極速過場（點擊任意處可立即略過） -->
-  <div id="app-splash" class="app-splash" role="status" aria-label="載入家與毛孩體重誌">
+  <div id="app-splash" class="app-splash" role="status" data-i18n-aria-label="app.splashAria" aria-label="載入家與毛孩體重誌">
     <div class="app-splash-inner">
       <div class="app-splash-icon-wrap">
         <span class="app-splash-halo" aria-hidden="true"></span>
-        <img src="./icons/app-icon.svg" alt="家與毛孩體重誌" class="app-splash-icon" />
+        <img src="./icons/app-icon.svg" alt="Kin &amp; Paws Weight" class="app-splash-icon" />
       </div>
       <div class="app-splash-text space-y-1">
-        <p class="text-lg font-semibold tracking-[0.14em] text-ink">家與毛孩體重誌</p>
-        <p class="text-xs font-medium tracking-[0.18em] text-sage-700/80">Kin &amp; Paws Weight</p>
+        <p data-i18n="app.brand" class="text-lg font-semibold tracking-[0.14em] text-ink">家與毛孩體重誌</p>
+        <p data-i18n="app.brandSub" class="text-xs font-medium tracking-[0.18em] text-sage-700/80">Kin &amp; Paws Weight</p>
       </div>
       <div class="app-splash-bar" aria-hidden="true">
         <span class="app-splash-bar-fill"></span>
@@ -45,15 +45,15 @@
     <div class="flex items-center gap-2.5 min-w-0">
       <img
         src="./icons/app-icon.svg"
-        alt="家與毛孩體重誌圖示"
+        alt="Kin &amp; Paws Weight"
         class="w-10 h-10 rounded-xl border border-oat-200 shadow-sm shrink-0"
       />
       <div class="min-w-0">
         <div class="flex items-baseline gap-1.5 min-w-0">
-          <h1 class="text-base font-semibold tracking-wider text-ink truncate">家與毛孩體重誌</h1>
-          <span class="hidden sm:inline text-[13px] font-medium tracking-wide text-sage-700/80 shrink-0">Kin &amp; Paws Weight</span>
+          <h1 data-i18n="app.brand" class="text-base font-semibold tracking-wider text-ink truncate">家與毛孩體重誌</h1>
+          <span data-i18n="app.brandSub" class="hidden sm:inline text-[13px] font-medium tracking-wide text-sage-700/80 shrink-0">Kin &amp; Paws Weight</span>
         </div>
-        <p id="header-family-code" class="text-fluid-label text-ink-400 font-mono truncate">同步碼：載入中...</p>
+        <p id="header-family-code" data-i18n="header.syncCodeLoading" class="text-fluid-label text-ink-400 font-mono truncate">同步碼：載入中...</p>
       </div>
     </div>
     <button id="btn-refresh" type="button" class="inline-flex items-center gap-1.5 text-xs bg-linen hover:bg-oat-100 text-ink-700 border border-oat-200 px-3 py-1.5 rounded-full font-medium shrink-0 whitespace-nowrap">
@@ -63,7 +63,7 @@
         <path d="M4 13a8 8 0 0 0 14.5 4.6L21 15" />
         <path d="M21 20v-5h-5" />
       </svg>
-      <span>同步</span>
+      <span data-i18n="header.sync">同步</span>
     </button>
   </header>
 
@@ -89,10 +89,10 @@
 
       <!-- 日/週/月/年 切換按鈕 -->
       <div id="chart-range-pills" class="flex bg-oat-100 border border-oat-200 p-1 rounded-2xl text-xs font-medium">
-        <button type="button" data-range="day" class="range-btn flex-1 py-1.5 rounded-xl bg-linen text-sage-700 shadow-sm">日</button>
-        <button type="button" data-range="week" class="range-btn flex-1 py-1.5 rounded-xl text-ink-500">週</button>
-        <button type="button" data-range="month" class="range-btn flex-1 py-1.5 rounded-xl text-ink-500">月</button>
-        <button type="button" data-range="year" class="range-btn flex-1 py-1.5 rounded-xl text-ink-500">年</button>
+        <button type="button" data-range="day" data-i18n="charts.rangeDay" class="range-btn flex-1 py-1.5 rounded-xl bg-linen text-sage-700 shadow-sm">日</button>
+        <button type="button" data-range="week" data-i18n="charts.rangeWeek" class="range-btn flex-1 py-1.5 rounded-xl text-ink-500">週</button>
+        <button type="button" data-range="month" data-i18n="charts.rangeMonth" class="range-btn flex-1 py-1.5 rounded-xl text-ink-500">月</button>
+        <button type="button" data-range="year" data-i18n="charts.rangeYear" class="range-btn flex-1 py-1.5 rounded-xl text-ink-500">年</button>
       </div>
 
       <!-- 區間統計摘要、目標進度與提醒 -->
@@ -103,19 +103,19 @@
         <div id="chart-canvas-wrap" class="select-none">
           <canvas id="weightChart" height="220" class="touch-pan-y select-none"></canvas>
         </div>
-        <div id="chart-empty-state" class="hidden py-10 text-center text-xs text-ink-400">此區間尚無體重紀錄，切換時間範圍或新增體重即可檢視趨勢。</div>
+        <div id="chart-empty-state" data-i18n="charts.emptyPeriod" class="hidden py-10 text-center text-xs text-ink-400">此區間尚無體重紀錄</div>
       </div>
       <div class="journal-card p-4 rounded-2xl">
         <div class="flex items-center justify-between gap-2 mb-2.5">
-          <h3 class="font-semibold text-sm text-ink-700 tracking-wide">歷史紀錄</h3>
+          <h3 data-i18n="history.title" class="font-semibold text-sm text-ink-700 tracking-wide">歷史紀錄</h3>
           <div class="flex items-center gap-2 shrink-0">
             <span id="history-count" class="text-fluid-label text-ink-400 tabular-nums whitespace-nowrap"></span>
-            <button id="btn-history-filter-toggle" type="button" class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-xl border border-oat-200 bg-oat-50 text-ink-600 hover:bg-oat-100 font-medium whitespace-nowrap" aria-expanded="false">
+            <button id="btn-history-filter-toggle" type="button" data-i18n-aria-label="history.filterToggleAria" class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-xl border border-oat-200 bg-oat-50 text-ink-600 hover:bg-oat-100 font-medium whitespace-nowrap" aria-expanded="false">
               <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
                 <path d="M8 3.5v3M16 3.5v3M3.5 9.5h17" />
               </svg>
-              <span>區間查詢</span>
+              <span data-i18n="history.filterBtn">區間查詢</span>
             </button>
           </div>
         </div>
@@ -126,26 +126,26 @@
         <!-- 可收合之歷史紀錄區間查詢面板（最多查詢一年） -->
         <div id="history-filter-panel" class="hidden mb-3 p-3 rounded-2xl bg-oat-50 border border-oat-200/80 space-y-2.5 text-xs">
           <div class="flex flex-wrap items-center gap-1.5">
-            <button type="button" data-history-preset="30d" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近 30 天</button>
-            <button type="button" data-history-preset="3m" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近 3 個月</button>
-            <button type="button" data-history-preset="6m" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近半年</button>
-            <button type="button" data-history-preset="1y" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近一年</button>
+            <button type="button" data-history-preset="30d" data-i18n="history.preset30d" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近 30 天</button>
+            <button type="button" data-history-preset="3m" data-i18n="history.preset3m" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近 3 個月</button>
+            <button type="button" data-history-preset="6m" data-i18n="history.preset6m" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近半年</button>
+            <button type="button" data-history-preset="1y" data-i18n="history.preset1y" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近一年</button>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div class="min-w-0">
-              <label for="history-start-date" class="block text-[11px] text-ink-400 mb-1">開始日期</label>
+              <label for="history-start-date" data-i18n="history.startDate" class="block text-[11px] text-ink-400 mb-1">開始日期</label>
               <input id="history-start-date" type="date" min="2000-01-01" class="w-full min-w-0 border rounded-xl px-2 py-1.5 text-xs tabular-nums bg-linen" />
             </div>
             <div class="min-w-0">
-              <label for="history-end-date" class="block text-[11px] text-ink-400 mb-1">結束日期</label>
+              <label for="history-end-date" data-i18n="history.endDate" class="block text-[11px] text-ink-400 mb-1">結束日期</label>
               <input id="history-end-date" type="date" min="2000-01-01" class="w-full min-w-0 border rounded-xl px-2 py-1.5 text-xs tabular-nums bg-linen" />
             </div>
           </div>
           <div class="flex items-center justify-between gap-2 pt-0.5">
-            <span class="text-[11px] text-ink-400 leading-snug">最多可查詢 1 年區間</span>
+            <span data-i18n="history.maxOneYearHint" class="text-[11px] text-ink-400 leading-snug">最多可查詢一年內紀錄</span>
             <div class="flex items-center gap-1.5 shrink-0">
-              <button id="btn-history-filter-reset" type="button" class="px-2.5 py-1.5 rounded-xl bg-linen border border-oat-200 text-ink-600 font-medium">重設</button>
-              <button id="btn-history-filter-apply" type="button" class="px-3 py-1.5 rounded-xl bg-sage-600 hover:bg-sage-700 text-linen font-medium">查詢</button>
+              <button id="btn-history-filter-reset" type="button" data-i18n="common.reset" class="px-2.5 py-1.5 rounded-xl bg-linen border border-oat-200 text-ink-600 font-medium">重設</button>
+              <button id="btn-history-filter-apply" type="button" data-i18n="common.search" class="px-3 py-1.5 rounded-xl bg-sage-600 hover:bg-sage-700 text-linen font-medium">查詢</button>
             </div>
           </div>
         </div>
@@ -157,30 +157,62 @@
 
     <!-- 分頁 3：設定與成員管理 -->
     <section id="view-settings" class="page-view hidden space-y-4">
+      <!-- 語言、單位與時區設定 -->
+      <div class="journal-card p-4 rounded-2xl space-y-3.5">
+        <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
+          <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3.6 9h16.8M3.6 15h16.8" />
+            <path d="M12 3a13 13 0 0 0 0 18M12 3a13 13 0 0 1 0 18" />
+          </svg>
+          <span data-i18n="settings.regionTitle">語言、單位與時區</span>
+        </h2>
+
+        <div>
+          <label for="select-language" data-i18n="settings.languageLabel" class="text-xs text-ink-500">顯示語言</label>
+          <select id="select-language" class="w-full border rounded-xl p-2.5 text-sm mt-1.5"></select>
+        </div>
+
+        <div>
+          <span data-i18n="settings.unitLabel" class="block text-xs text-ink-500">體重顯示單位</span>
+          <div class="flex bg-oat-100 border border-oat-200 p-1 rounded-2xl mt-1.5 gap-1">
+            <button id="btn-unit-kg" type="button" data-i18n="settings.unitKg" class="flex-1 py-2 rounded-xl text-xs font-medium bg-linen text-sage-700 shadow-sm transition">公斤 (kg)</button>
+            <button id="btn-unit-lb" type="button" data-i18n="settings.unitLb" class="flex-1 py-2 rounded-xl text-xs font-medium text-ink-500 transition">磅 (lb)</button>
+          </div>
+          <p data-i18n="settings.unitNote" class="text-[11px] text-ink-400 mt-1.5 leading-snug">資料庫統一以 kg 儲存，切換單位時自動換算顯示與輸入</p>
+        </div>
+
+        <div>
+          <label for="select-timezone" data-i18n="settings.timezoneLabel" class="text-xs text-ink-500">時區設定</label>
+          <select id="select-timezone" class="w-full border rounded-xl p-2.5 text-sm mt-1.5"></select>
+          <p id="settings-timezone-status" class="text-[11px] text-ink-400 mt-1.5 tabular-nums leading-snug"></p>
+        </div>
+      </div>
+
       <div class="journal-card p-4 rounded-2xl space-y-3.5">
         <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
           <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6.5 18h11a4 4 0 0 0 .8-7.92A5.5 5.5 0 0 0 7.6 8.3 3.8 3.8 0 0 0 6.5 18Z" />
           </svg>
-          <span>雲端同步設定</span>
+          <span data-i18n="settings.syncTitle">雲端同步設定</span>
         </h2>
         <div>
-          <label class="text-xs text-ink-500">家庭同步碼（12-64 字元英數字、- 或 _，輸入相同代碼即可同步）</label>
+          <label data-i18n="settings.familyCodeLabel" class="text-xs text-ink-500">家庭同步碼（建議使用隨機高強度碼）</label>
           <div class="flex gap-2 mt-1.5">
-            <input id="input-family-code" type="text" maxlength="64" autocomplete="off" class="min-w-0 flex-1 border rounded-xl p-2.5 text-sm font-mono" />
+            <input id="input-family-code" type="text" maxlength="64" autocomplete="off" data-i18n-placeholder="settings.familyCodePlaceholder" placeholder="請輸入 12–64 字元同步碼" class="min-w-0 flex-1 border rounded-xl p-2.5 text-sm font-mono" />
             <button id="btn-generate-code" type="button" class="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 text-xs bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 px-3 py-2 rounded-xl font-medium">
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z" />
               </svg>
-              <span>產生</span>
+              <span data-i18n="settings.generateCode">產生隨機碼</span>
             </button>
           </div>
         </div>
         <div id="api-key-setting-wrap" class="hidden">
-          <label class="text-xs text-ink-500">API 金鑰（若未透過 config.js 注入，請在此填入）</label>
-          <input id="input-api-key" type="password" autocomplete="off" placeholder="請輸入與後端 APP_API_KEY 相符的金鑰" class="w-full border rounded-xl p-2.5 text-sm mt-1.5" />
+          <label data-i18n="settings.apiKeyLabel" class="text-xs text-ink-500">API 存取金鑰（僅存於本機）</label>
+          <input id="input-api-key" type="password" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholder" placeholder="若未內建於 config.js，請在此貼上 API Key" class="w-full border rounded-xl p-2.5 text-sm mt-1.5" />
         </div>
-        <button id="btn-save-settings" type="button" class="w-full py-2.5 bg-ink text-linen rounded-xl text-sm font-medium tracking-wide">儲存並重新同步</button>
+        <button id="btn-save-settings" type="button" data-i18n="settings.saveSync" class="w-full py-2.5 bg-ink text-linen rounded-xl text-sm font-medium tracking-wide">儲存並同步</button>
       </div>
 
       <div class="journal-card p-4 rounded-2xl space-y-3">
@@ -192,13 +224,13 @@
               <circle cx="16.5" cy="9.5" r="2.2" />
               <path d="M16.5 14.5c1.8 0 3.4 1 4 3.2" />
             </svg>
-            <span>成員管理</span>
+            <span data-i18n="settings.membersTitle">成員管理</span>
           </h2>
           <button id="btn-open-member-modal" type="button" class="inline-flex items-center gap-1 text-xs bg-sage-600 text-linen px-3 py-1.5 rounded-xl font-medium">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            <span>新增成員</span>
+            <span data-i18n="memberModal.addTitle">新增成員</span>
           </button>
         </div>
         <ul id="settings-member-list" class="divide-y divide-oat-100 text-sm"></ul>
@@ -213,7 +245,7 @@
         <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
         </svg>
-        <span>記錄今日體重</span>
+        <span data-i18n="overview.recordToday">記錄今日體重</span>
       </button>
     </div>
   </div>
@@ -228,7 +260,7 @@
           <path d="M10 19v-4.5h4V19" />
         </svg>
       </span>
-      <span>總覽</span>
+      <span data-i18n="nav.overview">總覽</span>
     </button>
     <button type="button" data-tab="charts" class="nav-btn flex flex-col items-center gap-0.5">
       <span class="nav-icon-wrap w-9 h-6 rounded-full flex items-center justify-center transition-colors">
@@ -238,7 +270,7 @@
           <path d="M15 7h3.5v3.5" />
         </svg>
       </span>
-      <span>統計</span>
+      <span data-i18n="nav.charts">統計</span>
     </button>
     <button type="button" data-tab="settings" class="nav-btn flex flex-col items-center gap-0.5">
       <span class="nav-icon-wrap w-9 h-6 rounded-full flex items-center justify-center transition-colors">
@@ -251,7 +283,7 @@
           <circle cx="17" cy="17" r="2" />
         </svg>
       </span>
-      <span>設定</span>
+      <span data-i18n="nav.settings">設定</span>
     </button>
   </nav>
 
@@ -259,20 +291,20 @@
   <div id="modal-record" class="modal-overlay hidden fixed inset-0 bg-ink/35 backdrop-blur-[2px] z-50 flex items-end sm:items-center justify-center p-4">
     <form id="form-record" novalidate class="modal-sheet bg-linen border border-oat-200 w-full max-w-md rounded-3xl p-5 space-y-4 shadow-soft">
       <div class="flex justify-between items-center">
-        <h3 class="font-semibold text-base text-ink tracking-wide">記錄體重</h3>
+        <h3 data-i18n="record.title" class="font-semibold text-base text-ink tracking-wide">記錄體重</h3>
         <div class="flex bg-oat-100 border border-oat-200 p-1 rounded-xl text-xs font-medium">
           <button type="button" id="btn-rec-mode-batch" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-linen text-sage-700 shadow-sm">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 4L4 8.5 12 13l8-4.5L12 4Z" />
               <path d="M4 13l8 4.5 8-4.5" />
             </svg>
-            <span>批量</span>
+            <span data-i18n="record.modeBatch">批量記錄</span>
           </button>
           <button type="button" id="btn-rec-mode-single" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-ink-500">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M15.8 5.2a2.1 2.1 0 0 1 3 3L8.5 18.5 4.5 19.5l1-4 10.3-10.3Z" />
             </svg>
-            <span>單筆</span>
+            <span data-i18n="record.modeSingle">單筆記錄</span>
           </button>
         </div>
       </div>
@@ -280,7 +312,7 @@
       <!-- 批量模式：一次填寫多位成員今日體重 -->
       <div id="rec-batch-fields" class="space-y-3">
         <div>
-          <label class="text-xs text-ink-500">紀錄日期（未填體重的成員會自動略過）</label>
+          <label data-i18n="record.batchHint" class="text-xs text-ink-500">一次填入多位成員體重（留空略過），備註可選填</label>
           <input id="batch-date" type="date" min="2000-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
         <div id="batch-member-rows" class="max-h-64 overflow-y-auto divide-y divide-oat-100 border border-oat-200 bg-paper/60 rounded-2xl px-3"></div>
@@ -290,16 +322,16 @@
       <div id="rec-single-fields" class="hidden space-y-3">
         <select id="rec-member" class="w-full border rounded-xl p-2.5 text-sm"></select>
         <div class="relative">
-          <input id="rec-weight" type="text" inputmode="decimal" autocomplete="off" placeholder="體重 (kg)，例：62.5 或 4.35" class="w-full border rounded-xl p-2.5 text-sm tabular-nums" />
-          <button id="btn-rec-weight-visibility" type="button" class="hidden absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-oat-100" aria-label="顯示輸入體重" title="暫時顯示輸入內容"></button>
+          <input id="rec-weight" type="text" inputmode="decimal" autocomplete="off" placeholder="體重 (kg)" class="w-full border rounded-xl p-2.5 text-sm tabular-nums" />
+          <button id="btn-rec-weight-visibility" type="button" class="hidden absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-oat-100" data-i18n-aria-label="record.toggleShowWeight" aria-label="顯示輸入數值"></button>
         </div>
         <input id="rec-date" type="date" min="2000-01-01" class="w-full border rounded-xl p-2.5 text-sm" />
-        <input id="rec-note" type="text" maxlength="200" placeholder="備註（選填，例：飯後、換飼料、散步後）" class="w-full border rounded-xl p-2.5 text-sm" />
+        <input id="rec-note" type="text" maxlength="200" data-i18n-placeholder="record.notePlaceholder" placeholder="例：早餐前、換新飼料、散步後" class="w-full border rounded-xl p-2.5 text-sm" />
       </div>
 
       <div class="flex gap-2">
-        <button type="button" class="btn-close-modal flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
-        <button id="btn-rec-submit" type="submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存</button>
+        <button type="button" data-i18n="common.cancel" class="btn-close-modal flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
+        <button id="btn-rec-submit" type="submit" data-i18n="common.save" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存</button>
       </div>
     </form>
   </div>
@@ -307,95 +339,95 @@
   <!-- 彈窗：新增 / 編輯成員（含 12 款文青頭像自由選擇） -->
   <div id="modal-member" class="modal-overlay hidden fixed inset-0 bg-ink/35 backdrop-blur-[2px] z-50 flex items-end sm:items-center justify-center p-4">
     <form id="form-member" class="modal-sheet bg-linen border border-oat-200 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
-      <h3 id="mem-modal-title" class="font-semibold text-base text-ink tracking-wide">新增成員</h3>
+      <h3 id="mem-modal-title" data-i18n="memberModal.addTitle" class="font-semibold text-base text-ink tracking-wide">新增成員</h3>
       <input type="hidden" id="mem-id" />
       <input type="hidden" id="mem-avatar" />
       <div>
-        <label class="text-xs text-ink-500">成員名稱</label>
-        <input id="mem-name" type="text" maxlength="50" required placeholder="名稱（例：爸爸、橘貓咪咪、柴犬豆豆）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        <label data-i18n="memberModal.name" class="text-xs text-ink-500">成員名稱</label>
+        <input id="mem-name" type="text" maxlength="50" required data-i18n-placeholder="memberModal.namePlaceholder" placeholder="名稱（例：爸爸、橘貓咪咪、柴犬豆豆）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
       <div>
-        <label class="text-xs text-ink-500">成員類型</label>
+        <label data-i18n="memberModal.type" class="text-xs text-ink-500">成員類型</label>
         <select id="mem-type" class="w-full border rounded-xl p-2.5 text-sm mt-1">
-          <option value="human">家人</option>
-          <option value="cat">貓咪</option>
-          <option value="dog">狗狗</option>
+          <option value="human" data-i18n="memberType.human">家人</option>
+          <option value="cat" data-i18n="memberType.cat">貓咪</option>
+          <option value="dog" data-i18n="memberType.dog">狗狗</option>
         </select>
       </div>
       <div>
         <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
-          <label class="text-xs text-ink-500">選擇頭像</label>
-          <span class="text-fluid-label text-ink-400">可自由挑選喜愛的插畫頭像</span>
+          <label data-i18n="memberModal.avatar" class="text-xs text-ink-500">選擇頭像</label>
+          <span data-i18n="memberModal.avatarHint" class="text-fluid-label text-ink-400">可自由挑選喜愛的插畫頭像</span>
         </div>
         <div id="mem-avatar-picker" class="grid grid-cols-4 gap-1.5 mt-1.5"></div>
       </div>
       <div id="mem-breed-wrap" class="hidden">
-        <label class="text-xs text-ink-500">品種（選填）</label>
-        <input id="mem-breed" type="text" maxlength="40" placeholder="例：橘貓、米克斯、柴犬、貴賓" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        <label data-i18n="memberModal.breed" class="text-xs text-ink-500">品種（選填）</label>
+        <input id="mem-breed" type="text" maxlength="40" data-i18n-placeholder="memberModal.breedPlaceholder" placeholder="例：橘貓、米克斯、柴犬、貴賓" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
       <div id="mem-birth-date-wrap">
-        <label class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
+        <label data-i18n="memberModal.birthDate" class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
         <input id="mem-birth-date" type="date" min="1900-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
       <div id="mem-height-wrap">
-        <label class="text-xs text-ink-500">身高 (cm)</label>
-        <input id="mem-height" type="number" min="20" max="300" step="0.1" placeholder="家人計算 BMI 用，毛孩可留空" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
+        <input id="mem-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="家人計算 BMI 用，毛孩可留空" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
       <div id="mem-bcs-wrap" class="hidden">
-        <label class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
+        <label data-i18n="memberModal.bcs" class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
         <select id="mem-bcs" class="w-full border rounded-xl p-2.5 text-sm mt-1">
-          <option value="">未評分（總覽顯示一週體重變化）</option>
-          <option value="1">1 分 · 極瘦（肋骨腰椎極明顯）</option>
-          <option value="2">2 分 · 過瘦（幾乎無脂肪覆蓋）</option>
-          <option value="3">3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）</option>
-          <option value="4">4 分 · 適中偏瘦（輕摸可感肋骨）</option>
-          <option value="5">5 分 · 理想體態（肋骨好摸、腰身自然）</option>
-          <option value="6">6 分 · 略重（肋骨需稍用力才摸到）</option>
-          <option value="7">7 分 · 過重（肋骨難摸、腰身不明顯）</option>
-          <option value="8">8 分 · 肥胖（摸不到肋骨、腹部下垂）</option>
-          <option value="9">9 分 · 重度肥胖（明顯脂肪堆積）</option>
+          <option value="" data-i18n="bcsOpt.none">未評分（總覽顯示一週體重變化）</option>
+          <option value="1" data-i18n="bcsOpt.1">1 分 · 極瘦（肋骨腰椎極明顯）</option>
+          <option value="2" data-i18n="bcsOpt.2">2 分 · 過瘦（幾乎無脂肪覆蓋）</option>
+          <option value="3" data-i18n="bcsOpt.3">3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）</option>
+          <option value="4" data-i18n="bcsOpt.4">4 分 · 適中偏瘦（輕摸可感肋骨）</option>
+          <option value="5" data-i18n="bcsOpt.5">5 分 · 理想體態（肋骨好摸、腰身自然）</option>
+          <option value="6" data-i18n="bcsOpt.6">6 分 · 略重（肋骨需稍用力才摸到）</option>
+          <option value="7" data-i18n="bcsOpt.7">7 分 · 過重（肋骨難摸、腰身不明顯）</option>
+          <option value="8" data-i18n="bcsOpt.8">8 分 · 肥胖（摸不到肋骨、腹部下垂）</option>
+          <option value="9" data-i18n="bcsOpt.9">9 分 · 重度肥胖（明顯脂肪堆積）</option>
         </select>
       </div>
       <div id="mem-target-wrap">
-        <label class="text-xs text-ink-500">目標體重 (kg)</label>
-        <input id="mem-target" type="text" inputmode="decimal" autocomplete="off" placeholder="選填" class="w-full border rounded-xl p-2.5 text-sm mt-1 tabular-nums" />
+        <label id="mem-target-label" class="text-xs text-ink-500">目標體重 (kg)</label>
+        <input id="mem-target" type="text" inputmode="decimal" autocomplete="off" data-i18n-placeholder="memberModal.targetPlaceholder" placeholder="選填" class="w-full border rounded-xl p-2.5 text-sm mt-1 tabular-nums" />
       </div>
 
       <!-- 隱私保護設定（可選配個人 4 位數 PIN 密碼） -->
       <div class="bg-oat-50 border border-oat-200 rounded-2xl p-3.5 space-y-2.5">
         <div id="mem-privacy-locked-box" class="hidden flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
-          <span class="min-w-0 flex-1 leading-snug">已啟用密碼保護，解鎖後可修改目標體重與隱私設定</span>
-          <button type="button" id="btn-mem-unlock" class="shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
+          <span data-i18n="privacy.lockedDesc" class="min-w-0 flex-1 leading-snug">已啟用密碼保護，解鎖後可修改目標體重與隱私設定</span>
+          <button type="button" id="btn-mem-unlock" data-i18n="privacy.unlockEdit" class="shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
         </div>
         <div id="mem-privacy-controls" class="space-y-2.5">
           <label class="flex items-start gap-2.5 cursor-pointer select-none">
             <input id="mem-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
             <span class="text-xs leading-relaxed">
-              <span class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
-              <span class="text-ink-400">遮蔽公斤數與精確 BMI，只顯示變化趨勢與達標進度</span>
+              <span data-i18n="privacy.hideTitle" class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
+              <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽數值與精確 BMI，只顯示變化趨勢與達標進度</span>
             </span>
           </label>
           <div id="mem-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
             <div>
-              <label id="mem-pin-label" for="mem-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
-              <input id="mem-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              <label id="mem-pin-label" for="mem-pin" data-i18n="privacy.pinLabelNew" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
+              <input id="mem-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="privacy.pinPlaceholderNew" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
             </div>
             <div id="mem-pin-confirm-wrap" class="hidden">
-              <label for="mem-pin-confirm" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
-              <input id="mem-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              <label for="mem-pin-confirm" data-i18n="privacy.pinConfirmLabel" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
+              <input id="mem-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="privacy.pinConfirmPlaceholder" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
               <p id="mem-pin-feedback" class="hidden text-[11px] mt-1 leading-snug" aria-live="polite"></p>
             </div>
             <label id="mem-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
               <input id="mem-clear-pin" type="checkbox" class="rounded border-oat-300" />
-              <span>清除現有密碼（改為無密碼點擊暫時檢視）</span>
+              <span data-i18n="privacy.clearPin">清除現有密碼（改為無密碼點擊暫時檢視）</span>
             </label>
           </div>
         </div>
       </div>
 
       <div class="flex gap-2 pt-1">
-        <button type="button" class="btn-close-modal flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
-        <button id="btn-mem-submit" type="submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">新增</button>
+        <button type="button" data-i18n="common.cancel" class="btn-close-modal flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
+        <button id="btn-mem-submit" type="submit" data-i18n="common.add" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">新增</button>
       </div>
     </form>
   </div>
@@ -405,9 +437,9 @@
     <form id="form-profile" class="modal-sheet bg-linen border border-oat-200 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
       <div class="flex justify-between items-center gap-2 border-b border-oat-200 pb-3">
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
-          <button type="button" id="prof-avatar-slot" title="點擊更換頭像" aria-label="點擊更換頭像" class="shrink-0 relative rounded-full focus:outline-none focus:ring-2 focus:ring-sage-500/40"></button>
+          <button type="button" id="prof-avatar-slot" data-i18n-title="profile.changeAvatarTitle" data-i18n-aria-label="profile.changeAvatarTitle" title="點擊更換頭像" aria-label="點擊更換頭像" class="shrink-0 relative rounded-full focus:outline-none focus:ring-2 focus:ring-sage-500/40"></button>
           <div class="min-w-0">
-            <h3 id="prof-title" class="font-semibold text-base text-ink leading-snug break-words">個人資訊</h3>
+            <h3 id="prof-title" data-i18n="profile.titleFallback" class="font-semibold text-base text-ink leading-snug break-words">個人資訊</h3>
             <p id="prof-subtitle" class="text-fluid-label text-ink-400">成員檔案</p>
           </div>
         </div>
@@ -418,7 +450,7 @@
               <path d="M4 19h16" />
               <path d="M5.5 14.5l4-4 3.2 2.5L18.5 7" />
             </svg>
-            <span>統計</span>
+            <span data-i18n="profile.toChart">統計</span>
           </button>
         </div>
       </div>
@@ -426,8 +458,8 @@
       <!-- 點擊頭像快速更換抽屜 -->
       <div id="prof-inline-avatar-drawer" class="hidden bg-oat-50 border border-oat-200 rounded-2xl p-3 space-y-2">
         <div class="flex items-center justify-between gap-2">
-          <span class="text-xs font-medium text-ink-700">點擊頭像立即更換</span>
-          <button type="button" id="btn-prof-close-avatar-drawer" class="text-xs text-ink-400 hover:text-ink-700 px-1.5 py-0.5 rounded-lg">關閉</button>
+          <span data-i18n="profile.inlineAvatarHint" class="text-xs font-medium text-ink-700">點擊頭像立即更換</span>
+          <button type="button" id="btn-prof-close-avatar-drawer" data-i18n="common.close" class="text-xs text-ink-400 hover:text-ink-700 px-1.5 py-0.5 rounded-lg">關閉</button>
         </div>
         <div id="prof-inline-avatar-picker" class="grid grid-cols-4 gap-1.5"></div>
       </div>
@@ -438,7 +470,7 @@
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
         </svg>
-        <span>為此成員新增體重</span>
+        <span data-i18n="profile.addRecord">為此成員新增體重</span>
       </button>
 
       <input type="hidden" id="prof-id" />
@@ -453,78 +485,78 @@
       <!-- 編輯模式：點擊編輯後才顯示輸入框與頭像選擇器 -->
       <div id="prof-edit-fields" class="hidden space-y-3">
         <div>
-          <label class="text-xs text-ink-500">成員名稱</label>
-          <input id="prof-name" type="text" maxlength="50" required placeholder="例：爸爸、橘貓咪咪、柴犬豆豆" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+          <label data-i18n="memberModal.name" class="text-xs text-ink-500">成員名稱</label>
+          <input id="prof-name" type="text" maxlength="50" required data-i18n-placeholder="memberModal.namePlaceholder" placeholder="例：爸爸、橘貓咪咪、柴犬豆豆" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
 
         <div>
-          <label class="text-xs text-ink-500">選擇頭像</label>
+          <label data-i18n="memberModal.avatar" class="text-xs text-ink-500">選擇頭像</label>
           <div id="prof-avatar-picker" class="grid grid-cols-4 gap-1.5 mt-1.5"></div>
         </div>
 
         <div id="prof-breed-wrap" class="hidden">
-          <label class="text-xs text-ink-500">品種（選填）</label>
-          <input id="prof-breed" type="text" maxlength="40" placeholder="例：橘貓、米克斯、柴犬、貴賓" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+          <label data-i18n="memberModal.breed" class="text-xs text-ink-500">品種（選填）</label>
+          <input id="prof-breed" type="text" maxlength="40" data-i18n-placeholder="memberModal.breedPlaceholder" placeholder="例：橘貓、米克斯、柴犬、貴賓" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
 
         <div id="prof-birth-date-wrap">
-          <label class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
+          <label data-i18n="memberModal.birthDate" class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
           <input id="prof-birth-date" type="date" min="1900-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
 
         <div id="prof-height-wrap">
-          <label class="text-xs text-ink-500">身高 (cm)</label>
-          <input id="prof-height" type="number" min="20" max="300" step="0.1" placeholder="例：172.5" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+          <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
+          <input id="prof-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="例：172.5" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
 
         <div id="prof-bcs-wrap" class="hidden">
-          <label class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
+          <label data-i18n="memberModal.bcs" class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
           <select id="prof-bcs" class="w-full border rounded-xl p-2.5 text-sm mt-1">
-            <option value="">未評分（總覽顯示一週體重變化）</option>
-            <option value="1">1 分 · 極瘦（肋骨腰椎極明顯）</option>
-            <option value="2">2 分 · 過瘦（幾乎無脂肪覆蓋）</option>
-            <option value="3">3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）</option>
-            <option value="4">4 分 · 適中偏瘦（輕摸可感肋骨）</option>
-            <option value="5">5 分 · 理想體態（肋骨好摸、腰身自然）</option>
-            <option value="6">6 分 · 略重（肋骨需稍用力才摸到）</option>
-            <option value="7">7 分 · 過重（肋骨難摸、腰身不明顯）</option>
-            <option value="8">8 分 · 肥胖（摸不到肋骨、腹部下垂）</option>
-            <option value="9">9 分 · 重度肥胖（明顯脂肪堆積）</option>
+            <option value="" data-i18n="bcsOpt.none">未評分（總覽顯示一週體重變化）</option>
+            <option value="1" data-i18n="bcsOpt.1">1 分 · 極瘦（肋骨腰椎極明顯）</option>
+            <option value="2" data-i18n="bcsOpt.2">2 分 · 過瘦（幾乎無脂肪覆蓋）</option>
+            <option value="3" data-i18n="bcsOpt.3">3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）</option>
+            <option value="4" data-i18n="bcsOpt.4">4 分 · 適中偏瘦（輕摸可感肋骨）</option>
+            <option value="5" data-i18n="bcsOpt.5">5 分 · 理想體態（肋骨好摸、腰身自然）</option>
+            <option value="6" data-i18n="bcsOpt.6">6 分 · 略重（肋骨需稍用力才摸到）</option>
+            <option value="7" data-i18n="bcsOpt.7">7 分 · 過重（肋骨難摸、腰身不明顯）</option>
+            <option value="8" data-i18n="bcsOpt.8">8 分 · 肥胖（摸不到肋骨、腹部下垂）</option>
+            <option value="9" data-i18n="bcsOpt.9">9 分 · 重度肥胖（明顯脂肪堆積）</option>
           </select>
         </div>
 
         <div id="prof-target-wrap">
-          <label class="text-xs text-ink-500">目標體重 (kg)</label>
-          <input id="prof-target" type="text" inputmode="decimal" autocomplete="off" placeholder="例：65.0" class="w-full border rounded-xl p-2.5 text-sm mt-1 tabular-nums" />
+          <label id="prof-target-label" class="text-xs text-ink-500">目標體重 (kg)</label>
+          <input id="prof-target" type="text" inputmode="decimal" autocomplete="off" data-i18n-placeholder="memberModal.targetPlaceholder" placeholder="選填" class="w-full border rounded-xl p-2.5 text-sm mt-1 tabular-nums" />
         </div>
 
         <!-- 編輯模式：隱私保護設定 -->
         <div class="bg-oat-50 border border-oat-200 rounded-2xl p-3.5 space-y-2.5">
           <div id="prof-privacy-locked-box" class="hidden flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
-            <span class="min-w-0 flex-1 leading-snug">已啟用密碼保護，解鎖後可修改目標體重與隱私設定</span>
-            <button type="button" id="btn-prof-unlock-edit" class="shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
+            <span data-i18n="privacy.lockedDesc" class="min-w-0 flex-1 leading-snug">已啟用密碼保護，解鎖後可修改目標體重與隱私設定</span>
+            <button type="button" id="btn-prof-unlock-edit" data-i18n="privacy.unlockEdit" class="shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
           </div>
           <div id="prof-privacy-controls" class="space-y-2.5">
             <label class="flex items-start gap-2.5 cursor-pointer select-none">
               <input id="prof-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
               <span class="text-xs leading-relaxed">
-                <span class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
-                <span class="text-ink-400">遮蔽公斤數與精確 BMI，只顯示變化趨勢與達標進度</span>
+                <span data-i18n="privacy.hideTitle" class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
+                <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽數值與精確 BMI，只顯示變化趨勢與達標進度</span>
               </span>
             </label>
             <div id="prof-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
               <div>
-                <label id="prof-pin-label" for="prof-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填）</label>
-                <input id="prof-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+                <label id="prof-pin-label" for="prof-pin" data-i18n="privacy.pinLabelNew" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
+                <input id="prof-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="privacy.pinPlaceholderNew" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
               </div>
               <div id="prof-pin-confirm-wrap" class="hidden">
-                <label for="prof-pin-confirm" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
-                <input id="prof-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+                <label for="prof-pin-confirm" data-i18n="privacy.pinConfirmLabel" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
+                <input id="prof-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="privacy.pinConfirmPlaceholder" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
                 <p id="prof-pin-feedback" class="hidden text-[11px] mt-1 leading-snug" aria-live="polite"></p>
               </div>
               <label id="prof-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
                 <input id="prof-clear-pin" type="checkbox" class="rounded border-oat-300" />
-                <span>清除現有密碼（改為無密碼點擊暫時檢視）</span>
+                <span data-i18n="privacy.clearPin">清除現有密碼（改為無密碼點擊暫時檢視）</span>
               </label>
             </div>
           </div>
@@ -533,19 +565,19 @@
 
       <!-- 檢視模式操作列 -->
       <div id="prof-view-actions" class="flex gap-2 pt-1">
-        <button type="button" class="btn-close-modal flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">關閉</button>
+        <button type="button" data-i18n="common.close" class="btn-close-modal flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">關閉</button>
         <button type="button" id="btn-prof-edit" class="flex-1 py-2.5 bg-ink text-linen rounded-xl text-sm font-medium inline-flex items-center justify-center gap-1.5">
           <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15.8 5.2a2.1 2.1 0 0 1 3 3L8.5 18.5 4.5 19.5l1-4 10.3-10.3Z" />
           </svg>
-          <span>編輯資料</span>
+          <span data-i18n="profile.editBtn">編輯資料</span>
         </button>
       </div>
 
       <!-- 編輯模式操作列 -->
       <div id="prof-edit-actions" class="hidden flex gap-2 pt-1">
-        <button type="button" id="btn-prof-cancel-edit" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消編輯</button>
-        <button type="submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存修改</button>
+        <button type="button" id="btn-prof-cancel-edit" data-i18n="profile.cancelEdit" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消編輯</button>
+        <button type="submit" data-i18n="common.saveChanges" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存修改</button>
       </div>
     </form>
   </div>
@@ -561,8 +593,8 @@
           </svg>
         </div>
         <div class="min-w-0">
-          <h3 id="priv-modal-title" class="font-semibold text-base text-ink leading-snug">體重隱私設定</h3>
-          <p id="priv-modal-subtitle" class="text-fluid-label text-ink-400 truncate">管理個人體重顯示與密碼保護</p>
+          <h3 id="priv-modal-title" data-i18n="privacy.modalTitle" class="font-semibold text-base text-ink leading-snug">體重隱私設定</h3>
+          <p id="priv-modal-subtitle" data-i18n="privacy.modalSubtitle" class="text-fluid-label text-ink-400 truncate">管理個人體重顯示與密碼保護</p>
         </div>
       </div>
 
@@ -570,38 +602,38 @@
 
       <div class="bg-oat-50 border border-oat-200 rounded-2xl p-3.5 space-y-2.5">
         <div id="priv-privacy-locked-box" class="hidden flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
-          <span class="min-w-0 flex-1 leading-snug">已啟用密碼保護，解鎖後可修改隱私設定</span>
-          <button type="button" id="btn-priv-unlock" class="shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
+          <span data-i18n="privacy.lockedDescShort" class="min-w-0 flex-1 leading-snug">已啟用密碼保護，解鎖後可修改隱私設定</span>
+          <button type="button" id="btn-priv-unlock" data-i18n="privacy.unlockEdit" class="shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
         </div>
         <div id="priv-privacy-controls" class="space-y-2.5">
           <label class="flex items-start gap-2.5 cursor-pointer select-none">
             <input id="priv-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
             <span class="text-xs leading-relaxed">
-              <span class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
-              <span class="text-ink-400">遮蔽公斤數與精確 BMI，只顯示變化趨勢與達標進度</span>
+              <span data-i18n="privacy.hideTitle" class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
+              <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽數值與精確 BMI，只顯示變化趨勢與達標進度</span>
             </span>
           </label>
           <div id="priv-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
             <div>
-              <label id="priv-pin-label" for="priv-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
-              <input id="priv-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              <label id="priv-pin-label" for="priv-pin" data-i18n="privacy.pinLabelNew" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
+              <input id="priv-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="privacy.pinPlaceholderNew" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
             </div>
             <div id="priv-pin-confirm-wrap" class="hidden">
-              <label for="priv-pin-confirm" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
-              <input id="priv-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              <label for="priv-pin-confirm" data-i18n="privacy.pinConfirmLabel" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
+              <input id="priv-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="privacy.pinConfirmPlaceholder" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
               <p id="priv-pin-feedback" class="hidden text-[11px] mt-1 leading-snug" aria-live="polite"></p>
             </div>
             <label id="priv-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
               <input id="priv-clear-pin" type="checkbox" class="rounded border-oat-300" />
-              <span>清除現有密碼（改為無密碼點擊暫時檢視）</span>
+              <span data-i18n="privacy.clearPin">清除現有密碼（改為無密碼點擊暫時檢視）</span>
             </label>
           </div>
         </div>
       </div>
 
       <div class="flex gap-2 pt-1">
-        <button type="button" id="btn-priv-cancel" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
-        <button type="submit" id="btn-priv-submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存設定</button>
+        <button type="button" id="btn-priv-cancel" data-i18n="common.cancel" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
+        <button type="submit" id="btn-priv-submit" data-i18n="common.saveSettings" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存設定</button>
       </div>
     </form>
   </div>
@@ -616,8 +648,8 @@
             <path d="M8.5 11V8.2a3.5 3.5 0 0 1 7 0V11" />
           </svg>
         </div>
-        <h3 id="pin-modal-title" class="font-semibold text-base text-ink">輸入個人密碼</h3>
-        <p id="pin-modal-desc" class="text-xs text-ink-500 leading-relaxed">驗證後可暫時檢視真實體重，5 分鐘或離開畫面將自動重新隱藏。</p>
+        <h3 id="pin-modal-title" data-i18n="pinModal.title" class="font-semibold text-base text-ink">輸入個人密碼</h3>
+        <p id="pin-modal-desc" data-i18n="pinModal.desc" class="text-xs text-ink-500 leading-relaxed">驗證後可暫時檢視真實體重，5 分鐘或離開畫面將自動重新隱藏。</p>
       </div>
 
       <div class="space-y-2">
@@ -626,8 +658,8 @@
       </div>
 
       <div class="flex gap-2">
-        <button type="button" id="btn-pin-cancel" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
-        <button type="submit" id="btn-pin-submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">解鎖檢視</button>
+        <button type="button" id="btn-pin-cancel" data-i18n="common.cancel" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
+        <button type="submit" id="btn-pin-submit" data-i18n="pinModal.submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">解鎖檢視</button>
       </div>
     </form>
   </div>

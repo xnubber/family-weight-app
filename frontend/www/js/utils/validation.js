@@ -1,3 +1,12 @@
+import { t } from './i18n.js';
+import {
+  displayToKg,
+  formatWeight,
+  getWeightInputBounds,
+  getWeightUnit,
+  getWeightUnitLabel
+} from './units.js';
+
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const TEMP_ID_REGEX = /^temp-(mem|rec|th)-[0-9a-z-]+$/i;
 export const FAMILY_CODE_REGEX = /^[A-Za-z0-9_-]{12,64}$/;
@@ -54,7 +63,7 @@ export function isValidBirthDate(dateStr) {
     return false;
   }
   const minTime = Date.UTC(1900, 0, 1);
-  const maxTime = Date.now() + 24 * 60 * 60 * 1000;
+  const maxTime = Date.now() + 2 * 24 * 60 * 60 * 1000;
   return parsed.getTime() >= minTime && parsed.getTime() <= maxTime;
 }
 
@@ -62,15 +71,15 @@ export function isValidBirthDate(dateStr) {
 export function parseStrictNumber(raw, { required = false, min, max, label }) {
   const trimmed = String(raw ?? '').trim();
   if (trimmed === '') {
-    if (required) return { error: `${label}不可為空` };
+    if (required) return { error: t('val.required', { label }) };
     return { value: null };
   }
   const num = Number(trimmed);
   if (!Number.isFinite(num)) {
-    return { error: `${label}必須為有效數字` };
+    return { error: t('val.invalidNumber', { label }) };
   }
   if (num < min || num > max) {
-    return { error: `${label}須介於 ${min}–${max}` };
+    return { error: t('val.range', { label, min, max }) };
   }
   return { value: num };
 }
@@ -81,8 +90,9 @@ function normalizeDecimalSymbols(raw) {
     .replace(/[．。，,、]/g, '.');
 }
 
-// 即時清理體重輸入（支援 type="password" 與 type="text"）：轉半形、去非數字與多餘小數點、限整數 3 位與小數 2 位
-export function sanitizeWeightInputValue(raw) {
+// 即時清理體重輸入（支援 kg 3位整數 / lb 4位整數、最多小數 2 位、全形數字轉半形）
+export function sanitizeWeightInputValue(raw, { unit = getWeightUnit() } = {}) {
+  const { maxIntDigits } = getWeightInputBounds(unit);
   const normalized = normalizeDecimalSymbols(raw).replace(/[^0-9.]/g, '');
   if (normalized === '') return '';
 
@@ -96,7 +106,7 @@ export function sanitizeWeightInputValue(raw) {
     intPart = intPart.replace(/^0+/, '') || '0';
   }
 
-  intPart = intPart.slice(0, 3);
+  intPart = intPart.slice(0, maxIntDigits);
   fracPart = fracPart.slice(0, 2);
 
   if (firstDot !== -1) {
@@ -105,29 +115,41 @@ export function sanitizeWeightInputValue(raw) {
   return intPart;
 }
 
-// 體重欄位送出前嚴格防呆驗證（最多小數 2 位、禁止結尾孤立小數點、範圍 0.1–500 kg）
-export function parseWeightValue(raw, { required = false, min = 0.1, max = 500, label = '體重 (kg)' } = {}) {
+// 體重欄位送出前嚴格防呆驗證（支援 kg / lb，驗證通過後統一換算回 kg 存於 value）
+export function parseWeightValue(raw, { required = false, unit = getWeightUnit(), min, max, label } = {}) {
+  const bounds = getWeightInputBounds(unit);
+  const unitLabel = getWeightUnitLabel(unit);
+  const effMin = min ?? bounds.min;
+  const effMax = max ?? bounds.max;
+  const effLabel = label || t('record.weightLabel', { unit: unitLabel });
+
   const trimmed = normalizeDecimalSymbols(raw).trim();
   if (trimmed === '') {
-    if (required) return { error: `${label}不可為空` };
-    return { value: null };
+    if (required) return { error: t('val.required', { label: effLabel }) };
+    return { value: null, displayValue: null };
   }
-  if (!/^\d{1,3}(\.\d{1,2})?$/.test(trimmed)) {
-    return { error: `${label}格式不正確，請輸入正數（最多小數兩位）` };
+  const formatRegex = new RegExp(`^\\d{1,${bounds.maxIntDigits}}(\\.\\d{1,2})?$`);
+  if (!formatRegex.test(trimmed)) {
+    return { error: t('val.weightFormat', { label: effLabel }) };
   }
   const num = Number(trimmed);
   if (!Number.isFinite(num)) {
-    return { error: `${label}必須為有效數字` };
+    return { error: t('val.invalidNumber', { label: effLabel }) };
   }
-  if (num < min || num > max) {
-    return { error: `${label}須介於 ${min}–${max} kg` };
+  if (num < effMin || num > effMax) {
+    return { error: t('val.weightRange', { label: effLabel, min: effMin, max: effMax, unit: unitLabel }) };
   }
-  return { value: Number(num.toFixed(2)) };
+  const displayValue = Number(num.toFixed(2));
+  const kgValue = displayToKg(displayValue, unit);
+  if (kgValue < 0.1 || kgValue > 500) {
+    return { error: t('val.weightRange', { label: effLabel, min: effMin, max: effMax, unit: unitLabel }) };
+  }
+  return { value: kgValue, displayValue };
 }
 
-// 異常體重／漏打小數點防呆提醒（隱私模式下絕不於提示框中洩漏實際數值）
-export function checkWeightAnomaly({ member, weightKg, latestWeightKg = null, isHidden = false }) {
-  const name = member?.name || '成員';
+// 異常體重／漏打小數點防呆提醒（以底層 kg 判定，提示文字自動換算為目前顯示單位；隱私模式絕不洩漏數值）
+export function checkWeightAnomaly({ member, weightKg, latestWeightKg = null, isHidden = false, unit = getWeightUnit() }) {
+  const name = member?.name || t('memberType.human');
   const type = member?.type || 'human';
   const w = Number(weightKg);
   if (!Number.isFinite(w)) return null;
@@ -141,9 +163,13 @@ export function checkWeightAnomaly({ member, weightKg, latestWeightKg = null, is
       : (pct >= 0.35 && diff >= 1);
     if (isHugeJump) {
       if (isHidden) {
-        return `「${name}」本次輸入的體重與上次紀錄差異較大（可能漏輸入小數點），確定要儲存嗎？`;
+        return t('val.anomalyJumpHidden', { name });
       }
-      return `「${name}」本次輸入 ${w} kg，與上次 ${prev} kg 差異較大（可能漏輸入小數點），確定要儲存嗎？`;
+      return t('val.anomalyJump', {
+        name,
+        weight: formatWeight(w, { unit, trimTrailingZeros: true }),
+        prev: formatWeight(prev, { unit, trimTrailingZeros: true })
+      });
     }
   }
 
@@ -154,9 +180,12 @@ export function checkWeightAnomaly({ member, weightKg, latestWeightKg = null, is
 
   if (outOfTypicalRange) {
     if (isHidden) {
-      return `「${name}」本次輸入的體重超出常見範圍（可能漏輸入小數點），確定要儲存嗎？`;
+      return t('val.anomalyRangeHidden', { name });
     }
-    return `「${name}」本次輸入 ${w} kg 超出常見範圍（可能漏輸入小數點），確定要儲存嗎？`;
+    return t('val.anomalyRange', {
+      name,
+      weight: formatWeight(w, { unit, trimTrailingZeros: true })
+    });
   }
 
   return null;
@@ -177,22 +206,20 @@ export function validateHistoryDateRange(startDate, endDate, todayStr) {
   const start = String(startDate ?? '').trim();
   const end = String(endDate ?? '').trim();
   if (!start || !end) {
-    return { error: '請選擇開始與結束日期' };
+    return { error: t('val.rangeMissing') };
   }
   if (!isValidRecordedDate(start) || !isValidRecordedDate(end)) {
-    return { error: '日期格式不正確或超出合理範圍' };
+    return { error: t('val.rangeInvalidDate') };
   }
   if (start > end) {
-    return { error: '開始日期不可晚於結束日期' };
+    return { error: t('val.rangeOrder') };
   }
   if (todayStr && end > todayStr) {
-    return { error: '結束日期不可晚於今天' };
+    return { error: t('val.rangeFuture') };
   }
   const maxEnd = addCalendarYears(start, 1);
   if (maxEnd && end > maxEnd) {
-    return { error: '歷史紀錄查詢區間最多不可超過一年' };
+    return { error: t('val.rangeMaxYear') };
   }
   return { startDate: start, endDate: end };
 }
-
-

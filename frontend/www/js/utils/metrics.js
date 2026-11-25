@@ -1,7 +1,15 @@
-function formatLocalDateStr(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+import { MONTH_SHORT_EN, getActiveLocale, t } from './i18n.js';
+import {
+  getActiveTimeZone,
+  getTodayInTimeZone,
+  isoTimestampToYmd
+} from './timezone.js';
+import { formatWeightDelta, getWeightUnit } from './units.js';
+
+function formatUtcDateStr(date) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
@@ -10,36 +18,37 @@ function parseYmdParts(ymd) {
   return { y, m, d };
 }
 
-function getQuarterRangeText(q) {
-  if (q === 1) return '1–3月';
-  if (q === 2) return '4–6月';
-  if (q === 3) return '7–9月';
-  return '10–12月';
+function getQuarterRangeText(q, locale = getActiveLocale()) {
+  if (q === 1) return t('charts.q1Range', {}, locale);
+  if (q === 2) return t('charts.q2Range', {}, locale);
+  if (q === 3) return t('charts.q3Range', {}, locale);
+  return t('charts.q4Range', {}, locale);
 }
 
-// 取得使用者裝置當地日期字串 (YYYY-MM-DD)，避免 UTC 時差造成設定日期偏移一天
-export function getLocalTodayDate() {
-  return formatLocalDateStr(new Date());
+// 取得使用者目前設定時區的今日日期字串 (YYYY-MM-DD)，精準支援全球 IANA 時區與 DST
+export function getLocalTodayDate(timeZone = getActiveTimeZone(), nowDate = new Date()) {
+  return getTodayInTimeZone(timeZone, nowDate);
 }
 
-// 產生歷史紀錄快捷區間（近 30 天／近 3 個月／近半年／近一年，皆符合最長一年限制）
-export function getPresetHistoryRange(preset, nowDate = new Date()) {
-  const end = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
-  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+// 產生歷史紀錄快捷區間（近 30 天／近 3 個月／近半年／近一年，皆符合最長一年限制且依目標時區計算）
+export function getPresetHistoryRange(preset, nowDate = new Date(), timeZone = getActiveTimeZone()) {
+  const endStr = getTodayInTimeZone(timeZone, nowDate);
+  const { y, m, d } = parseYmdParts(endStr);
+  const start = new Date(Date.UTC(y, m - 1, d));
 
   if (preset === '30d') {
-    start.setDate(start.getDate() - 30);
+    start.setUTCDate(start.getUTCDate() - 30);
   } else if (preset === '3m') {
-    start.setMonth(start.getMonth() - 3);
+    start.setUTCMonth(start.getUTCMonth() - 3);
   } else if (preset === '6m') {
-    start.setMonth(start.getMonth() - 6);
+    start.setUTCMonth(start.getUTCMonth() - 6);
   } else {
-    start.setFullYear(start.getFullYear() - 1);
+    start.setUTCFullYear(start.getUTCFullYear() - 1);
   }
 
   return {
-    startDate: formatLocalDateStr(start),
-    endDate: formatLocalDateStr(end)
+    startDate: formatUtcDateStr(start),
+    endDate: endStr
   };
 }
 
@@ -54,30 +63,35 @@ export function filterRecordsByDateRange(recs, startDate, endDate) {
     .sort((a, b) => String(a.recorded_at || '').localeCompare(String(b.recorded_at || '')));
 }
 
-const RANGE_SUMMARY_MAP = {
-  day: '近 30 天 · 每日紀錄',
-  week: '近 12 週 · 每週平均',
-  month: '近 12 月 · 每月平均',
-  year: '近 3 年 · 每季平均'
-};
+function getRangeSummary(range, locale = getActiveLocale()) {
+  if (range === 'week') return t('charts.summaryWeek', {}, locale);
+  if (range === 'month') return t('charts.summaryMonth', {}, locale);
+  if (range === 'year') return t('charts.summaryYear', {}, locale);
+  return t('charts.summaryDay', {}, locale);
+}
 
-// 依據 日/週/月/年 篩選並計算平均體重，同時回傳清晰的 X 軸標籤、檢視列詳情與代表日期 pointDates
-export function aggregateRecords(recs, range) {
-  const now = new Date();
-  const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+// 依據 日/週/月/年 篩選並計算平均體重，同時回傳多語系 X 軸標籤、檢視列詳情與代表日期 pointDates
+export function aggregateRecords(
+  recs,
+  range,
+  { locale = getActiveLocale(), timeZone = getActiveTimeZone(), nowDate = new Date() } = {}
+) {
+  const todayStr = getTodayInTimeZone(timeZone, nowDate);
+  const { y: ty, m: tm, d: td } = parseYmdParts(todayStr);
+  const cutoff = new Date(Date.UTC(ty, tm - 1, td));
 
-  if (range === 'day') cutoff.setDate(cutoff.getDate() - 30);
-  else if (range === 'week') cutoff.setDate(cutoff.getDate() - 84);
-  else if (range === 'month') cutoff.setMonth(cutoff.getMonth() - 12);
-  else if (range === 'year') cutoff.setFullYear(cutoff.getFullYear() - 3);
+  if (range === 'day') cutoff.setUTCDate(cutoff.getUTCDate() - 30);
+  else if (range === 'week') cutoff.setUTCDate(cutoff.getUTCDate() - 84);
+  else if (range === 'month') cutoff.setUTCMonth(cutoff.getUTCMonth() - 12);
+  else if (range === 'year') cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 3);
 
-  const cutoffStr = formatLocalDateStr(cutoff);
+  const cutoffStr = formatUtcDateStr(cutoff);
   const filtered = (recs || [])
-    .filter((r) => r.recorded_at >= cutoffStr)
+    .filter((r) => String(r?.recorded_at || '').slice(0, 10) >= cutoffStr)
     .slice()
     .sort((a, b) => String(a.recorded_at || '').localeCompare(String(b.recorded_at || '')));
 
-  const rangeSummary = RANGE_SUMMARY_MAP[range] || RANGE_SUMMARY_MAP.day;
+  const rangeSummary = getRangeSummary(range, locale);
 
   if (range === 'day') {
     const years = new Set(filtered.map((r) => parseYmdParts(r.recorded_at).y));
@@ -116,19 +130,20 @@ export function aggregateRecords(recs, range) {
     let meta;
 
     if (range === 'week') {
-      const localDate = new Date(y, m - 1, d);
-      const dayOfWeek = localDate.getDay();
+      // 以純日曆 UTC 計算週一至週日，徹底避免任何裝置時區或夏令時間偏移
+      const utcDate = new Date(Date.UTC(y, m - 1, d));
+      const dayOfWeek = utcDate.getUTCDay();
       const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      const monday = new Date(y, m - 1, d + mondayOffset);
-      const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
-      bucketKey = formatLocalDateStr(monday);
+      const monday = new Date(Date.UTC(y, m - 1, d + mondayOffset));
+      const sunday = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + 6));
+      bucketKey = formatUtcDateStr(monday);
       meta = {
-        startYear: monday.getFullYear(),
-        startMonth: monday.getMonth() + 1,
-        startDay: monday.getDate(),
-        endYear: sunday.getFullYear(),
-        endMonth: sunday.getMonth() + 1,
-        endDay: sunday.getDate()
+        startYear: monday.getUTCFullYear(),
+        startMonth: monday.getUTCMonth() + 1,
+        startDay: monday.getUTCDate(),
+        endYear: sunday.getUTCFullYear(),
+        endMonth: sunday.getUTCMonth() + 1,
+        endDay: sunday.getUTCDate()
       };
     } else if (range === 'month') {
       bucketKey = `${y}-${String(m).padStart(2, '0')}`;
@@ -177,27 +192,41 @@ export function aggregateRecords(recs, range) {
       const startShort = `${startMonth}/${startDay}`;
       const endShort = `${endMonth}/${endDay}`;
       labels.push(showYear ? `${String(startYear).slice(-2)}/${startShort}~` : `${startShort}~`);
-      tagLabels.push(`${startShort}週`);
+      tagLabels.push(locale === 'en' ? `Wk ${startShort}` : `${startShort}週`);
       const rangeStr = startYear !== endYear
         ? `${String(startYear).slice(-2)}/${startShort}–${String(endYear).slice(-2)}/${endShort}`
         : `${startShort}–${endShort}`;
-      detailLabels.push(`${rangeStr} 週平均`);
+      detailLabels.push(t('charts.weekAvg', { range: rangeStr }, locale));
     } else if (range === 'month') {
       const { year, month } = bucket.meta;
       const showYear = spansYears && year !== prevYear;
       prevYear = year;
       const yy = String(year).slice(-2);
-      labels.push(showYear ? `${yy}年${month}月` : `${month}月`);
-      tagLabels.push(`${yy}年${month}月`);
-      detailLabels.push(`${year}年${month}月 月平均`);
+      if (locale === 'en') {
+        const mShort = MONTH_SHORT_EN[month - 1] || String(month);
+        labels.push(showYear ? `${mShort} '${yy}` : mShort);
+        tagLabels.push(`${mShort} '${yy}`);
+        detailLabels.push(t('charts.monthAvg', { monthName: mShort, year, month }, locale));
+      } else {
+        labels.push(showYear ? `${yy}年${month}月` : `${month}月`);
+        tagLabels.push(`${yy}年${month}月`);
+        detailLabels.push(t('charts.monthAvg', { year, month }, locale));
+      }
     } else {
       const { year, quarter } = bucket.meta;
       const showYear = year !== prevYear;
       prevYear = year;
       const yy = String(year).slice(-2);
-      labels.push(showYear ? `${yy}年Q${quarter}` : `Q${quarter}`);
-      tagLabels.push(`${yy}年Q${quarter}`);
-      detailLabels.push(`${year}年 Q${quarter}（${getQuarterRangeText(quarter)}平均）`);
+      if (locale === 'en') {
+        labels.push(showYear ? `'${yy} Q${quarter}` : `Q${quarter}`);
+        tagLabels.push(`'${yy} Q${quarter}`);
+      } else {
+        labels.push(showYear ? `${yy}年Q${quarter}` : `Q${quarter}`);
+        tagLabels.push(`${yy}年Q${quarter}`);
+      }
+      detailLabels.push(
+        t('charts.quarterAvg', { year, q: quarter, range: getQuarterRangeText(quarter, locale) }, locale)
+      );
     }
   });
 
@@ -214,10 +243,7 @@ export function aggregateRecords(recs, range) {
 }
 
 /**
- * 依據目標體重歷史紀錄計算每個圖表日期點當下生效的目標體重：
- * - 在首次設定當天（effective_date）之前的日期回傳 null（圖表不顯示目標線）
- * - 未來變更目標體重時，僅影響新 effective_date 當天與之後的點，過去維持原目標值
- * - 若某天清除目標體重（target_weight = null），則該日起顯示為 null，過去仍保留歷史目標線
+ * 依據目標體重歷史紀錄計算每個圖表日期點當下生效的目標體重（底層單位皆為 kg）
  */
 export function resolveTargetWeightSeries(pointDates, memberHistory = [], member = null) {
   let sorted = (memberHistory || [])
@@ -236,11 +262,9 @@ export function resolveTargetWeightSeries(pointDates, memberHistory = [], member
       return a.created_at.localeCompare(b.created_at);
     });
 
-  // 相容尚未執行 SQL 遷移的舊資料：若無歷史表紀錄但成員已有目標體重，以建立日作為生效日
+  // 相容尚未執行 SQL 遷移的舊資料：將 created_at ISO 時間戳轉換至目前時區日期作為生效日
   if (sorted.length === 0 && member?.target_weight !== null && member?.target_weight !== undefined) {
-    const fallbackDate = typeof member.created_at === 'string' && member.created_at.length >= 10
-      ? member.created_at.slice(0, 10)
-      : getLocalTodayDate();
+    const fallbackDate = isoTimestampToYmd(member.created_at) || getLocalTodayDate();
     sorted = [{
       effective_date: fallbackDate,
       created_at: '',
@@ -260,7 +284,6 @@ export function resolveTargetWeightSeries(pointDates, memberHistory = [], member
     return activeTarget;
   });
 
-  // 若目標線段只有孤立單點（例如今天剛設定目標且只有今天一筆紀錄），顯示小圓點避免圖表上看不見
   const pointRadii = values.map((val, idx) => {
     if (val === null) return 0;
     const prevIsNull = idx === 0 || values[idx - 1] === null;
@@ -275,35 +298,46 @@ export function resolveTargetWeightSeries(pointDates, memberHistory = [], member
   };
 }
 
-export function calculateTargetGap(weightKg, targetWeight) {
+export function calculateTargetGap(weightKg, targetWeight, { unit = getWeightUnit(), locale = getActiveLocale() } = {}) {
   if (weightKg === null || weightKg === undefined || targetWeight === null || targetWeight === undefined) {
     return null;
   }
   const w = Number(weightKg);
-  const t = Number(targetWeight);
-  if (!Number.isFinite(w) || !Number.isFinite(t)) return null;
-  const gap = Number((w - t).toFixed(2));
-  const absFixed = Math.abs(gap).toFixed(2);
-  const signedText = gap === 0 ? '0.00' : `${gap > 0 ? '+' : '-'}${absFixed}`;
+  const tWeight = Number(targetWeight);
+  if (!Number.isFinite(w) || !Number.isFinite(tWeight)) return null;
+  const gap = Number((w - tWeight).toFixed(2));
+  const signedNoUnit = formatWeightDelta(gap, { unit, withUnit: false });
+  const signedWithUnit = formatWeightDelta(gap, { unit, withUnit: true });
   return {
     gap,
     isAchieved: gap === 0,
-    signedText,
-    label: gap === 0 ? '已達目標' : `距目標 ${signedText} kg`,
-    compactLabel: gap === 0 ? '已達標' : `距目標 ${signedText}`
+    signedText: signedNoUnit,
+    signedWithUnit,
+    label: gap === 0
+      ? t('overview.achievedFull', {}, locale)
+      : t('history.targetGapLabel', { delta: signedWithUnit }, locale),
+    compactLabel: gap === 0
+      ? t('overview.achieved', {}, locale)
+      : t('history.targetGapLabel', { delta: signedNoUnit }, locale)
   };
 }
 
-export function calculateBmi(weightKg, heightCm) {
+export function calculateBmi(weightKg, heightCm, locale = getActiveLocale()) {
   const w = Number(weightKg);
   const h = Number(heightCm) / 100;
   if (!(w > 0) || !(h > 0)) return null;
   const bmi = Number((w / (h * h)).toFixed(1));
-  const status = bmi < 18.5 ? '過輕' : bmi < 24 ? '正常範圍' : bmi < 27 ? '過重' : '肥胖';
-  return { bmi, status };
+  const statusKey = bmi < 18.5 ? 'under' : bmi < 24 ? 'normal' : bmi < 27 ? 'over' : 'obese';
+  const statusMap = {
+    under: t('health.bmiUnder', {}, locale),
+    normal: t('health.bmiNormal', {}, locale),
+    over: t('health.bmiOver', {}, locale),
+    obese: t('health.bmiObese', {}, locale)
+  };
+  return { bmi, statusKey, status: statusMap[statusKey] };
 }
 
-// 台灣衛福部成人健康體重建議區間（BMI 18.5–24.0）
+// 成人健康體重建議區間（BMI 18.5–24.0，底層回傳 kg，顯示時可轉換為 lb）
 export function calculateHealthyWeightRange(heightCm) {
   const h = Number(heightCm) / 100;
   if (!(h > 0)) return null;
@@ -324,7 +358,7 @@ export function calculatePetCalories(weightKg, factor) {
 
 export const calculateCatCalories = calculatePetCalories;
 
-// 計算選定時間區間內的平均、最低、最高與區間增減幅
+// 計算選定時間區間內的平均、最低、最高與區間增減幅（皆以底層 kg 回傳）
 export function calculatePeriodStats(filteredRecords) {
   if (!Array.isArray(filteredRecords) || filteredRecords.length === 0) return null;
   const weights = filteredRecords.map((r) => Number(r.weight_kg)).filter(Number.isFinite);
@@ -378,7 +412,7 @@ export function calculateGoalProgress(memberRecords, targetWeight) {
   };
 }
 
-// 計算距離最新一筆體重紀錄已過幾天（以本地日曆日計算）
+// 計算距離最新一筆體重紀錄已過幾天（以目前設定時區的日曆日計算）
 export function getDaysSinceLastRecord(memberRecords, todayStr = getLocalTodayDate()) {
   if (!Array.isArray(memberRecords) || memberRecords.length === 0) return null;
   const latestDate = String(memberRecords[memberRecords.length - 1].recorded_at || '').slice(0, 10);
@@ -391,46 +425,50 @@ export function getDaysSinceLastRecord(memberRecords, todayStr = getLocalTodayDa
 }
 
 // 獸醫 WSAVA 9 分制體態評分（Body Condition Score）解讀
-export function getBcsMeta(score) {
+export function getBcsMeta(score, locale = getActiveLocale()) {
   const num = Number(score);
   if (!Number.isInteger(num) || num < 1 || num > 9) return null;
   if (num <= 3) {
+    const status = t('health.bcsThin', {}, locale);
     return {
       score: num,
-      status: '偏瘦',
-      compact: `${num}/9 偏瘦`,
+      status,
+      compact: `${num}/9 ${status}`,
       colorClass: 'text-ink-700',
       badgeClass: 'bg-oat-100 text-ink-700 border border-oat-200',
-      guide: '肋骨與腰椎明顯易見，建議與獸醫討論適度補充營養。'
+      guide: t('health.bcsGuideThin', {}, locale)
     };
   }
   if (num <= 5) {
+    const status = t('health.bcsIdeal', {}, locale);
     return {
       score: num,
-      status: '理想',
-      compact: `${num}/9 理想`,
+      status,
+      compact: `${num}/9 ${status}`,
       colorClass: 'text-sage-700',
       badgeClass: 'bg-sage-100 text-sage-700 border border-sage-200',
-      guide: '輕摸可感到肋骨、上方可見自然腰身，體態維持良好。'
+      guide: t('health.bcsGuideIdeal', {}, locale)
     };
   }
   if (num <= 7) {
+    const status = t('health.bcsOver', {}, locale);
     return {
       score: num,
-      status: '過重',
-      compact: `${num}/9 過重`,
+      status,
+      compact: `${num}/9 ${status}`,
       colorClass: 'text-ochre-600',
       badgeClass: 'bg-ochre-100 text-ochre-700 border border-ochre-200',
-      guide: '肋骨較難摸到、腰身變不明顯，建議控制熱量並適度活動。'
+      guide: t('health.bcsGuideOver', {}, locale)
     };
   }
+  const status = t('health.bcsObese', {}, locale);
   return {
     score: num,
-    status: '肥胖',
-    compact: `${num}/9 肥胖`,
+    status,
+    compact: `${num}/9 ${status}`,
     colorClass: 'text-rosewood-600',
     badgeClass: 'bg-rosewood-50 text-rosewood-600 border border-rosewood-200',
-    guide: '腹部明顯下垂且不易摸到肋骨，建議諮詢獸醫規劃減重。'
+    guide: t('health.bcsGuideObese', {}, locale)
   };
 }
 
@@ -441,12 +479,7 @@ function parseUtcDayMs(dateStr) {
   return Date.UTC(y, m - 1, d);
 }
 
-/**
- * 計算毛孩「一週體重變化幅度（%）」：
- * - 以最新一筆體重為終點，優先取 1–7 天內最早的一筆（例如 7 天前）為基準
- * - 若 1–7 天內無紀錄，但 8–14 天內有每週量測紀錄，取最接近 7 天的那一筆為基準
- * - 百分比不曝露絕對公斤數，隱私模式下亦可安心顯示；單週變動達 ±5% 以上標記為警戒
- */
+// 計算毛孩「一週體重變化幅度（%）」
 export function calculateWeeklyWeightChangePct(memberRecords) {
   if (!Array.isArray(memberRecords) || memberRecords.length < 2) return null;
   const latest = memberRecords[memberRecords.length - 1];
@@ -455,8 +488,8 @@ export function calculateWeeklyWeightChangePct(memberRecords) {
   if (!(latestWeight > 0) || latestMs === null) return null;
 
   const DAY_MS = 24 * 60 * 60 * 1000;
-  let bestWithinWeek = null; // { rec, diffDays } 盡量接近 7 天（diffDays 最大）
-  let bestNearWeek = null; // { rec, diffDays } 8–14 天內最接近 7 天（diffDays 最小）
+  let bestWithinWeek = null;
+  let bestNearWeek = null;
 
   for (let i = 0; i < memberRecords.length - 1; i++) {
     const rec = memberRecords[i];
@@ -492,8 +525,8 @@ export function calculateWeeklyWeightChangePct(memberRecords) {
   };
 }
 
-// 依生日計算年齡、毛孩生命階段與約略相當人類年齡（支援家人／貓咪／狗狗）
-export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLocalTodayDate()) {
+// 依生日計算年齡、毛孩生命階段與約略相當人類年齡（支援家人／貓咪／狗狗與多語系）
+export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLocalTodayDate(), locale = getActiveLocale()) {
   const iso = String(birthDateStr || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || !/^\d{4}-\d{2}-\d{2}$/.test(todayStr)) return null;
 
@@ -514,13 +547,13 @@ export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLoc
 
   let shortText;
   if (years >= 1 && months > 0) {
-    shortText = `${years}歲${months}月`;
+    shortText = t('age.ym', { years, months }, locale);
   } else if (years >= 1) {
-    shortText = `${years}歲`;
+    shortText = t('age.y', { years }, locale);
   } else if (months >= 1) {
-    shortText = `${months}個月`;
+    shortText = t('age.m', { months }, locale);
   } else {
-    shortText = '未滿 1 個月';
+    shortText = t('age.underMonth', {}, locale);
   }
 
   const totalYears = years + months / 12;
@@ -531,18 +564,17 @@ export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLoc
       shortText,
       lifeStage: null,
       humanAgeYears: null,
-      displayText: `${iso}（${shortText}）`
+      displayText: t('age.humanDisplay', { date: iso, short: shortText }, locale)
     };
   }
 
   const isDog = type === 'dog';
   const lifeStage = totalYears < 1
-    ? (isDog ? '幼犬' : '幼貓')
+    ? t(isDog ? 'stage.puppy' : 'stage.kitten', {}, locale)
     : totalYears >= (isDog ? 7 : 10)
-      ? (isDog ? '熟齡犬' : '熟齡貓')
-      : (isDog ? '成犬' : '成貓');
+      ? t(isDog ? 'stage.seniorDog' : 'stage.seniorCat', {}, locale)
+      : t(isDog ? 'stage.adultDog' : 'stage.adultCat', {}, locale);
 
-  // 獸醫常見換算參考：第 1 年 ≈ 15 歲、第 2 年 +9（24 歲），之後貓每年 +4、狗每年 +5
   let humanAgeYears;
   if (totalYears <= 1) {
     humanAgeYears = Math.max(1, Math.round(totalYears * 15));
@@ -558,6 +590,6 @@ export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLoc
     shortText,
     lifeStage,
     humanAgeYears,
-    displayText: `${iso}（${shortText} · 約人類 ${humanAgeYears} 歲）`
+    displayText: t('age.petDisplay', { date: iso, short: shortText, human: humanAgeYears }, locale)
   };
 }

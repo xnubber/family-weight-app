@@ -15,24 +15,26 @@ import {
   isMemberWeightHidden,
   memberHasPrivacyPin
 } from '../utils/privacy.js';
+import { t } from '../utils/i18n.js';
+import { formatWeightDelta, formatWeightNumber, getWeightUnitLabel } from '../utils/units.js';
 
 function getMemberTypeMeta(type) {
   if (type === 'cat') {
     return {
-      label: '貓咪',
+      label: t('memberType.cat'),
       pillClass: 'bg-clay-50 text-clay-700 border border-clay-200',
       accentClass: 'text-clay-700'
     };
   }
   if (type === 'dog') {
     return {
-      label: '狗狗',
+      label: t('memberType.dog'),
       pillClass: 'bg-ochre-50 text-ochre-700 border border-ochre-200',
       accentClass: 'text-ochre-700'
     };
   }
   return {
-    label: '家人',
+    label: t('memberType.human'),
     pillClass: 'bg-sage-50 text-sage-700 border border-sage-200',
     accentClass: 'text-sage-700'
   };
@@ -439,20 +441,21 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
     const emptyBox = createEl(
       'div',
       'journal-card p-6 rounded-2xl text-center text-ink-400 text-sm',
-      '尚無成員，請先到「設定」新增家人、貓咪或狗狗。'
+      t('overview.emptyDesc')
     );
     container.replaceChildren(emptyBox);
     return;
   }
 
   const canReorder = state.appData.members.length > 1 && typeof onReorderMembers === 'function';
+  const unitLabel = getWeightUnitLabel();
 
   const cards = state.appData.members.map((m) => {
     const recs = state.appData.records.filter((r) => r.member_id === m.id);
     const latest = recs[recs.length - 1];
     const prev = recs[recs.length - 2];
     const diffNum = latest && prev ? Number((latest.weight_kg - prev.weight_kg).toFixed(2)) : null;
-    const diffStr = diffNum !== null ? `${diffNum > 0 ? '+' : ''}${diffNum.toFixed(2)} kg` : '--';
+    const diffStr = diffNum !== null ? formatWeightDelta(diffNum) : '--';
     const targetGap = latest ? calculateTargetGap(latest.weight_kg, m.target_weight) : null;
     const goalProgress = calculateGoalProgress(recs, m.target_weight);
     const isHuman = m.type === 'human';
@@ -478,8 +481,8 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
     if (canReorder) {
       const handle = createEl('div', 'card-drag-handle');
       handle.dataset.dragHandle = 'true';
-      handle.setAttribute('title', '拖拉調整順序');
-      handle.setAttribute('aria-label', '拖拉調整順序');
+      handle.setAttribute('title', t('overview.dragHandle'));
+      handle.setAttribute('aria-label', t('overview.dragHandle'));
       handle.appendChild(createEl('span', 'card-drag-bar'));
       handle.onclick = (e) => e.stopPropagation();
       card.appendChild(handle);
@@ -555,8 +558,8 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
         privToggle.type = 'button';
         privToggle.dataset.cardAction = 'privacy';
         const actionLabel = isHidden
-          ? (hasPin ? '輸入密碼解鎖體重' : '點擊暫時解鎖顯示體重')
-          : '點擊立即上鎖隱藏體重';
+          ? (hasPin ? t('overview.unlockPinAria') : t('overview.unlockViewAria'))
+          : t('overview.lockAria');
         privToggle.setAttribute('title', actionLabel);
         privToggle.setAttribute('aria-label', actionLabel);
         privToggle.onclick = (e) => {
@@ -565,11 +568,11 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
           onTogglePrivacy(m);
         };
       } else {
-        privToggle.setAttribute('title', hasPin ? '已開啟密碼隱私保護' : '已開啟體重隱私保護');
+        privToggle.setAttribute('title', hasPin ? t('overview.privacyProtectedPin') : t('overview.privacyProtected'));
       }
       privToggle.append(
         createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-3 h-3 shrink-0'),
-        createEl('span', '', isHidden ? '解鎖' : '上鎖')
+        createEl('span', '', isHidden ? t('overview.unlock') : t('overview.lock'))
       );
       nameLine.appendChild(privToggle);
     }
@@ -579,7 +582,7 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
       createEl(
         'p',
         'text-fluid-label text-ink-400 mt-1 tabular-nums whitespace-nowrap',
-        latest ? `${latest.recorded_at} 更新` : '尚未有紀錄'
+        latest ? t('overview.updatedAt', { date: latest.recorded_at }) : t('overview.noRecords')
       )
     );
     identityWrap.append(avatarNode, textWrap);
@@ -588,12 +591,15 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
     if (isHidden) {
       weightRow.append(
         createEl('span', 'text-ink-400 tracking-wider', latest ? MASKED_WEIGHT : '--'),
-        createEl('span', 'text-xs font-normal text-ink-400 ml-1', 'kg')
+        createEl('span', 'text-xs font-normal text-ink-400 ml-1', unitLabel)
       );
     } else {
+      const displayWeight = latest
+        ? formatWeightNumber(latest.weight_kg, { trimTrailingZeros: true })
+        : '--';
       weightRow.append(
-        document.createTextNode(`${latest ? latest.weight_kg : '--'} `),
-        createEl('span', 'text-xs font-normal text-ink-400', 'kg')
+        document.createTextNode(`${displayWeight} `),
+        createEl('span', 'text-xs font-normal text-ink-400', unitLabel)
       );
     }
 
@@ -610,18 +616,18 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
     let targetValue;
     let targetColor;
     if (isHidden) {
-      targetLabel = '目標進度';
+      targetLabel = t('overview.goalProgress');
       if (goalProgress) {
-        targetValue = goalProgress.isAchieved ? '已達標' : `${goalProgress.percent}%`;
+        targetValue = goalProgress.isAchieved ? t('overview.achieved') : `${goalProgress.percent}%`;
         targetColor = goalProgress.isAchieved ? 'text-sage-600' : 'text-sage-700';
       } else {
         targetValue = '--';
         targetColor = 'text-ink-400';
       }
     } else {
-      targetLabel = '距目標';
+      targetLabel = t('overview.toTarget');
       targetValue = targetGap
-        ? (targetGap.isAchieved ? '已達標' : `${targetGap.signedText} kg`)
+        ? (targetGap.isAchieved ? t('overview.achieved') : targetGap.signedWithUnit)
         : '--';
       targetColor = !targetGap
         ? 'text-ink-400'
@@ -637,20 +643,20 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
     let thirdValue;
     let thirdColor;
     if (isHuman) {
-      const isBmiNormal = bmiRes?.status === '正常範圍';
-      thirdLabel = 'BMI';
+      const isBmiNormal = bmiRes?.statusKey === 'normal';
+      thirdLabel = t('overview.bmi');
       thirdValue = bmiRes
-        ? (isHidden ? (isBmiNormal ? '正常' : '異常') : bmiRes.bmi.toFixed(1))
+        ? (isHidden ? (isBmiNormal ? t('overview.bmiNormalShort') : t('overview.bmiAbnormalShort')) : bmiRes.bmi.toFixed(1))
         : '--';
       thirdColor = bmiRes
         ? (isBmiNormal ? 'text-sage-700' : 'text-ochre-600')
         : 'text-ink-400';
     } else if (bcsMeta) {
-      thirdLabel = '體態 BCS';
+      thirdLabel = t('overview.bcs');
       thirdValue = bcsMeta.compact;
       thirdColor = bcsMeta.colorClass;
     } else {
-      thirdLabel = '一週變化';
+      thirdLabel = t('overview.weeklyChange');
       thirdValue = weeklyPct ? weeklyPct.signedText : '--';
       thirdColor = !weeklyPct
         ? 'text-ink-400'
@@ -668,7 +674,7 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
       'mt-3.5 bg-oat-50 border border-oat-200/70 rounded-xl py-2.5 px-1 grid grid-cols-3 divide-x divide-oat-200 text-center'
     );
     metricsGrid.append(
-      createMetricCell('較前次', diffStr, diffColor),
+      createMetricCell(t('overview.diffPrev'), diffStr, diffColor),
       createMetricCell(targetLabel, targetValue, targetColor),
       createMetricCell(thirdLabel, thirdValue, thirdColor)
     );

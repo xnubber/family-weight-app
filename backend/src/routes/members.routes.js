@@ -12,6 +12,7 @@ import {
 } from '../schemas/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getTodayDate } from '../utils/date.js';
+import { getBackendMessage } from '../utils/messages.js';
 import { hashPrivacyPin, verifyPrivacyPin, sanitizeMember } from '../utils/security.js';
 import logger from '../utils/logger.js';
 
@@ -23,12 +24,12 @@ function normalizeTargetWeight(value) {
   return Number.isFinite(num) ? num : null;
 }
 
-async function appendTargetHistory(supabase, { familyCode, memberId, targetWeight, effectiveDate }) {
+async function appendTargetHistory(supabase, { familyCode, memberId, targetWeight, effectiveDate, timeZone }) {
   const { error } = await supabase.from('target_weight_history').insert({
     family_code: familyCode,
     member_id: memberId,
     target_weight: targetWeight,
-    effective_date: effectiveDate || getTodayDate()
+    effective_date: effectiveDate || getTodayDate(timeZone)
   });
   if (error) {
     if (error.code === '42P01' || error.code === 'PGRST205') {
@@ -60,13 +61,13 @@ function detectMissingOptionalColumn(error) {
 router.post('/:id/verify-pin', pinVerifyLimiter, asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
-    return res.status(400).json({ error: '無效的成員識別碼' });
+    return res.status(400).json({ error: getBackendMessage(req, 'invalidMemberId') });
   }
   const id = idParsed.data;
 
   const bodyParsed = verifyPinSchema.safeParse(req.body);
   if (!bodyParsed.success) {
-    return res.status(400).json({ error: formatZodError(bodyParsed.error) });
+    return res.status(400).json({ error: formatZodError(bodyParsed.error, req) });
   }
 
   const resolved = resolveFamilyCode(req);
@@ -85,10 +86,10 @@ router.post('/:id/verify-pin', pinVerifyLimiter, asyncHandler(async (req, res) =
 
   if (error) {
     logger.error('讀取成員隱私密碼失敗', { id, error: error.message });
-    return res.status(500).json({ error: '驗證失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'verifyFailed') });
   }
   if (!member) {
-    return res.status(404).json({ error: '找不到成員或無權限存取' });
+    return res.status(404).json({ error: getBackendMessage(req, 'memberNotFound') });
   }
 
   if (!member.privacy_pin_hash) {
@@ -98,7 +99,7 @@ router.post('/:id/verify-pin', pinVerifyLimiter, asyncHandler(async (req, res) =
   const ok = verifyPrivacyPin(bodyParsed.data.pin, member.privacy_pin_hash);
   if (!ok) {
     logger.warn('個人隱私 PIN 驗證失敗', { id, ip: req.ip });
-    return res.status(403).json({ error: '個人密碼不正確' });
+    return res.status(403).json({ error: getBackendMessage(req, 'incorrectPin') });
   }
 
   return res.json({ verified: true, has_privacy_pin: true });
@@ -108,7 +109,7 @@ router.post('/:id/verify-pin', pinVerifyLimiter, asyncHandler(async (req, res) =
 router.post('/', asyncHandler(async (req, res) => {
   const parsed = createMemberSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: formatZodError(parsed.error) });
+    return res.status(400).json({ error: formatZodError(parsed.error, req) });
   }
 
   const {
@@ -175,11 +176,11 @@ router.post('/', asyncHandler(async (req, res) => {
     if (error.code === '23514' && type === 'dog') {
       logger.warn('新增狗狗成員遭資料庫 CHECK 條件拒絕，請執行 002_dog_and_avatar.sql');
       return res.status(400).json({
-        error: '資料庫尚未啟用「狗狗」類別，請先於 Supabase 執行 backend/sql/002_dog_and_avatar.sql'
+        error: getBackendMessage(req, 'dogMigrationRequired')
       });
     }
     logger.error('新增成員失敗', { error: error.message });
-    return res.status(500).json({ error: '新增成員失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'addMemberFailed') });
   }
 
   // 若建立成員時已設定目標體重，同步記錄初始生效日期
@@ -188,7 +189,8 @@ router.post('/', asyncHandler(async (req, res) => {
       familyCode,
       memberId: data.id,
       targetWeight: normalizeTargetWeight(data.target_weight),
-      effectiveDate: target_effective_date || getTodayDate()
+      effectiveDate: target_effective_date || getTodayDate(req.clientTimeZone),
+      timeZone: req.clientTimeZone
     });
   }
 
@@ -200,7 +202,7 @@ router.post('/', asyncHandler(async (req, res) => {
 router.put('/reorder', asyncHandler(async (req, res) => {
   const bodyParsed = reorderMembersSchema.safeParse(req.body);
   if (!bodyParsed.success) {
-    return res.status(400).json({ error: formatZodError(bodyParsed.error) });
+    return res.status(400).json({ error: formatZodError(bodyParsed.error, req) });
   }
 
   const resolved = resolveFamilyCode(req);
@@ -228,7 +230,7 @@ router.put('/reorder', asyncHandler(async (req, res) => {
       return res.json({ synced: false, migration_required: true });
     }
     logger.error('更新成員排序失敗', { error: firstErr.message });
-    return res.status(500).json({ error: '更新成員排序失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'reorderFailed') });
   }
 
   logger.info('更新成員排序成功', { count: member_ids.length });
@@ -239,13 +241,13 @@ router.put('/reorder', asyncHandler(async (req, res) => {
 router.put('/:id', asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
-    return res.status(400).json({ error: '無效的成員識別碼' });
+    return res.status(400).json({ error: getBackendMessage(req, 'invalidMemberId') });
   }
   const id = idParsed.data;
 
   const bodyParsed = updateMemberSchema.safeParse(req.body);
   if (!bodyParsed.success) {
-    return res.status(400).json({ error: formatZodError(bodyParsed.error) });
+    return res.status(400).json({ error: formatZodError(bodyParsed.error, req) });
   }
 
   const resolved = resolveFamilyCode(req);
@@ -265,11 +267,11 @@ router.put('/:id', asyncHandler(async (req, res) => {
 
   if (fetchErr) {
     logger.error('讀取原成員資料失敗', { id, error: fetchErr.message });
-    return res.status(500).json({ error: '更新成員資料失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'updateMemberFailed') });
   }
   if (!existing) {
     logger.warn('更新成員遭拒（找不到成員或非所屬家庭）', { id, ip: req.ip });
-    return res.status(404).json({ error: '找不到成員或無權限修改' });
+    return res.status(404).json({ error: getBackendMessage(req, 'memberNotFoundModify') });
   }
 
   // 若此成員已設定個人隱私 PIN，修改隱私設定、變更/清除 PIN 或修改目標體重前必須驗證原 PIN
@@ -285,7 +287,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
     if (wantsDisableHide || wantsChangePin || wantsChangeTarget) {
       if (!bodyParsed.data.current_pin || !verifyPrivacyPin(bodyParsed.data.current_pin, existing.privacy_pin_hash)) {
         logger.warn('修改受 PIN 保護的成員設定遭拒', { id, ip: req.ip });
-        return res.status(403).json({ error: '請先驗證個人 4 位數密碼後再修改隱私設定或目標體重' });
+        return res.status(403).json({ error: getBackendMessage(req, 'pinRequiredForProtectedEdit') });
       }
     }
   }
@@ -348,11 +350,11 @@ router.put('/:id', asyncHandler(async (req, res) => {
 
   if (error) {
     logger.error('更新成員資料失敗', { id, error: error.message });
-    return res.status(500).json({ error: '更新成員資料失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'updateMemberFailed') });
   }
   if (!data) {
     logger.warn('更新成員遭拒（找不到成員或非所屬家庭）', { id, ip: req.ip });
-    return res.status(404).json({ error: '找不到成員或無權限修改' });
+    return res.status(404).json({ error: getBackendMessage(req, 'memberNotFoundModify') });
   }
 
   if (bodyParsed.data.target_weight !== undefined) {
@@ -363,7 +365,8 @@ router.put('/:id', asyncHandler(async (req, res) => {
         familyCode,
         memberId: id,
         targetWeight: nextTarget,
-        effectiveDate: bodyParsed.data.target_effective_date || getTodayDate()
+        effectiveDate: bodyParsed.data.target_effective_date || getTodayDate(req.clientTimeZone),
+        timeZone: req.clientTimeZone
       });
     }
   }
@@ -376,7 +379,7 @@ router.put('/:id', asyncHandler(async (req, res) => {
 router.delete('/:id', asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
-    return res.status(400).json({ error: '無效的成員識別碼' });
+    return res.status(400).json({ error: getBackendMessage(req, 'invalidMemberId') });
   }
   const id = idParsed.data;
 
@@ -396,11 +399,11 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 
   if (error) {
     logger.error('刪除成員失敗', { id, error: error.message });
-    return res.status(500).json({ error: '刪除成員失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'deleteMemberFailed') });
   }
   if (!data || data.length === 0) {
     logger.warn('刪除成員遭拒（找不到成員或非所屬家庭）', { id, ip: req.ip });
-    return res.status(404).json({ error: '找不到成員或無權限刪除' });
+    return res.status(404).json({ error: getBackendMessage(req, 'memberNotFoundDelete') });
   }
 
   logger.info('刪除成員成功', { id });

@@ -8,6 +8,7 @@ import {
 } from '../schemas/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getTodayDate, getTwoYearsAgoDate } from '../utils/date.js';
+import { getBackendMessage } from '../utils/messages.js';
 import logger from '../utils/logger.js';
 
 const router = Router();
@@ -16,7 +17,7 @@ const router = Router();
 router.post('/', asyncHandler(async (req, res) => {
   const parsed = createRecordSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: formatZodError(parsed.error) });
+    return res.status(400).json({ error: formatZodError(parsed.error, req) });
   }
 
   const { family_code, member_id, weight_kg, recorded_at, note } = parsed.data;
@@ -37,11 +38,11 @@ router.post('/', asyncHandler(async (req, res) => {
 
   if (ownerErr) {
     logger.error('驗證成員所屬家庭失敗', { member_id, error: ownerErr.message });
-    return res.status(500).json({ error: '驗證成員資料失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'verifyMemberOwnerFailed') });
   }
   if (!ownerMember) {
     logger.warn('跨家庭新增體重紀錄遭拒', { member_id, ip: req.ip });
-    return res.status(403).json({ error: '無權限對此成員新增體重紀錄' });
+    return res.status(403).json({ error: getBackendMessage(req, 'addRecordForbidden') });
   }
 
   const { data, error } = await supabase
@@ -50,7 +51,7 @@ router.post('/', asyncHandler(async (req, res) => {
       family_code: familyCode,
       member_id,
       weight_kg,
-      recorded_at: recorded_at || getTodayDate(),
+      recorded_at: recorded_at || getTodayDate(req.clientTimeZone),
       note
     })
     .select()
@@ -58,11 +59,11 @@ router.post('/', asyncHandler(async (req, res) => {
 
   if (error) {
     logger.error('新增體重紀錄失敗', { member_id, error: error.message });
-    return res.status(500).json({ error: '新增體重紀錄失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'addRecordFailed') });
   }
 
   // 非同步清理超過兩年的舊紀錄（不阻塞前端回應，並捕捉潛在例外）
-  const cutoffDate = getTwoYearsAgoDate();
+  const cutoffDate = getTwoYearsAgoDate(req.clientTimeZone);
   supabase
     .from('weight_records')
     .delete()
@@ -83,7 +84,7 @@ router.post('/', asyncHandler(async (req, res) => {
 router.delete('/:id', asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
-    return res.status(400).json({ error: '無效的紀錄識別碼' });
+    return res.status(400).json({ error: getBackendMessage(req, 'invalidRecordId') });
   }
   const id = idParsed.data;
 
@@ -103,11 +104,11 @@ router.delete('/:id', asyncHandler(async (req, res) => {
 
   if (error) {
     logger.error('刪除體重紀錄失敗', { id, error: error.message });
-    return res.status(500).json({ error: '刪除體重紀錄失敗，請稍後再試' });
+    return res.status(500).json({ error: getBackendMessage(req, 'deleteRecordFailed') });
   }
   if (!data || data.length === 0) {
     logger.warn('刪除體重紀錄遭拒（找不到紀錄或非所屬家庭）', { id, ip: req.ip });
-    return res.status(404).json({ error: '找不到紀錄或無權限刪除' });
+    return res.status(404).json({ error: getBackendMessage(req, 'recordNotFoundDelete') });
   }
 
   logger.info('刪除體重紀錄成功', { id });

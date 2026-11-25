@@ -11,15 +11,17 @@ import {
   initModals,
   refreshOpenProfileModalIfAny,
   hasOpenModal,
-  handleModalBackAction
+  handleModalBackAction,
+  syncModalDynamicLabels
 } from './js/ui/modals.js';
-import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
+import { initSettings, renderSettingsMembers, renderRegionSettings } from './js/ui/settings.js';
 import { initPrivacyLifecycle, isMemberWeightHidden, lockMember } from './js/utils/privacy.js';
 import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 import { initSwipeBackGesture } from './js/utils/swipeBack.js';
 import { initOverviewPullToRefresh } from './js/utils/pullToRefresh.js';
 import { applyMemberOrder } from './js/utils/memberOrder.js';
 import { createSplashController } from './js/utils/splash.js';
+import { applyI18nToDOM, t } from './js/utils/i18n.js';
 
 const TAB_ORDER = ['overview', 'charts', 'settings'];
 const PAGE_ANIM_CLASSES = [
@@ -170,8 +172,8 @@ function formatCompactFamilyCode(code) {
 
 function renderAll() {
   const headerCodeEl = document.getElementById('header-family-code');
-  headerCodeEl.textContent = `同步碼：${formatCompactFamilyCode(state.familyCode)}`;
-  headerCodeEl.title = `同步碼：${state.familyCode}`;
+  headerCodeEl.textContent = t('header.syncCode', { code: formatCompactFamilyCode(state.familyCode) });
+  headerCodeEl.title = t('header.syncCode', { code: state.familyCode });
   document.getElementById('input-family-code').value = state.familyCode;
 
   renderOverview({
@@ -184,18 +186,19 @@ function renderAll() {
       }),
     onReorderMembers: (orderedIds) => {
       optimisticReorderMembers(orderedIds);
-      showToast('已更新成員順序');
+      showToast(t('overview.reorderSaved'));
     },
     onTogglePrivacy: (member) => {
       if (isMemberWeightHidden(member)) {
         requestMemberUnlock(member);
       } else {
         lockMember(member.id);
-        showToast('已重新隱藏真實體重');
+        showToast(t('privacy.relockedToast'));
       }
     }
   });
   renderCharts();
+  renderRegionSettings();
   renderSettingsMembers({
     onEditMember: (member) => openMemberModal(member)
   });
@@ -256,7 +259,7 @@ async function syncData() {
   } catch (err) {
     renderAll();
     const hasCachedData = state.appData.members.length > 0;
-    showToast(hasCachedData ? `暫時無法連線雲端，目前顯示本機快取（${err.message}）` : err.message, true);
+    showToast(hasCachedData ? t('api.offlineCache', { msg: err.message }) : err.message, true);
     return false;
   } finally {
     if (reqId === syncRequestSeq) {
@@ -296,9 +299,13 @@ window.Capacitor?.Plugins?.App?.addListener?.('backButton', () => {
     window.Capacitor?.Plugins?.App?.exitApp?.();
   } else {
     lastRootBackPromptAt = now;
-    showToast('再返回一次即可離開 APP');
+    showToast(t('nav.exitPrompt'));
   }
 });
+
+// 啟動時立即套用多語系 DOM 與動態單位標籤（避免首屏閃爍）
+applyI18nToDOM();
+syncModalDynamicLabels();
 
 // 初始化隱私自動上鎖生命週期（逾時 5 分鐘或切換畫面時自動重新遮蔽體重）
 initPrivacyLifecycle({ onLockChange: renderAll });
@@ -331,17 +338,26 @@ initOverviewPullToRefresh({
   isSyncing: () => isFetching,
   onRefresh: async () => {
     const ok = await syncData();
-    if (ok) showToast('已同步最新資料');
+    if (ok) showToast(t('pull.synced'));
   }
 });
 initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
-initSettings({ onSync: syncData });
+initSettings({
+  onSync: syncData,
+  onPreferencesChange: () => {
+    applyI18nToDOM();
+    syncModalDynamicLabels();
+    refreshSyncIndicator();
+    renderAll();
+  }
+});
 
 const splash = createSplashController();
 
 // Stale-While-Revalidate：先立即載入本機快取秒開畫面，同時背景向雲端拉取最新資料
 const hasCache = hydrateFromCache();
+refreshSyncIndicator();
 renderAll();
 
 if (hasCache) {

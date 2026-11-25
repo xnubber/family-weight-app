@@ -1,6 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import logger from '../utils/logger.js';
 import { maskSensitiveUrl } from '../utils/security.js';
+import { getBackendMessage } from '../utils/messages.js';
 
 // 健康檢查專用限流：每分鐘最多 30 次，防止用來灌爆日誌
 export const healthLimiter = rateLimit({
@@ -10,7 +11,7 @@ export const healthLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => {
     logger.warn('健康檢查觸發速率限制 (429)', { ip: req.ip });
-    res.status(429).json({ error: '請求過於頻繁，請稍後再試' });
+    res.status(429).json({ error: getBackendMessage(req, 'tooManyRequests') });
   }
 });
 
@@ -23,7 +24,7 @@ export const apiLimiter = rateLimit({
   skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
     logger.warn('觸發速率限制 (429)', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
-    res.status(429).json({ error: '請求過於頻繁，請稍後再試' });
+    res.status(429).json({ error: getBackendMessage(req, 'tooManyRequests') });
   }
 });
 
@@ -37,7 +38,7 @@ export const authFailLimiter = rateLimit({
   skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
     logger.warn('觸發異常失敗請求限流 (429)', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
-    res.status(429).json({ error: '錯誤嘗試過於頻繁，請稍後再試' });
+    res.status(429).json({ error: getBackendMessage(req, 'tooManyFailedAttempts') });
   }
 });
 
@@ -51,6 +52,6 @@ export const pinVerifyLimiter = rateLimit({
   skip: (req) => req.method === 'OPTIONS',
   handler: (req, res) => {
     logger.warn('觸發個人 PIN 驗證限流 (429)', { ip: req.ip, path: maskSensitiveUrl(req.originalUrl) });
-    res.status(429).json({ error: 'PIN 密碼嘗試次數過多，請 15 分鐘後再試' });
+    res.status(429).json({ error: getBackendMessage(req, 'tooManyPinAttempts') });
   }
 });

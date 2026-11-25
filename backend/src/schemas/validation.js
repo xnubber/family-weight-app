@@ -192,9 +192,14 @@ export const createRecordSchema = z.strictObject({
     .transform((v) => v ?? '')
 });
 
-export function formatZodError(error) {
+import { getBackendMessage, translateZodMessage } from '../utils/messages.js';
+
+export function formatZodError(error, localeOrReq = 'zh-TW') {
+  const locale = typeof localeOrReq === 'string'
+    ? localeOrReq
+    : (localeOrReq?.clientLocale || 'zh-TW');
   const first = error?.issues?.[0];
-  if (!first) return '請求欄位格式不正確';
-  if (first.code === 'unrecognized_keys') return '請求包含不允許的額外欄位';
-  return first.message || '請求欄位格式不正確';
+  if (!first) return getBackendMessage(locale, 'invalidRequestFields');
+  if (first.code === 'unrecognized_keys') return getBackendMessage(locale, 'unrecognizedKeys');
+  return translateZodMessage(first.message, locale);
 }

@@ -1,3 +1,6 @@
+import { getActiveLocale, t } from '../utils/i18n.js';
+import { getActiveTimeZone } from '../utils/timezone.js';
+
 // 執行期設定由未納入版控的 config.js 注入至 window.__APP_CONFIG__（範本見 config.example.js）
 function getApiBaseUrl() {
   const configured = window.__APP_CONFIG__?.API_BASE_URL;
@@ -28,17 +31,19 @@ export function hasInjectedApiKey() {
 async function request(endpoint, familyCode, options = {}) {
   const baseUrl = getApiBaseUrl();
   if (!baseUrl.startsWith('https://') && !isLocalhostUrl(baseUrl)) {
-    throw new Error('正式環境 API 必須使用 HTTPS 安全連線');
+    throw new Error(t('api.httpsRequired'));
   }
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error('尚未設定 API 金鑰，請至「設定」輸入或於 config.js 中設定');
+    throw new Error(t('api.missingKey'));
   }
 
   const headers = {
     'Content-Type': 'application/json',
     'X-API-Key': apiKey,
+    'Accept-Language': getActiveLocale(),
+    'X-Timezone': getActiveTimeZone(),
     ...(familyCode ? { 'X-Family-Code': familyCode } : {}),
     ...(options.headers || {})
   };
@@ -50,19 +55,19 @@ async function request(endpoint, familyCode, options = {}) {
 
   if (res.status === 400) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.error || '請求資料格式不正確');
+    throw new Error(body?.error || t('api.badRequest'));
   }
-  if (res.status === 401) throw new Error('驗證失敗，請確認 API 金鑰或 APP 版本是否正確');
+  if (res.status === 401) throw new Error(t('api.unauthorized'));
   if (res.status === 403) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.error || '無權限存取或修改此家庭資料');
+    throw new Error(body?.error || t('api.forbidden'));
   }
-  if (res.status === 404) throw new Error('找不到目標資料或無權限操作');
+  if (res.status === 404) throw new Error(t('api.notFound'));
   if (res.status === 429) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.error || '操作過於頻繁，請稍候幾分鐘再試');
+    throw new Error(body?.error || t('api.rateLimit'));
   }
-  if (!res.ok) throw new Error('伺服器連線異常，請稍後再試');
+  if (!res.ok) throw new Error(t('api.serverError'));
 
   return res.status === 204 ? null : res.json();
 }

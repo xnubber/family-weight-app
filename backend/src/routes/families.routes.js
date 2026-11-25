@@ -21,7 +21,7 @@ router.get('/:familyCode/data', asyncHandler(async (req, res) => {
     return res.status(resolved.errorStatus).json({ error: resolved.errorMessage });
   }
   const { familyCode } = resolved;
-  const cutoffDate = getTwoYearsAgoDate();
+  const cutoffDate = getTwoYearsAgoDate(req.clientTimeZone);
   const supabase = getSupabaseClient();
 
   const [membersRes, recordsRes, historyRes] = await Promise.all([

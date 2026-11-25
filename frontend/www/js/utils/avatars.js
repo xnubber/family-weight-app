@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const LOCAL_AVATAR_STORAGE_KEY = 'memberAvatars';
 const INK = '#3B3A34';
@@ -354,17 +356,18 @@ export function renderAvatarPicker(container, selectedId, onSelect) {
 
   const buttons = AVATARS.map((av) => {
     const isSelected = av.id === activeId;
+    const displayLabel = t(`avatar.${av.id}`) || av.label;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.dataset.avatarId = av.id;
     btn.className = `avatar-option ${isSelected ? 'is-selected' : ''}`;
     btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
-    btn.setAttribute('title', av.label);
+    btn.setAttribute('title', displayLabel);
 
     const badge = createAvatarNode(av.id, 'w-10 h-10');
     const label = document.createElement('span');
     label.className = `text-[12px] leading-tight truncate max-w-full ${isSelected ? 'text-sage-700 font-semibold' : 'text-ink-500'}`;
-    label.textContent = av.label;
+    label.textContent = displayLabel;
 
     btn.append(badge, label);
     btn.onclick = () => {
