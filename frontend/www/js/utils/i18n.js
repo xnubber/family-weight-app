@@ -167,6 +167,8 @@ const DICTIONARY = {
 
     // 設定頁
     'settings.regionTitle': '語言、單位與時區',
+    'settings.regionEdit': '變更',
+    'settings.regionCollapse': '收合',
     'settings.languageLabel': '顯示語言',
     'settings.languageAuto': '自動偵測（{lang}）',
     'settings.unitLabel': '體重顯示單位',
@@ -637,6 +639,8 @@ const DICTIONARY = {
 
     // Settings
     'settings.regionTitle': 'Language, Units & Timezone',
+    'settings.regionEdit': 'Edit',
+    'settings.regionCollapse': 'Done',
     'settings.languageLabel': 'Language',
     'settings.languageAuto': 'Auto ({lang})',
     'settings.unitLabel': 'Weight Unit',
@@ -1107,6 +1111,8 @@ const DICTIONARY = {
 
     // 設定
     'settings.regionTitle': '言語・単位・タイムゾーン',
+    'settings.regionEdit': '変更',
+    'settings.regionCollapse': '閉じる',
     'settings.languageLabel': '表示言語',
     'settings.languageAuto': '自動検出（{lang}）',
     'settings.unitLabel': '体重の表示単位',

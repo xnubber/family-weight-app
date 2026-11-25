@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { hasInjectedApiKey } from '../services/api.js';
 import { optimisticDeleteMember } from '../services/syncQueue.js';
-import { createEl, showToast } from '../utils/dom.js';
+import { createEl, playSoftFade, showToast } from '../utils/dom.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { isMemberPrivacyEnabled, lockAllMembers, memberHasPrivacyPin } from '../utils/privacy.js';
 import { clearFamilyCache } from '../utils/cache.js';
@@ -9,6 +9,7 @@ import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
 import {
   LANGUAGE_DISPLAY_NAMES,
   detectDeviceLocale,
+  getActiveLocale,
   getLanguageSetting,
   setLanguageSetting,
   t
@@ -24,13 +25,54 @@ import {
 } from '../utils/timezone.js';
 import { getWeightUnit, setWeightUnit } from '../utils/units.js';
 
+let isRegionSettingsExpanded = false;
+
 function getMemberTypeLabel(type) {
   if (type === 'cat') return t('memberType.cat');
   if (type === 'dog') return t('memberType.dog');
   return t('memberType.human');
 }
 
+function formatCompactTimeZoneLabel(tzId, offsetLabel) {
+  const matched = COMMON_TIMEZONES.find((item) => item.id === tzId);
+  let shortPlace = '';
+  if (matched) {
+    const full = t(matched.labelKey);
+    // 擷取括號前的精簡城市名稱（例：「台北 (Asia/Taipei)」→「台北」、「Tokyo (Asia/Tokyo)」→「Tokyo」）
+    shortPlace = full.split(' (')[0].split(' · ')[0].trim();
+  } else {
+    const parts = String(tzId || '').split('/');
+    shortPlace = (parts[parts.length - 1] || tzId).replace(/_/g, ' ');
+  }
+  return offsetLabel ? `${shortPlace} (${offsetLabel})` : shortPlace;
+}
+
+function syncRegionPanelVisibility({ animate = false } = {}) {
+  const toggleBtn = document.getElementById('btn-toggle-region-settings');
+  const toggleText = document.getElementById('region-settings-toggle-text');
+  const chevron = document.getElementById('region-settings-chevron');
+  const panel = document.getElementById('region-settings-panel');
+
+  if (toggleBtn) {
+    toggleBtn.setAttribute('aria-expanded', isRegionSettingsExpanded ? 'true' : 'false');
+  }
+  if (toggleText) {
+    toggleText.textContent = t(isRegionSettingsExpanded ? 'settings.regionCollapse' : 'settings.regionEdit');
+  }
+  if (chevron) {
+    chevron.classList.toggle('rotate-180', isRegionSettingsExpanded);
+  }
+  if (panel) {
+    panel.classList.toggle('hidden', !isRegionSettingsExpanded);
+    if (isRegionSettingsExpanded && animate) {
+      playSoftFade(panel);
+    }
+  }
+}
+
 export function renderRegionSettings() {
+  const activeLocale = getActiveLocale();
+  const activeLangName = LANGUAGE_DISPLAY_NAMES[activeLocale] || activeLocale;
   const langSelect = document.getElementById('select-language');
   if (langSelect) {
     const detected = detectDeviceLocale();
@@ -108,6 +150,20 @@ export function renderRegionSettings() {
       offset: activeOffset
     });
   }
+
+  // 收合／展開標題下方的精簡摘要膠囊（目前語言、單位、時區）
+  const summaryEl = document.getElementById('region-settings-summary');
+  if (summaryEl) {
+    const chipCls = 'inline-flex items-center px-2 py-0.5 rounded-lg text-[11px] font-medium bg-oat-50 border border-oat-200/80 text-ink-600 leading-tight';
+    const tzChipCls = `${chipCls} tabular-nums`;
+    summaryEl.replaceChildren(
+      createEl('span', chipCls, activeLangName),
+      createEl('span', chipCls, unit),
+      createEl('span', tzChipCls, formatCompactTimeZoneLabel(activeTz, activeOffset))
+    );
+  }
+
+  syncRegionPanelVisibility();
 }
 
 export function renderSettingsMembers({ onEditMember }) {
@@ -155,6 +211,14 @@ export function renderSettingsMembers({ onEditMember }) {
 
 export function initSettings({ onSync, onPreferencesChange = () => {} }) {
   renderRegionSettings();
+
+  const toggleRegionBtn = document.getElementById('btn-toggle-region-settings');
+  if (toggleRegionBtn) {
+    toggleRegionBtn.onclick = () => {
+      isRegionSettingsExpanded = !isRegionSettingsExpanded;
+      syncRegionPanelVisibility({ animate: true });
+    };
+  }
 
   const langSelect = document.getElementById('select-language');
   if (langSelect) {
