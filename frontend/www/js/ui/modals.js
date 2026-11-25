@@ -61,11 +61,26 @@ const DOG_FACTORS = [
 
 const VALID_MEMBER_TYPES = new Set(['human', 'cat', 'dog']);
 
+const BCS_OPTIONS = [
+  { value: '', label: '未評分（總覽顯示一週體重變化）' },
+  { value: '1', label: '1 分 · 極瘦（肋骨腰椎極明顯）' },
+  { value: '2', label: '2 分 · 過瘦（幾乎無脂肪覆蓋）' },
+  { value: '3', label: '3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）' },
+  { value: '4', label: '4 分 · 適中偏瘦（輕摸可感肋骨）' },
+  { value: '5', label: '5 分 · 理想體態（肋骨好摸、腰身自然）' },
+  { value: '6', label: '6 分 · 略重（肋骨需稍用力才摸到）' },
+  { value: '7', label: '7 分 · 過重（肋骨難摸、腰身不明顯）' },
+  { value: '8', label: '8 分 · 肥胖（摸不到肋骨、腹部下垂）' },
+  { value: '9', label: '9 分 · 重度肥胖（明顯脂肪堆積）' }
+];
+
 let recordModalMode = 'batch'; // 'batch' | 'single'
 let hasProfileHealthCard = false;
 let memberAvatarManuallyPicked = false;
 let activePinRequest = null; // { member, onUnlocked }
 let activeProfileContext = null; // { memberId, onNavigateToChart }
+let activeProfileInlineField = null; // 'name' | 'breed' | 'birth_date' | 'height_cm' | 'bcs_score' | 'target_weight' | null
+let isInlineAvatarDrawerOpen = false;
 
 function getMemberTypeLabel(type) {
   if (type === 'cat') return '貓咪';
@@ -561,9 +576,23 @@ function renderProfileHealthCard(member, latest) {
   card.replaceChildren(...children);
 }
 
+function setInlineAvatarDrawer(isOpen) {
+  isInlineAvatarDrawerOpen = Boolean(isOpen);
+  const drawer = document.getElementById('prof-inline-avatar-drawer');
+  if (!drawer) return;
+  drawer.classList.toggle('hidden', !isInlineAvatarDrawerOpen);
+  if (isInlineAvatarDrawerOpen) {
+    playSoftFade(drawer);
+  }
+}
+
 function setProfileEditMode(isEditing, animate = false) {
   const viewFields = document.getElementById('prof-view-fields');
   const editFields = document.getElementById('prof-edit-fields');
+  if (isEditing) {
+    activeProfileInlineField = null;
+    setInlineAvatarDrawer(false);
+  }
   viewFields.classList.toggle('hidden', isEditing);
   document.getElementById('prof-view-actions').classList.toggle('hidden', isEditing);
   document.getElementById('btn-prof-add-record').classList.toggle('hidden', isEditing);
@@ -580,10 +609,12 @@ function setProfileEditMode(isEditing, animate = false) {
   }
 }
 
-export function openProfileModal(memberId, { onNavigateToChart }) {
+export function openProfileModal(memberId, { onNavigateToChart, initialInlineField = null } = {}) {
   const m = state.appData.members.find((x) => x.id === memberId);
   if (!m) return;
   activeProfileContext = { memberId, onNavigateToChart };
+  activeProfileInlineField = initialInlineField || null;
+  setInlineAvatarDrawer(false);
 
   const recs = state.appData.records.filter((r) => r.member_id === m.id);
   const latest = recs[recs.length - 1];
@@ -600,9 +631,46 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   const renderProfileAvatarPreview = (avatarId) => {
     const slot = document.getElementById('prof-avatar-slot');
     if (slot) {
-      slot.replaceChildren(createAvatarNode(avatarId, 'w-11 h-11'));
+      const editDot = createEl(
+        'span',
+        'absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-linen border border-oat-200 text-ink-500 flex items-center justify-center shadow-sm'
+      );
+      editDot.appendChild(createIcon('edit', 'w-2.5 h-2.5'));
+      slot.replaceChildren(createAvatarNode(avatarId, 'w-11 h-11'), editDot);
     }
   };
+
+  const renderInlineAvatarPicker = () => {
+    const picker = document.getElementById('prof-inline-avatar-picker');
+    if (!picker) return;
+    renderAvatarPicker(picker, resolveMemberAvatar(m), (picked) => {
+      if (picked === resolveMemberAvatar(m)) {
+        setInlineAvatarDrawer(false);
+        return;
+      }
+      optimisticUpdateMember(m.id, { avatar: picked });
+      showToast('頭像已更新');
+      openProfileModal(m.id, { onNavigateToChart });
+    });
+  };
+
+  const avatarSlotBtn = document.getElementById('prof-avatar-slot');
+  if (avatarSlotBtn) {
+    avatarSlotBtn.onclick = () => {
+      // 完整編輯模式已有內嵌頭像選擇器，檢視模式才切換快捷頭像抽屜
+      if (!document.getElementById('prof-edit-fields').classList.contains('hidden')) return;
+      if (!isInlineAvatarDrawerOpen) {
+        activeProfileInlineField = null;
+        renderProfileViewFields();
+        renderInlineAvatarPicker();
+      }
+      setInlineAvatarDrawer(!isInlineAvatarDrawerOpen);
+    };
+  }
+  const closeAvatarDrawerBtn = document.getElementById('btn-prof-close-avatar-drawer');
+  if (closeAvatarDrawerBtn) {
+    closeAvatarDrawerBtn.onclick = () => setInlineAvatarDrawer(false);
+  }
 
   const fillEditInputs = () => {
     document.getElementById('prof-name').value = m.name || '';
@@ -621,6 +689,343 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
     });
     syncPrivacyFormUI('prof', m);
   };
+
+  // 原地單欄快速編輯：渲染檢視列表與展開中的單一輸入列
+  function renderProfileViewFields() {
+    const container = document.getElementById('prof-view-fields');
+    if (!container) return;
+
+    const fieldDefs = [
+      {
+        key: 'name',
+        label: '成員名稱',
+        value: m.name || '--',
+        editable: true,
+        valueClass: 'font-medium text-ink text-right break-words min-w-0'
+      },
+      {
+        key: 'type',
+        label: '成員類型',
+        value: getMemberTypeLabel(m.type),
+        editable: false,
+        valueClass: 'font-medium text-ink-500 text-right break-words min-w-0'
+      }
+    ];
+
+    if (isPet) {
+      fieldDefs.push({
+        key: 'breed',
+        label: '品種',
+        value: m.breed ? String(m.breed).trim() : '未設定',
+        isEmpty: !m.breed,
+        editable: true,
+        valueClass: 'font-medium text-right break-words min-w-0'
+      });
+    }
+
+    fieldDefs.push({
+      key: 'birth_date',
+      label: '生日與年齡',
+      value: ageInfo ? ageInfo.displayText : '未設定',
+      isEmpty: !ageInfo,
+      editable: true,
+      valueClass: 'font-medium text-right break-words min-w-0'
+    });
+
+    if (!isPet) {
+      fieldDefs.push({
+        key: 'height_cm',
+        label: '身高',
+        value: m.height_cm ? `${m.height_cm} cm` : '未設定',
+        isEmpty: !m.height_cm,
+        editable: true,
+        valueClass: 'font-medium text-right tabular-nums whitespace-nowrap'
+      });
+    }
+
+    if (isPet) {
+      fieldDefs.push({
+        key: 'bcs_score',
+        label: '體態評分 BCS',
+        value: bcsMeta ? bcsMeta.compact : '未評分',
+        isEmpty: !bcsMeta,
+        editable: true,
+        valueClass: `font-medium text-right whitespace-nowrap ${bcsMeta ? bcsMeta.colorClass : ''}`
+      });
+    }
+
+    fieldDefs.push(
+      {
+        key: 'target_weight',
+        label: '目標體重',
+        value: isHidden
+          ? (m.target_weight ? '已隱藏' : '未設定')
+          : (m.target_weight ? `${m.target_weight} kg` : '未設定'),
+        isEmpty: !m.target_weight,
+        editable: true,
+        valueClass: 'font-medium text-right tabular-nums whitespace-nowrap'
+      },
+      {
+        key: 'privacy',
+        label: '體重隱私',
+        value: !isPrivacyOn
+          ? '公開顯示'
+          : (hasPin ? '已隱藏（密碼保護）' : '已隱藏（點擊可檢視）'),
+        editable: true,
+        valueClass: 'font-medium text-ink text-right break-words min-w-0'
+      }
+    );
+
+    const startInlineEdit = (fieldKey) => {
+      setInlineAvatarDrawer(false);
+      if (fieldKey === 'privacy') {
+        setProfileEditMode(true, true);
+        const privTarget = document.getElementById(
+          isLockedWithPin ? 'prof-privacy-locked-box' : 'prof-privacy-controls'
+        );
+        privTarget?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+        return;
+      }
+      if (fieldKey === 'target_weight' && isHidden) {
+        requestMemberUnlock(m, () =>
+          openProfileModal(m.id, { onNavigateToChart, initialInlineField: 'target_weight' })
+        );
+        return;
+      }
+      activeProfileInlineField = fieldKey;
+      renderProfileViewFields();
+    };
+
+    const commitInlineField = (fieldKey, rawVal) => {
+      let payload = null;
+      let toastMsg = '資料已更新';
+
+      if (fieldKey === 'name') {
+        const nextName = String(rawVal ?? '').trim();
+        if (!nextName || nextName.length > 50) {
+          showToast('名稱須為 1–50 字元', true);
+          return false;
+        }
+        payload = { name: nextName };
+        toastMsg = '成員名稱已更新';
+      } else if (fieldKey === 'breed') {
+        const nextBreed = String(rawVal ?? '').trim();
+        if (nextBreed.length > 40) {
+          showToast('品種不可超過 40 字元', true);
+          return false;
+        }
+        payload = { breed: nextBreed || null };
+        toastMsg = '品種已更新';
+      } else if (fieldKey === 'birth_date') {
+        const parsed = parseOptionalBirthDateInput(rawVal);
+        if (parsed.error) {
+          showToast(parsed.error, true);
+          return false;
+        }
+        payload = { birth_date: parsed.value };
+        toastMsg = parsed.value ? '生日已更新' : '已清除生日';
+      } else if (fieldKey === 'height_cm') {
+        const parsed = parseStrictNumber(rawVal, {
+          required: false,
+          min: 20,
+          max: 300,
+          label: '身高 (cm)'
+        });
+        if (parsed.error) {
+          showToast(parsed.error, true);
+          return false;
+        }
+        payload = { height_cm: parsed.value };
+        toastMsg = '身高已更新';
+      } else if (fieldKey === 'bcs_score') {
+        const parsed = parseOptionalBcsInput(rawVal);
+        if (parsed.error) {
+          showToast(parsed.error, true);
+          return false;
+        }
+        payload = { bcs_score: parsed.value };
+        toastMsg = parsed.value ? '體態評分已更新' : '已清除體態評分';
+      } else if (fieldKey === 'target_weight') {
+        const parsed = parseStrictNumber(rawVal, {
+          required: false,
+          min: 0.1,
+          max: 500,
+          label: '目標體重 (kg)'
+        });
+        if (parsed.error) {
+          showToast(parsed.error, true);
+          return false;
+        }
+        payload = {
+          target_weight: parsed.value,
+          target_effective_date: getLocalTodayDate()
+        };
+        if (hasPin) {
+          const currentPin = getUnlockedPin(m.id);
+          if (currentPin) payload.current_pin = currentPin;
+        }
+        toastMsg = parsed.value !== null ? '目標體重已更新' : '已清除目標體重';
+      }
+
+      if (!payload) return false;
+      activeProfileInlineField = null;
+      optimisticUpdateMember(m.id, payload);
+      showToast(toastMsg);
+      openProfileModal(m.id, { onNavigateToChart });
+      return true;
+    };
+
+    const nodes = fieldDefs.map((field) => {
+      // 展開中的原地編輯列
+      if (field.editable && activeProfileInlineField === field.key) {
+        const editRow = createEl('div', 'px-2 py-3 space-y-2');
+        const labelRow = createEl('div', 'flex items-center justify-between gap-2');
+        labelRow.appendChild(createEl('span', 'text-xs font-medium text-sage-700', field.label));
+
+        let controlEl;
+        if (field.key === 'bcs_score') {
+          controlEl = document.createElement('select');
+          controlEl.className = 'w-full border border-sage-500/50 rounded-xl px-2.5 py-2 text-sm bg-linen text-ink';
+          BCS_OPTIONS.forEach((optCfg) => {
+            const opt = document.createElement('option');
+            opt.value = optCfg.value;
+            opt.textContent = optCfg.label;
+            controlEl.appendChild(opt);
+          });
+          controlEl.value = m.bcs_score ? String(m.bcs_score) : '';
+        } else {
+          controlEl = document.createElement('input');
+          controlEl.className = 'w-full border border-sage-500/50 rounded-xl px-2.5 py-2 text-sm bg-linen text-ink';
+          if (field.key === 'name') {
+            controlEl.type = 'text';
+            controlEl.maxLength = 50;
+            controlEl.placeholder = '輸入成員名稱';
+            controlEl.value = m.name || '';
+          } else if (field.key === 'breed') {
+            controlEl.type = 'text';
+            controlEl.maxLength = 40;
+            controlEl.placeholder = '例：橘貓、米克斯、柴犬、貴賓';
+            controlEl.value = m.breed || '';
+          } else if (field.key === 'birth_date') {
+            controlEl.type = 'date';
+            controlEl.min = '1900-01-01';
+            controlEl.max = getLocalTodayDate();
+            controlEl.value = m.birth_date ? String(m.birth_date).slice(0, 10) : '';
+          } else if (field.key === 'height_cm') {
+            controlEl.type = 'number';
+            controlEl.min = '20';
+            controlEl.max = '300';
+            controlEl.step = '0.1';
+            controlEl.placeholder = '例：172.5（留空可清除）';
+            controlEl.value = m.height_cm ?? '';
+          } else if (field.key === 'target_weight') {
+            controlEl.type = 'number';
+            controlEl.min = '0.1';
+            controlEl.max = '500';
+            controlEl.step = '0.01';
+            controlEl.placeholder = '例：65.0（留空可清除）';
+            controlEl.value = m.target_weight ?? '';
+          }
+        }
+
+        controlEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            commitInlineField(field.key, controlEl.value);
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            activeProfileInlineField = null;
+            renderProfileViewFields();
+          }
+        });
+
+        const btnRow = createEl('div', 'flex items-center justify-end gap-1.5');
+        if (field.key === 'birth_date' && m.birth_date) {
+          const clearBtn = createEl(
+            'button',
+            'mr-auto text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1.5 rounded-xl font-medium',
+            '清除'
+          );
+          clearBtn.type = 'button';
+          clearBtn.onclick = () => commitInlineField('birth_date', '');
+          btnRow.appendChild(clearBtn);
+        }
+
+        const cancelBtn = createEl(
+          'button',
+          'text-xs bg-oat-100 text-ink-700 px-3 py-1.5 rounded-xl font-medium',
+          '取消'
+        );
+        cancelBtn.type = 'button';
+        cancelBtn.onclick = () => {
+          activeProfileInlineField = null;
+          renderProfileViewFields();
+        };
+
+        const saveBtn = createEl(
+          'button',
+          'text-xs bg-sage-600 text-linen px-3.5 py-1.5 rounded-xl font-medium',
+          '儲存'
+        );
+        saveBtn.type = 'button';
+        saveBtn.onclick = () => commitInlineField(field.key, controlEl.value);
+
+        btnRow.append(cancelBtn, saveBtn);
+        editRow.append(labelRow, controlEl, btnRow);
+
+        // 使用者主動點擊欄位後才聚焦輸入框（日期與下拉選單則由使用者點選展開）
+        if (field.key !== 'birth_date' && field.key !== 'bcs_score') {
+          queueMicrotask(() => {
+            if (typeof controlEl.focus === 'function') {
+              controlEl.focus();
+            }
+          });
+        }
+        return editRow;
+      }
+
+      // 唯讀列（例如成員類型）
+      if (!field.editable) {
+        const staticRow = createEl('div', 'px-2 py-2.5 flex justify-between items-baseline gap-3');
+        staticRow.append(
+          createEl('span', 'text-ink-500 shrink-0 whitespace-nowrap', field.label),
+          createEl('span', field.valueClass, field.value)
+        );
+        return staticRow;
+      }
+
+      // 可直接點擊編輯的檢視列
+      const rowBtn = createEl(
+        'button',
+        'w-full text-left px-2 py-2.5 flex justify-between items-center gap-3 cursor-pointer hover:bg-oat-100/70 active:bg-oat-100 rounded-xl transition-colors'
+      );
+      rowBtn.type = 'button';
+      rowBtn.dataset.inlineField = field.key;
+      rowBtn.setAttribute('aria-label', `編輯${field.label}`);
+
+      const rightWrap = createEl('span', 'flex items-center justify-end gap-1.5 min-w-0');
+      const valColor = field.isEmpty
+        ? 'text-ink-400'
+        : field.valueClass.includes('text-')
+          ? ''
+          : 'text-ink';
+      rightWrap.append(
+        createEl('span', `${field.valueClass} ${valColor}`.trim(), field.value),
+        createIcon('chevronRight', 'w-3.5 h-3.5 shrink-0 text-ink-400/70')
+      );
+
+      rowBtn.append(
+        createEl('span', 'text-ink-500 shrink-0 whitespace-nowrap', field.label),
+        rightWrap
+      );
+      rowBtn.onclick = () => startInlineEdit(field.key);
+      return rowBtn;
+    });
+
+    container.replaceChildren(...nodes);
+  }
 
   document.getElementById('prof-id').value = m.id;
   document.getElementById('prof-title').textContent = m.name || '個人資訊';
@@ -657,22 +1062,8 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
     toggleBtn.replaceChildren();
   }
 
-  // 檢視模式文字
-  document.getElementById('prof-view-name').textContent = m.name || '--';
-  document.getElementById('prof-view-type').textContent = getMemberTypeLabel(m.type);
-  document.getElementById('prof-view-breed-row').classList.toggle('hidden', !isPet);
-  document.getElementById('prof-view-breed').textContent = m.breed ? String(m.breed).trim() : '未設定';
-  document.getElementById('prof-view-birth').textContent = ageInfo ? ageInfo.displayText : '未設定';
-  document.getElementById('prof-view-height-row').classList.toggle('hidden', isPet);
-  document.getElementById('prof-view-height').textContent = m.height_cm ? `${m.height_cm} cm` : '未設定';
-  document.getElementById('prof-view-bcs-row').classList.toggle('hidden', !isPet);
-  document.getElementById('prof-view-bcs').textContent = bcsMeta ? bcsMeta.compact : '未評分';
-  document.getElementById('prof-view-target').textContent = isHidden
-    ? (m.target_weight ? '已隱藏' : '未設定')
-    : (m.target_weight ? `${m.target_weight} kg` : '未設定');
-  document.getElementById('prof-view-privacy').textContent = !isPrivacyOn
-    ? '公開顯示'
-    : (hasPin ? '已隱藏（密碼保護）' : '已隱藏（點擊可檢視）');
+  // 渲染可點擊原地修改的檢視欄位
+  renderProfileViewFields();
 
   // 自動健康指標卡
   renderProfileHealthCard(m, latest);
@@ -845,12 +1236,18 @@ function extractPrivacySubmitPayload(prefix, existingMember) {
 }
 
 export function initModals() {
+  const clearProfileModalState = () => {
+    activeProfileContext = null;
+    activeProfileInlineField = null;
+    setInlineAvatarDrawer(false);
+  };
+
   // 關閉按鈕
   document.querySelectorAll('.btn-close-modal').forEach((btn) => {
     btn.onclick = () => {
       const modal = btn.closest('.fixed');
       closeModal(modal);
-      if (modal.id === 'modal-profile') activeProfileContext = null;
+      if (modal.id === 'modal-profile') clearProfileModalState();
     };
   });
 
@@ -860,20 +1257,33 @@ export function initModals() {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         closeModal(modal);
-        if (id === 'modal-profile') activeProfileContext = null;
+        if (id === 'modal-profile') clearProfileModalState();
         if (id === 'modal-pin') activePinRequest = null;
       }
     });
   });
 
-  // 支援 Esc 鍵平滑關閉最上層彈窗
+  // 支援 Esc 鍵：若個人資訊面板有展開原地編輯或頭像抽屜則先收合，否則平滑關閉最上層彈窗
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const stack = ['modal-pin', 'modal-record', 'modal-member', 'modal-profile'];
     for (const id of stack) {
       if (isModalOpen(id)) {
+        if (id === 'modal-profile') {
+          if (isInlineAvatarDrawerOpen) {
+            setInlineAvatarDrawer(false);
+            break;
+          }
+          if (activeProfileInlineField && activeProfileContext) {
+            activeProfileInlineField = null;
+            openProfileModal(activeProfileContext.memberId, {
+              onNavigateToChart: activeProfileContext.onNavigateToChart
+            });
+            break;
+          }
+          clearProfileModalState();
+        }
         closeModal(id);
-        if (id === 'modal-profile') activeProfileContext = null;
         if (id === 'modal-pin') activePinRequest = null;
         break;
       }

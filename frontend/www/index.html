@@ -329,7 +329,7 @@
     <form id="form-profile" class="modal-sheet bg-linen border border-oat-200 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
       <div class="flex justify-between items-center gap-2 border-b border-oat-200 pb-3">
         <div class="flex items-center gap-2.5 min-w-0 flex-1">
-          <div id="prof-avatar-slot" class="shrink-0"></div>
+          <button type="button" id="prof-avatar-slot" title="點擊更換頭像" aria-label="點擊更換頭像" class="shrink-0 relative rounded-full focus:outline-none focus:ring-2 focus:ring-sage-500/40"></button>
           <div class="min-w-0">
             <h3 id="prof-title" class="font-semibold text-base text-ink leading-snug break-words">個人資訊</h3>
             <p id="prof-subtitle" class="text-fluid-label text-ink-400">成員檔案</p>
@@ -347,6 +347,15 @@
         </div>
       </div>
 
+      <!-- 點擊頭像快速更換抽屜 -->
+      <div id="prof-inline-avatar-drawer" class="hidden bg-oat-50 border border-oat-200 rounded-2xl p-3 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-xs font-medium text-ink-700">點擊頭像立即更換</span>
+          <button type="button" id="btn-prof-close-avatar-drawer" class="text-xs text-ink-400 hover:text-ink-700 px-1.5 py-0.5 rounded-lg">關閉</button>
+        </div>
+        <div id="prof-inline-avatar-picker" class="grid grid-cols-4 gap-1.5"></div>
+      </div>
+
       <div id="prof-summary" class="grid grid-cols-2 gap-2 bg-oat-50 border border-oat-200/70 p-3 rounded-2xl text-center text-sm"></div>
 
       <button type="button" id="btn-prof-add-record" class="w-full py-2.5 bg-sage-50 hover:bg-sage-100 text-sage-700 font-medium rounded-xl text-sm border border-sage-200 inline-flex items-center justify-center gap-1.5">
@@ -359,41 +368,8 @@
       <input type="hidden" id="prof-id" />
       <input type="hidden" id="prof-avatar" />
 
-      <!-- 檢視模式：唯讀文字顯示 -->
-      <div id="prof-view-fields" class="divide-y divide-oat-100 text-sm border border-oat-200 bg-paper/50 rounded-2xl px-3.5">
-        <div class="py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">成員名稱</span>
-          <span id="prof-view-name" class="font-medium text-ink text-right break-words min-w-0">--</span>
-        </div>
-        <div class="py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">成員類型</span>
-          <span id="prof-view-type" class="font-medium text-ink text-right break-words min-w-0">--</span>
-        </div>
-        <div id="prof-view-breed-row" class="hidden py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">品種</span>
-          <span id="prof-view-breed" class="font-medium text-ink text-right break-words min-w-0">--</span>
-        </div>
-        <div id="prof-view-birth-row" class="py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">生日與年齡</span>
-          <span id="prof-view-birth" class="font-medium text-ink text-right break-words min-w-0">--</span>
-        </div>
-        <div id="prof-view-height-row" class="py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">身高</span>
-          <span id="prof-view-height" class="font-medium text-ink text-right tabular-nums whitespace-nowrap">--</span>
-        </div>
-        <div id="prof-view-bcs-row" class="hidden py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">體態評分 BCS</span>
-          <span id="prof-view-bcs" class="font-medium text-ink text-right whitespace-nowrap">--</span>
-        </div>
-        <div class="py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">目標體重</span>
-          <span id="prof-view-target" class="font-medium text-ink text-right tabular-nums whitespace-nowrap">--</span>
-        </div>
-        <div class="py-2.5 flex justify-between items-baseline gap-3">
-          <span class="text-ink-500 shrink-0 whitespace-nowrap">體重隱私</span>
-          <span id="prof-view-privacy" class="font-medium text-ink text-right break-words min-w-0">--</span>
-        </div>
-      </div>
+      <!-- 檢視模式：點擊任一可編輯欄位即可原地修改 -->
+      <div id="prof-view-fields" class="divide-y divide-oat-100 text-sm border border-oat-200 bg-paper/50 rounded-2xl px-1.5 py-0.5"></div>
 
       <!-- 檢視模式：自動健康指標卡（家人顯示 BMI 判定與健康體重區間；貓狗顯示 RER / DER 熱量與 BCS 指南） -->
       <div id="prof-health-card" class="hidden rounded-2xl p-3.5 text-sm space-y-2 border"></div>
