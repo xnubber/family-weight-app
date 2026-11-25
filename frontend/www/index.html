@@ -363,6 +363,11 @@
               <label id="mem-pin-label" for="mem-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
               <input id="mem-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
             </div>
+            <div id="mem-pin-confirm-wrap" class="hidden">
+              <label for="mem-pin-confirm" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
+              <input id="mem-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              <p id="mem-pin-feedback" class="hidden text-[11px] mt-1 leading-snug" aria-live="polite"></p>
+            </div>
             <label id="mem-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
               <input id="mem-clear-pin" type="checkbox" class="rounded border-oat-300" />
               <span>清除現有密碼（改為無密碼點擊暫時檢視）</span>
@@ -494,6 +499,11 @@
               <div>
                 <label id="prof-pin-label" for="prof-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填）</label>
                 <input id="prof-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              </div>
+              <div id="prof-pin-confirm-wrap" class="hidden">
+                <label for="prof-pin-confirm" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
+                <input id="prof-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+                <p id="prof-pin-feedback" class="hidden text-[11px] mt-1 leading-snug" aria-live="polite"></p>
               </div>
               <label id="prof-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
                 <input id="prof-clear-pin" type="checkbox" class="rounded border-oat-300" />

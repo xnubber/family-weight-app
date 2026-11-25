@@ -23,7 +23,9 @@ import {
   isValidPinFormat,
   lockMember,
   memberHasPrivacyPin,
+  sanitizePinInputValue,
   unlockMember,
+  validatePinConfirmation,
   verifyLocalPin
 } from '../utils/privacy.js';
 import {
@@ -395,6 +397,88 @@ function setMemberModalAvatar(avatarId) {
   });
 }
 
+function setPinFeedbackMessage(feedbackEl, message = '', tone = 'muted') {
+  if (!feedbackEl) return;
+  if (!message) {
+    feedbackEl.textContent = '';
+    feedbackEl.className = 'hidden text-[11px] mt-1 leading-snug';
+    return;
+  }
+  const toneClass =
+    tone === 'error'
+      ? 'text-rosewood-600'
+      : tone === 'success'
+        ? 'text-sage-700'
+        : 'text-ink-400';
+  feedbackEl.textContent = message;
+  feedbackEl.className = `text-[11px] mt-1 leading-snug ${toneClass}`;
+}
+
+function syncPrivacyPinConfirmState(prefix) {
+  const hideCheckbox = document.getElementById(`${prefix}-hide-weight`);
+  const clearCheckbox = document.getElementById(`${prefix}-clear-pin`);
+  const pinInput = document.getElementById(`${prefix}-pin`);
+  const pinConfirmWrap = document.getElementById(`${prefix}-pin-confirm-wrap`);
+  const pinConfirmInput = document.getElementById(`${prefix}-pin-confirm`);
+  const feedbackEl = document.getElementById(`${prefix}-pin-feedback`);
+  if (!pinInput || !pinConfirmWrap || !pinConfirmInput) return;
+
+  pinInput.classList.remove('border-rosewood-500');
+  pinConfirmInput.classList.remove('border-rosewood-500');
+
+  if (!hideCheckbox?.checked || clearCheckbox?.checked) {
+    pinConfirmWrap.classList.add('hidden');
+    setPinFeedbackMessage(feedbackEl, '');
+    return;
+  }
+
+  const pin = pinInput.value;
+  const confirm = pinConfirmInput.value;
+  const shouldShowConfirm = pin.length > 0 || confirm.length > 0;
+  pinConfirmWrap.classList.toggle('hidden', !shouldShowConfirm);
+
+  if (!shouldShowConfirm) {
+    setPinFeedbackMessage(feedbackEl, '');
+    return;
+  }
+
+  if (pin.length === 0 && confirm.length > 0) {
+    pinInput.classList.add('border-rosewood-500');
+    setPinFeedbackMessage(feedbackEl, '請先在上方輸入 4 位數密碼', 'error');
+  } else if (pin.length < 4 && confirm.length > 0) {
+    pinInput.classList.add('border-rosewood-500');
+    setPinFeedbackMessage(feedbackEl, '個人隱私密碼須為 4 位數字', 'error');
+  } else if (pin.length < 4) {
+    setPinFeedbackMessage(feedbackEl, `請輸入 4 位數字（${pin.length}/4），完成後需再次輸入確認`, 'muted');
+  } else if (confirm.length === 0) {
+    setPinFeedbackMessage(feedbackEl, '請再次輸入 4 位數密碼以確認', 'muted');
+  } else if (confirm.length === 4 && confirm === pin) {
+    setPinFeedbackMessage(feedbackEl, '兩次輸入的密碼一致', 'success');
+  } else if (!pin.startsWith(confirm) || confirm.length === 4) {
+    pinConfirmInput.classList.add('border-rosewood-500');
+    setPinFeedbackMessage(feedbackEl, '兩次輸入的密碼不一致', 'error');
+  } else {
+    setPinFeedbackMessage(feedbackEl, `請繼續輸入確認密碼（${confirm.length}/4）`, 'muted');
+  }
+}
+
+function showPrivacyPinSubmitError(prefix, errorMessage, focusField) {
+  const pinInput = document.getElementById(`${prefix}-pin`);
+  const pinConfirmWrap = document.getElementById(`${prefix}-pin-confirm-wrap`);
+  const pinConfirmInput = document.getElementById(`${prefix}-pin-confirm`);
+  const feedbackEl = document.getElementById(`${prefix}-pin-feedback`);
+  if (!pinInput || !pinConfirmInput) return;
+
+  if (pinConfirmWrap && (focusField === 'confirm' || pinInput.value.length > 0 || pinConfirmInput.value.length > 0)) {
+    pinConfirmWrap.classList.remove('hidden');
+  }
+  const targetIsConfirm = focusField === 'confirm';
+  pinInput.classList.toggle('border-rosewood-500', !targetIsConfirm);
+  pinConfirmInput.classList.toggle('border-rosewood-500', targetIsConfirm);
+  setPinFeedbackMessage(feedbackEl, errorMessage, 'error');
+  (targetIsConfirm ? pinConfirmInput : pinInput).focus();
+}
+
 function syncPrivacyFormUI(prefix, member) {
   const isLockedWithPin = Boolean(member && memberHasPrivacyPin(member) && !isMemberUnlocked(member.id));
   const hideEnabled = member ? isMemberPrivacyEnabled(member) : false;
@@ -407,6 +491,7 @@ function syncPrivacyFormUI(prefix, member) {
   const pinWrap = document.getElementById(`${prefix}-pin-wrap`);
   const pinLabel = document.getElementById(`${prefix}-pin-label`);
   const pinInput = document.getElementById(`${prefix}-pin`);
+  const pinConfirmInput = document.getElementById(`${prefix}-pin-confirm`);
   const clearWrap = document.getElementById(`${prefix}-clear-pin-wrap`);
   const clearCheckbox = document.getElementById(`${prefix}-clear-pin`);
 
@@ -416,6 +501,10 @@ function syncPrivacyFormUI(prefix, member) {
 
   hideCheckbox.checked = hideEnabled;
   pinInput.value = '';
+  if (pinConfirmInput) {
+    pinConfirmInput.value = '';
+    pinConfirmInput.disabled = false;
+  }
   clearCheckbox.checked = false;
   pinInput.disabled = false;
 
@@ -426,6 +515,7 @@ function syncPrivacyFormUI(prefix, member) {
 
   pinWrap.classList.toggle('hidden', !hideEnabled);
   clearWrap.classList.toggle('hidden', !hideEnabled || !hasPin);
+  syncPrivacyPinConfirmState(prefix);
 }
 
 // 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、頭像、品種、生日、BCS、隱私設定、身高與目標體重）
@@ -1251,26 +1341,46 @@ function bindPrivacyControlEvents(prefix) {
   const hideCheckbox = document.getElementById(`${prefix}-hide-weight`);
   const pinWrap = document.getElementById(`${prefix}-pin-wrap`);
   const pinInput = document.getElementById(`${prefix}-pin`);
+  const pinConfirmInput = document.getElementById(`${prefix}-pin-confirm`);
   const clearCheckbox = document.getElementById(`${prefix}-clear-pin`);
 
   hideCheckbox.onchange = () => {
     pinWrap.classList.toggle('hidden', !hideCheckbox.checked);
     if (!hideCheckbox.checked) {
       pinInput.value = '';
+      if (pinConfirmInput) {
+        pinConfirmInput.value = '';
+        pinConfirmInput.disabled = false;
+      }
       clearCheckbox.checked = false;
       pinInput.disabled = false;
     }
+    syncPrivacyPinConfirmState(prefix);
   };
 
   clearCheckbox.onchange = () => {
-    pinInput.disabled = clearCheckbox.checked;
-    if (clearCheckbox.checked) pinInput.value = '';
+    const clearing = clearCheckbox.checked;
+    pinInput.disabled = clearing;
+    if (pinConfirmInput) pinConfirmInput.disabled = clearing;
+    if (clearing) {
+      pinInput.value = '';
+      if (pinConfirmInput) pinConfirmInput.value = '';
+    }
+    syncPrivacyPinConfirmState(prefix);
   };
 
-  // 僅保留數字鍵入
+  // 僅保留數字鍵入並即時更新二次輸入比對狀態
   pinInput.oninput = () => {
-    pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
+    pinInput.value = sanitizePinInputValue(pinInput.value);
+    syncPrivacyPinConfirmState(prefix);
   };
+
+  if (pinConfirmInput) {
+    pinConfirmInput.oninput = () => {
+      pinConfirmInput.value = sanitizePinInputValue(pinConfirmInput.value);
+      syncPrivacyPinConfirmState(prefix);
+    };
+  }
 }
 
 function extractPrivacySubmitPayload(prefix, existingMember) {
@@ -1283,10 +1393,16 @@ function extractPrivacySubmitPayload(prefix, existingMember) {
 
   const hideWeight = document.getElementById(`${prefix}-hide-weight`).checked;
   const rawPin = document.getElementById(`${prefix}-pin`).value.trim();
+  const rawPinConfirm = document.getElementById(`${prefix}-pin-confirm`)?.value.trim() ?? '';
   const clearPin = document.getElementById(`${prefix}-clear-pin`).checked;
 
-  if (hideWeight && !clearPin && rawPin !== '' && !isValidPinFormat(rawPin)) {
-    return { error: '個人隱私密碼須為 4 位數字（例如 1234）' };
+  let validatedPin = null;
+  if (hideWeight && !clearPin) {
+    const pinCheck = validatePinConfirmation(rawPin, rawPinConfirm);
+    if (pinCheck.error) {
+      return { error: pinCheck.error, focusField: pinCheck.focusField };
+    }
+    validatedPin = pinCheck.pin;
   }
 
   const result = {
@@ -1300,8 +1416,8 @@ function extractPrivacySubmitPayload(prefix, existingMember) {
     }
   } else if (clearPin) {
     result.privacy_pin = null;
-  } else if (rawPin !== '') {
-    result.privacy_pin = rawPin;
+  } else if (validatedPin) {
+    result.privacy_pin = validatedPin;
   }
 
   if (existingMember && memberHasPrivacyPin(existingMember)) {
@@ -1388,7 +1504,7 @@ export function initModals() {
   // PIN 解鎖彈窗操作
   const pinInput = document.getElementById('input-pin-verify');
   pinInput.oninput = () => {
-    pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
+    pinInput.value = sanitizePinInputValue(pinInput.value);
     document.getElementById('pin-modal-error').classList.add('hidden');
   };
 
@@ -1638,7 +1754,10 @@ export function initModals() {
         });
 
     const privacyData = extractPrivacySubmitPayload('mem', existingMember);
-    if (privacyData.error) return showToast(privacyData.error, true);
+    if (privacyData.error) {
+      showPrivacyPinSubmitError('mem', privacyData.error, privacyData.focusField);
+      return showToast(privacyData.error, true);
+    }
 
     const memTargetInput = document.getElementById('mem-target');
     const targetParsed = privacyData.locked
@@ -1735,7 +1854,10 @@ export function initModals() {
         });
 
     const privacyData = extractPrivacySubmitPayload('prof', member);
-    if (privacyData.error) return showToast(privacyData.error, true);
+    if (privacyData.error) {
+      showPrivacyPinSubmitError('prof', privacyData.error, privacyData.focusField);
+      return showToast(privacyData.error, true);
+    }
 
     const profTargetInput = document.getElementById('prof-target');
     const targetParsed = privacyData.locked

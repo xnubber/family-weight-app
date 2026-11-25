@@ -11,6 +11,37 @@ export function isValidPinFormat(pin) {
   return typeof pin === 'string' && /^\d{4}$/.test(pin.trim());
 }
 
+// 僅保留最多 4 位數字（支援全形數字轉半形）
+export function sanitizePinInputValue(raw) {
+  return String(raw ?? '')
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/\D/g, '')
+    .slice(0, 4);
+}
+
+// 驗證設定／變更隱私密碼時的二次輸入確認
+export function validatePinConfirmation(rawPin, rawPinConfirm) {
+  const pin = String(rawPin ?? '').trim();
+  const confirm = String(rawPinConfirm ?? '').trim();
+
+  if (pin === '' && confirm === '') {
+    return { status: 'empty', pin: null };
+  }
+  if (pin === '' && confirm !== '') {
+    return { error: '請先輸入個人 4 位數密碼', focusField: 'pin' };
+  }
+  if (!isValidPinFormat(pin)) {
+    return { error: '個人隱私密碼須為 4 位數字（例如 1234）', focusField: 'pin' };
+  }
+  if (confirm === '') {
+    return { error: '請再次輸入 4 位數密碼以確認', focusField: 'confirm' };
+  }
+  if (pin !== confirm) {
+    return { error: '兩次輸入的密碼不一致，請重新確認', focusField: 'confirm' };
+  }
+  return { status: 'valid', pin };
+}
+
 function readLocalPrivacyMap() {
   try {
     const raw = localStorage.getItem(LOCAL_PRIVACY_STORAGE_KEY);
