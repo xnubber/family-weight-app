@@ -84,6 +84,10 @@ export function initOverviewPullToRefresh({ canPull, isSyncing, onRefresh }) {
 
   const handleTouchMove = (e) => {
     if (!gesture || refreshing || !e.touches || e.touches.length !== 1) return;
+    if (!canPull()) {
+      resetGesture();
+      return;
+    }
     const touch = e.touches[0];
     const dx = touch.clientX - gesture.startX;
     const dy = touch.clientY - gesture.startY;

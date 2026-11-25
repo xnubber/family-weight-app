@@ -308,8 +308,8 @@ button:not(:disabled).is-pressed {
   filter: none;
 }
 
-.member-card:active,
-.member-card.is-pressed {
+.member-card:not(.is-dragging):not(.is-settling):active,
+.member-card:not(.is-dragging):not(.is-settling).is-pressed {
   transform: scale(0.988);
   filter: brightness(0.985);
 }
@@ -500,6 +500,7 @@ button:not(:disabled).is-pressed {
 .member-cards-reordering {
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .member-cards-reordering .member-card {
@@ -507,8 +508,10 @@ button:not(:disabled).is-pressed {
 }
 
 .member-cards-reordering .member-card:not(.is-dragging) {
-  opacity: 0.88;
-  transition: opacity 180ms ease;
+  opacity: 0.9;
+  transition:
+    transform 230ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
 }
 
 .member-card.is-dragging {
@@ -516,15 +519,24 @@ button:not(:disabled).is-pressed {
   z-index: 20;
   border-color: #587864;
   background-color: #ffffff;
-  box-shadow: 0 16px 34px rgba(47, 52, 47, 0.16), 0 0 0 2px rgba(88, 120, 100, 0.18);
+  box-shadow: 0 18px 36px rgba(47, 52, 47, 0.16), 0 0 0 2px rgba(88, 120, 100, 0.18);
   transition: box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
   cursor: grabbing;
 }
 
 .member-card.is-settling {
   position: relative;
-  z-index: 15;
+  z-index: 18;
+  transition:
+    transform 210ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 210ms ease,
+    border-color 210ms ease,
+    background-color 210ms ease;
   pointer-events: none;
+}
+
+.member-cards-snap-reset .member-card {
+  transition: none;
 }
 
 /* 目標達成進度條（原生 <progress>，符合嚴格 style-src 'self' CSP） */
