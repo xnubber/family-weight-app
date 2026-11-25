@@ -810,10 +810,11 @@ export function renderCharts() {
   renderInspectBar();
 
   const baselineWeight = values.length > 0 ? Number(values[0]) : null;
+  const isDaily = state.selectedRange === 'day';
   const datasets = [{
     label: isHidden
-      ? `${member?.name || ''} 體重趨勢（已隱藏數值）`
-      : `${member?.name || ''} 體重 (kg)${state.selectedRange === 'day' ? '' : '（平均）'}`,
+      ? (isDaily ? '體重趨勢' : '平均趨勢')
+      : (isDaily ? '體重 (kg)' : '平均體重 (kg)'),
     data: values,
     borderColor: theme.lineColor,
     backgroundColor: theme.fillColor,
@@ -826,10 +827,10 @@ export function renderCharts() {
 
   if (targetSeries.hasAnyTarget && labels.length > 0) {
     const targetLabel = isHidden
-      ? '目標線（已隱藏數值）'
+      ? '目標線'
       : member?.target_weight
-        ? `目標體重（目前 ${member.target_weight} kg）`
-        : '歷史目標體重 (kg)';
+        ? `目標 ${member.target_weight} kg`
+        : '歷史目標';
     datasets.push({
       label: targetLabel,
       data: targetSeries.values,
@@ -858,14 +859,17 @@ export function renderCharts() {
       plugins: {
         legend: {
           display: true,
-          labels: { color: '#494C45', boxWidth: 12, usePointStyle: true, font: { size: 13 } }
+          labels: { color: '#494C45', boxWidth: 10, boxHeight: 10, padding: 12, usePointStyle: true, font: { size: 12 } }
         },
         tooltip: {
           filter: () => !inspectState.isInspecting,
           callbacks: {
             label: (ctxItem) => {
               if (!isHidden) {
-                return `${ctxItem.dataset.label}: ${ctxItem.parsed.y} kg`;
+                if (ctxItem.datasetIndex === 0) {
+                  return `${isDaily ? '體重' : '平均體重'}：${ctxItem.parsed.y} kg`;
+                }
+                return `目標體重：${ctxItem.parsed.y} kg`;
               }
               if (ctxItem.datasetIndex === 0 && baselineWeight !== null && Number.isFinite(ctxItem.parsed.y)) {
                 const delta = Number((ctxItem.parsed.y - baselineWeight).toFixed(2));
