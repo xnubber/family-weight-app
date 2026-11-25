@@ -478,10 +478,10 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
         : 'text-sage-600';
 
     statsCard.append(
-      createStatCell('區間平均', isHidden ? MASKED_WEIGHT : `${stats.avg} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
+      createStatCell('區間平均', isHidden ? `${MASKED_WEIGHT} kg` : `${stats.avg} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
       createStatCell('區間變化', deltaText === '--' ? '--' : `${deltaText} kg`, deltaColor),
-      createStatCell('區間最低', isHidden ? MASKED_WEIGHT : `${stats.min} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
-      createStatCell('區間最高', isHidden ? MASKED_WEIGHT : `${stats.max} kg`, isHidden ? 'text-ink-400' : 'text-ink')
+      createStatCell('區間最低', isHidden ? `${MASKED_WEIGHT} kg` : `${stats.min} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
+      createStatCell('區間最高', isHidden ? `${MASKED_WEIGHT} kg` : `${stats.max} kg`, isHidden ? 'text-ink-400' : 'text-ink')
     );
   } else {
     statsCard.append(
@@ -876,7 +876,7 @@ export function renderCharts() {
                 const sign = delta > 0 ? '+' : '';
                 return `較區間起點：${sign}${delta.toFixed(2)} kg`;
               }
-              return '目標體重：已隱藏';
+              return `目標體重：${MASKED_WEIGHT} kg`;
             }
           }
         }

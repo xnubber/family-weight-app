@@ -1,7 +1,7 @@
 const LOCAL_PRIVACY_STORAGE_KEY = 'memberPrivacy';
 const UNLOCK_TTL_MS = 5 * 60 * 1000; // 5 分鐘後自動重新遮蔽
 
-export const MASKED_WEIGHT = '••.•';
+export const MASKED_WEIGHT = '∗∗∗';
 
 const unlockedSessions = new Map(); // memberId -> { expiresAt, verifiedPin, timer }
 let onLockChangeCallback = () => {};

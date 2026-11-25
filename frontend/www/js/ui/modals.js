@@ -759,11 +759,11 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         key: 'target_weight',
         label: '目標體重',
         value: isHidden
-          ? (m.target_weight ? '已隱藏' : '未設定')
+          ? (m.target_weight ? `${MASKED_WEIGHT} kg` : '未設定')
           : (m.target_weight ? `${m.target_weight} kg` : '未設定'),
         isEmpty: !m.target_weight,
         editable: true,
-        valueClass: 'font-medium text-right tabular-nums whitespace-nowrap'
+        valueClass: `font-medium text-right tabular-nums whitespace-nowrap ${isHidden && m.target_weight ? 'text-ink-400' : ''}`.trim()
       },
       {
         key: 'privacy',
