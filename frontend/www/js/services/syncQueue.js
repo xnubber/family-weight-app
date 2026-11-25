@@ -9,7 +9,8 @@ import {
   saveLocalPrivacy,
   migrateLocalPrivacy,
   removeLocalPrivacy,
-  unlockMember
+  unlockMember,
+  isMemberWeightHidden
 } from '../utils/privacy.js';
 
 let tempSeq = 0;
@@ -421,7 +422,13 @@ export function optimisticDeleteRecord(rawRecordId) {
   const targetFamilyCode = state.familyCode;
   const currentId = resolveId(rawRecordId);
   const record = state.appData.records.find((r) => r.id === currentId || r.id === rawRecordId);
-  if (!record) return;
+  if (!record) return false;
+
+  const owner = state.appData.members.find((m) => m.id === record.member_id);
+  if (isMemberWeightHidden(owner)) {
+    showToast('隱藏體重狀態下無法刪除紀錄，請先解鎖顯示', true);
+    return false;
+  }
 
   const removedRecord = { ...record };
   state.appData.records = state.appData.records.filter((r) => r.id !== record.id && r.id !== rawRecordId);
@@ -442,6 +449,7 @@ export function optimisticDeleteRecord(rawRecordId) {
       sortRecordsInPlace();
     }
   });
+  return true;
 }
 
 // 6. 樂觀更新成員顯示順序（立即寫入本機排序與畫面，背景同步至雲端 sort_order）

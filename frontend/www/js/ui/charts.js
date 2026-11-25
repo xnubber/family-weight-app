@@ -412,7 +412,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
         'span',
         'leading-snug',
         isHidden
-          ? '隱私模式：已遮蔽體重與刻度'
+          ? '隱私模式：已遮蔽體重並鎖定刪除'
           : '已暫時顯示（5 分鐘或離頁自動隱藏）'
       )
     );
@@ -666,19 +666,28 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
       info.appendChild(createEl('p', 'text-xs text-ink-500 mt-1 leading-relaxed break-words', String(r.note)));
     }
 
-    const delBtn = createEl(
-      'button',
-      'shrink-0 whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2 py-1 rounded-lg',
-      '刪除'
-    );
-    delBtn.type = 'button';
-    delBtn.onclick = () => {
-      if (!confirm('確定刪除此筆體重紀錄？')) return;
-      optimisticDeleteRecord(r.id);
-      showToast('已刪除紀錄');
-    };
-
-    li.append(info, delBtn);
+    if (!isHidden) {
+      const delBtn = createEl(
+        'button',
+        'shrink-0 whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2 py-1 rounded-lg',
+        '刪除'
+      );
+      delBtn.type = 'button';
+      delBtn.onclick = () => {
+        if (isMemberWeightHidden(member)) {
+          showToast('隱藏體重狀態下無法刪除紀錄，請先解鎖顯示', true);
+          renderCharts();
+          return;
+        }
+        if (!confirm('確定刪除此筆體重紀錄？')) return;
+        if (optimisticDeleteRecord(r.id)) {
+          showToast('已刪除紀錄');
+        }
+      };
+      li.append(info, delBtn);
+    } else {
+      li.append(info);
+    }
     return li;
   });
   list.replaceChildren(...items);
