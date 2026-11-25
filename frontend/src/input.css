@@ -677,3 +677,153 @@ button:not(:disabled).is-pressed {
 .goal-progress.goal-progress-dog::-moz-progress-bar {
   background-color: #b68a4c;
 }
+
+/* 冷啟動「晨露扉頁」極速過場 */
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1.5rem 3.5rem;
+  background: radial-gradient(circle at 50% 38%, #fbf9f4 0%, #f6f4ee 64%, #efeae0 100%);
+  opacity: 1;
+  transform: scale(1);
+  will-change: opacity, transform;
+  transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app-splash.is-leaving {
+  opacity: 0;
+  transform: scale(1.02);
+  pointer-events: none;
+}
+
+.app-splash.is-gone {
+  display: none;
+}
+
+.app-splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.app-splash-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: splashIconIn 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.app-splash-halo {
+  position: absolute;
+  inset: -10px;
+  border-radius: 30px;
+  background: radial-gradient(circle, rgba(109, 141, 121, 0.16) 0%, rgba(109, 141, 121, 0) 70%);
+  animation: splashHaloPulse 1.4s ease-in-out infinite;
+}
+
+.app-splash-icon {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 22px;
+  border: 1px solid rgba(229, 224, 213, 0.95);
+  box-shadow: 0 12px 28px -12px rgba(47, 52, 47, 0.16), 0 2px 6px rgba(47, 52, 47, 0.05);
+}
+
+.app-splash-text {
+  margin-top: 1.125rem;
+  animation: splashTextIn 360ms cubic-bezier(0.22, 1, 0.36, 1) 70ms both;
+}
+
+.app-splash-bar {
+  margin-top: 1.25rem;
+  width: 64px;
+  height: 3px;
+  border-radius: 9999px;
+  background-color: #e5e0d5;
+  overflow: hidden;
+  animation: splashTextIn 360ms cubic-bezier(0.22, 1, 0.36, 1) 110ms both;
+}
+
+.app-splash-bar-fill {
+  display: block;
+  width: 48%;
+  height: 100%;
+  border-radius: 9999px;
+  background-color: #6d8d79;
+  animation: splashBarGlide 950ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes splashIconIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes splashTextIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes splashHaloPulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes splashBarGlide {
+  0% {
+    transform: translate3d(-100%, 0, 0);
+  }
+  100% {
+    transform: translate3d(240%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-splash {
+    transition: opacity 120ms ease;
+  }
+
+  .app-splash.is-leaving {
+    transform: none;
+  }
+
+  .app-splash-icon-wrap,
+  .app-splash-halo,
+  .app-splash-text,
+  .app-splash-bar,
+  .app-splash-bar-fill {
+    animation: none;
+  }
+
+  .app-splash-bar-fill {
+    width: 100%;
+    opacity: 0.7;
+  }
+}
+

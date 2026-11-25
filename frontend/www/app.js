@@ -19,6 +19,7 @@ import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 import { initSwipeBackGesture } from './js/utils/swipeBack.js';
 import { initOverviewPullToRefresh } from './js/utils/pullToRefresh.js';
 import { applyMemberOrder } from './js/utils/memberOrder.js';
+import { createSplashController } from './js/utils/splash.js';
 
 const TAB_ORDER = ['overview', 'charts', 'settings'];
 const PAGE_ANIM_CLASSES = [
@@ -337,7 +338,18 @@ initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
 initSettings({ onSync: syncData });
 
+const splash = createSplashController();
+
 // Stale-While-Revalidate：先立即載入本機快取秒開畫面，同時背景向雲端拉取最新資料
-hydrateFromCache();
+const hasCache = hydrateFromCache();
 renderAll();
-syncData();
+
+if (hasCache) {
+  splash.markReady({ hasCache: true });
+  syncData();
+} else {
+  // 首次無快取時，等待首波雲端同步完成（最長 1.2 秒保底自動退場）再淡出扉頁
+  syncData().finally(() => {
+    splash.markReady({ hasCache: false });
+  });
+}
