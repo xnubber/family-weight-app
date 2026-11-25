@@ -632,15 +632,18 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
             : 'text-sage-700';
     }
 
-    // 第 3 欄：家人顯示 BMI（隱私模式僅顯體位狀態）；毛孩優先顯示 BCS 體態評分，未填則顯示一週體重變化幅度（%）
+    // 第 3 欄：家人顯示 BMI（隱私模式僅顯示正常／異常）；毛孩優先顯示 BCS 體態評分，未填則顯示一週體重變化幅度（%）
     let thirdLabel;
     let thirdValue;
     let thirdColor;
     if (isHuman) {
-      thirdLabel = isHidden ? '體位狀態' : 'BMI';
-      thirdValue = bmiRes ? (isHidden ? bmiRes.status : bmiRes.bmi.toFixed(1)) : '--';
+      const isBmiNormal = bmiRes?.status === '正常範圍';
+      thirdLabel = 'BMI';
+      thirdValue = bmiRes
+        ? (isHidden ? (isBmiNormal ? '正常' : '異常') : bmiRes.bmi.toFixed(1))
+        : '--';
       thirdColor = bmiRes
-        ? (bmiRes.status === '正常範圍' ? 'text-sage-700' : 'text-ochre-600')
+        ? (isBmiNormal ? 'text-sage-700' : 'text-ochre-600')
         : 'text-ink-400';
     } else if (bcsMeta) {
       thirdLabel = '體態 BCS';
