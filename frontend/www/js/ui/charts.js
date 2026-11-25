@@ -665,13 +665,42 @@ function syncHistoryFilterUI() {
   }
 }
 
+const WEEKDAY_LABELS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+function formatHistoryDateWithWeekday(ymd, currentYear) {
+  const str = String(ymd || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const [y, m, d] = str.split('-').map(Number);
+  const weekday = WEEKDAY_LABELS[new Date(y, m - 1, d).getDay()] || '';
+  const mm = String(m).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  if (y !== currentYear) {
+    return `${String(y).slice(-2)}/${mm}/${dd} ${weekday}`;
+  }
+  return `${mm}/${dd} ${weekday}`;
+}
+
+function buildPreviousWeightMap(allMemberRecs) {
+  const sorted = (allMemberRecs || [])
+    .slice()
+    .sort((a, b) => String(a.recorded_at || '').localeCompare(String(b.recorded_at || '')));
+  const map = new Map();
+  let prevWeight = null;
+  for (const rec of sorted) {
+    map.set(rec.id, prevWeight);
+    const w = Number(rec.weight_kg);
+    if (Number.isFinite(w)) prevWeight = w;
+  }
+  return map;
+}
+
 function refreshCurrentMemberHistoryOnly(animate = false) {
   const member = state.appData.members.find((m) => m.id === state.selectedMemberId);
   const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
   const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
   const { filteredRecords } = aggregateRecords(recs, state.selectedRange);
   const historyRecords = resolveHistoryRecords(recs, filteredRecords);
-  renderHistoryList(member, memberHistory, historyRecords);
+  renderHistoryList(member, memberHistory, historyRecords, recs);
   if (animate) {
     playSoftFade(document.getElementById('history-list'));
   }
@@ -845,7 +874,7 @@ function bindGlobalHistorySwipeListeners() {
   });
 }
 
-function renderHistoryList(member, memberHistory, filteredRecords) {
+function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs = filteredRecords) {
   const list = document.getElementById('history-list');
   const countEl = document.getElementById('history-count');
   const pagerEl = document.getElementById('history-pagination');
@@ -873,6 +902,8 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   }
 
   const isHidden = isMemberWeightHidden(member);
+  const currentYear = new Date().getFullYear();
+  const prevWeightMap = buildPreviousWeightMap(allMemberRecs);
   const totalPages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
   state.historyPage = Math.min(Math.max(1, Number(state.historyPage) || 1), totalPages);
 
@@ -895,8 +926,8 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
   const items = pageRecords.map((r, idx) => {
     const li = createEl('li', 'history-swipe-row');
-    const contentEl = createEl('div', 'history-swipe-content py-2.5');
-    const info = createEl('div', 'min-w-0');
+    const contentEl = createEl('div', 'history-swipe-content py-2.5 flex items-center gap-2');
+    const info = createEl('div', 'min-w-0 flex-1');
 
     const numericWeight = Number(r.weight_kg);
     const weightDisplay = isHidden
@@ -905,12 +936,31 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
         ? `${numericWeight.toFixed(2)} kg`
         : `${r.weight_kg} kg`;
 
-    // 第 1 行：固定欄寬體重（小數兩位等寬對齊）＋ 垂直對齊之目標差距膠囊（固定列高避免有無膠囊高低不一）
-    const topRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-2 min-h-[22px]');
-    topRow.appendChild(
+    // 較前次紀錄變化（依完整時間序列計算，跨分頁也精準；隱私模式僅顯相對漲跌、不洩露真實體重）
+    const prevWeight = prevWeightMap.has(r.id) ? prevWeightMap.get(r.id) : null;
+    let deltaText = '首次紀錄';
+    let deltaColor = 'text-ink-400';
+    if (prevWeight !== null && Number.isFinite(numericWeight)) {
+      const diff = Number((numericWeight - prevWeight).toFixed(2));
+      if (diff === 0) {
+        deltaText = '— 持平';
+        deltaColor = 'text-ink-400';
+      } else if (diff > 0) {
+        deltaText = `↗ +${diff.toFixed(2)} kg`;
+        deltaColor = 'text-rosewood-600';
+      } else {
+        deltaText = `↘ ${diff.toFixed(2)} kg`;
+        deltaColor = 'text-sage-600';
+      }
+    }
+
+    // 第 1 行：左欄體重 ＋ 中間目標差距膠囊 ＋ 右側較前次變化（固定列高避免有無膠囊高低不一）
+    const topRow = createEl('div', 'flex items-center justify-between gap-1.5 min-h-[22px]');
+    const topLeft = createEl('div', 'flex items-center gap-1.5 min-w-0');
+    topLeft.appendChild(
       createEl(
         'span',
-        `font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+        `w-[5rem] shrink-0 font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
         weightDisplay
       )
     );
@@ -924,7 +974,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
           pillSlot.appendChild(
             createEl(
               'span',
-              'inline-flex items-center rounded-full px-2 py-0.5 text-[12px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
+              'inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
               '已達標'
             )
           );
@@ -938,21 +988,30 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
         pillSlot.appendChild(
           createEl(
             'span',
-            `inline-flex items-center rounded-full px-2 py-0.5 text-[12px] leading-4 font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
+            `inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
             targetGap.compactLabel
           )
         );
       }
     }
-    topRow.appendChild(pillSlot);
+    topLeft.appendChild(pillSlot);
 
-    // 第 2 行：量測日期 ＋ 單行省略備註（同欄寬對齊且固定高度，確保每筆歷史紀錄版面完全一致）
-    const bottomRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-2 h-4 mt-1');
+    const deltaEl = createEl(
+      'span',
+      `shrink-0 text-xs font-medium leading-4 tabular-nums whitespace-nowrap ${deltaColor}`,
+      deltaText
+    );
+    topRow.append(topLeft, deltaEl);
+
+    // 第 2 行：量測日期（含星期幾）＋ 單行省略備註（同欄寬對齊且固定高度，確保每筆歷史紀錄版面完全一致）
+    const bottomRow = createEl('div', 'grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-1.5 h-4 mt-1');
     const dateCell = createEl(
       'span',
-      'text-fluid-label text-ink-400 tabular-nums leading-4 whitespace-nowrap',
-      String(r.recorded_at ?? '')
+      'text-[12px] text-ink-400 tabular-nums leading-4 whitespace-nowrap',
+      formatHistoryDateWithWeekday(r.recorded_at, currentYear)
     );
+    dateCell.setAttribute('title', String(r.recorded_at ?? ''));
+
     const noteSlot = createEl('div', 'min-w-0 flex items-center');
     const noteText = String(r.note ?? '').trim();
     if (noteText) {
@@ -982,6 +1041,11 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
     if (!isHidden) {
       li.dataset.swipeDeleteRow = 'true';
+
+      // 極右緣淡色左滑提示細線（低調提示可左滑刪除，隱藏體重時不顯示）
+      const swipeCue = createEl('span', 'history-swipe-cue');
+      swipeCue.setAttribute('aria-hidden', 'true');
+      contentEl.appendChild(swipeCue);
 
       const triggerDelete = () => {
         if (isMemberWeightHidden(member)) {
@@ -1067,7 +1131,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
   const goToPage = (targetPage) => {
     state.historyPage = targetPage;
-    renderHistoryList(member, memberHistory, filteredRecords);
+    renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs);
     playSoftFade(list);
   };
 
@@ -1208,7 +1272,7 @@ export function renderCharts() {
   if (emptyStateEl) emptyStateEl.classList.toggle('hidden', hasData);
 
   if (!hasData) {
-    renderHistoryList(member, memberHistory, historyRecords);
+    renderHistoryList(member, memberHistory, historyRecords, recs);
     return;
   }
 
@@ -1349,7 +1413,7 @@ export function renderCharts() {
     }
   });
 
-  renderHistoryList(member, memberHistory, historyRecords);
+  renderHistoryList(member, memberHistory, historyRecords, recs);
 }
 
 export function initChartRangeControls({ onRangeChange }) {

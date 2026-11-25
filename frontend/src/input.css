@@ -615,6 +615,25 @@ button:not(:disabled).is-pressed {
   transition: none;
 }
 
+.history-swipe-cue {
+  width: 3px;
+  height: 22px;
+  border-radius: 9999px;
+  background-color: #e4dfd4;
+  flex-shrink: 0;
+  transition: background-color 160ms ease, opacity 160ms ease;
+}
+
+@media (hover: hover) {
+  .history-swipe-row:hover .history-swipe-cue {
+    background-color: #cfc8b8;
+  }
+}
+
+.history-swipe-row.is-swiping .history-swipe-cue {
+  background-color: #c9898d;
+}
+
 /* 目標達成進度條（原生 <progress>，符合嚴格 style-src 'self' CSP） */
 .goal-progress {
   appearance: none;
