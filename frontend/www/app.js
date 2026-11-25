@@ -4,10 +4,18 @@ import { initSyncQueue, flushQueue, getPendingCount } from './js/services/syncQu
 import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.js';
 import { renderOverview } from './js/ui/overview.js';
 import { renderCharts, initChartRangeControls, resizeChart } from './js/ui/charts.js';
-import { openProfileModal, openMemberModal, initModals, refreshOpenProfileModalIfAny } from './js/ui/modals.js';
+import {
+  openProfileModal,
+  openMemberModal,
+  initModals,
+  refreshOpenProfileModalIfAny,
+  hasOpenModal,
+  handleModalBackAction
+} from './js/ui/modals.js';
 import { initSettings, renderSettingsMembers } from './js/ui/settings.js';
 import { initPrivacyLifecycle } from './js/utils/privacy.js';
 import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
+import { initSwipeBackGesture } from './js/utils/swipeBack.js';
 
 const TAB_ORDER = ['overview', 'charts', 'settings'];
 const PAGE_ANIM_CLASSES = [
@@ -21,6 +29,8 @@ let isFetching = false;
 let syncRequestSeq = 0;
 let currentTab = 'overview';
 let tabTransitionSeq = 0;
+const tabHistory = ['overview'];
+let lastRootBackPromptAt = 0;
 
 function refreshSyncIndicator() {
   updateSyncIndicator({ pendingCount: getPendingCount(), isFetching });
@@ -31,7 +41,22 @@ function clearPageAnimClasses(section) {
   section.classList.remove(...PAGE_ANIM_CLASSES);
 }
 
-function switchTab(tabName) {
+function canGoBack() {
+  return hasOpenModal() || tabHistory.length > 1 || currentTab !== 'overview';
+}
+
+// 單一哨兵歷史狀態：讓 Android 系統邊緣返回手勢與瀏覽器返回鍵能優雅逐層返回，不直接跳出 App
+function ensureHistoryBackTrap() {
+  if (typeof window === 'undefined' || !window.history || typeof window.history.pushState !== 'function') {
+    return;
+  }
+  if (!canGoBack()) return;
+  if (!window.history.state || !window.history.state.appBackTrap) {
+    window.history.pushState({ appBackTrap: true }, '');
+  }
+}
+
+function switchTab(tabName, { pushHistory = true } = {}) {
   const nextSection = document.getElementById(`view-${tabName}`);
   if (!nextSection) return;
 
@@ -51,6 +76,10 @@ function switchTab(tabName) {
   const seq = ++tabTransitionSeq;
 
   currentTab = tabName;
+  if (pushHistory && tabHistory[tabHistory.length - 1] !== tabName) {
+    tabHistory.push(tabName);
+    if (tabHistory.length > 20) tabHistory.shift();
+  }
 
   // 先更新底部導覽列狀態，給予即時視覺回饋
   document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('tab-active'));
@@ -92,11 +121,33 @@ function switchTab(tabName) {
     nextFrame(() => resizeChart());
   }
 
+  ensureHistoryBackTrap();
+
   setTimeout(() => {
     if (seq === tabTransitionSeq) {
       clearPageAnimClasses(nextSection);
     }
   }, 300);
+}
+
+// 全站統一返回邏輯：優先逐層關閉彈窗／原地編輯，其次回到上一個分頁，最後回到總覽
+function handleAppBack() {
+  if (handleModalBackAction()) {
+    return true;
+  }
+  if (tabHistory.length > 1) {
+    tabHistory.pop();
+    const targetTab = tabHistory[tabHistory.length - 1] || 'overview';
+    switchTab(targetTab, { pushHistory: false });
+    return true;
+  }
+  if (currentTab !== 'overview') {
+    tabHistory.length = 0;
+    tabHistory.push('overview');
+    switchTab('overview', { pushHistory: false });
+    return true;
+  }
+  return false;
 }
 
 function formatCompactFamilyCode(code) {
@@ -197,6 +248,32 @@ window.addEventListener('beforeunload', (e) => {
   }
 });
 
+// 監聽彈窗開啟事件，補上 History 返回哨兵，並攔截系統邊緣返回／瀏覽器返回鍵
+window.addEventListener('app:nav-state-change', ensureHistoryBackTrap);
+
+if (typeof window.history?.replaceState === 'function') {
+  window.history.replaceState({ appRoot: true }, '');
+}
+
+window.addEventListener('popstate', () => {
+  const handled = handleAppBack();
+  if (handled && canGoBack()) {
+    ensureHistoryBackTrap();
+  }
+});
+
+// 若以 Capacitor Android APK 執行且載入 App 外掛，同步接管系統返回鍵／系統邊緣滑動返回
+window.Capacitor?.Plugins?.App?.addListener?.('backButton', () => {
+  if (handleAppBack()) return;
+  const now = Date.now();
+  if (now - lastRootBackPromptAt < 1800) {
+    window.Capacitor?.Plugins?.App?.exitApp?.();
+  } else {
+    lastRootBackPromptAt = now;
+    showToast('再返回一次即可離開 APP');
+  }
+});
+
 // 初始化隱私自動上鎖生命週期（逾時 5 分鐘或切換畫面時自動重新遮蔽體重）
 initPrivacyLifecycle({ onLockChange: renderAll });
 
@@ -219,6 +296,10 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
 document.getElementById('btn-refresh').onclick = syncData;
 
 initTapFeedback();
+initSwipeBackGesture({
+  canGoBack,
+  onBack: handleAppBack
+});
 initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
 initSettings({ onSync: syncData });

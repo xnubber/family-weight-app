@@ -329,6 +329,7 @@ button:not(:disabled).is-pressed {
 
   .modal-overlay .modal-sheet,
   .tab-active .nav-icon-wrap,
+  .swipe-back-indicator,
   button:not(:disabled):active,
   button:not(:disabled).is-pressed,
   .nav-btn:active,
@@ -337,6 +338,72 @@ button:not(:disabled).is-pressed {
   .member-card.is-pressed {
     transform: none;
   }
+}
+
+/* 手機左／右邊緣滑動返回視覺指示膠囊（純 CSS 類別控制，符合嚴格 CSP） */
+.swipe-back-indicator {
+  position: fixed;
+  top: 50%;
+  z-index: 70;
+  width: 34px;
+  height: 44px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(252, 251, 248, 0.94);
+  color: #555952;
+  border: 1px solid #e5e0d5;
+  box-shadow: 0 6px 20px rgba(47, 52, 47, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 150ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+  will-change: transform, opacity;
+}
+
+.swipe-back-indicator.from-left {
+  left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  transform: translate3d(-100%, -50%, 0);
+}
+
+.swipe-back-indicator.from-right {
+  right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  transform: translate3d(100%, -50%, 0);
+}
+
+.swipe-back-indicator.from-left.is-pulling {
+  opacity: 0.92;
+  transform: translate3d(-6px, -50%, 0);
+}
+
+.swipe-back-indicator.from-right.is-pulling {
+  opacity: 0.92;
+  transform: translate3d(6px, -50%, 0);
+}
+
+.swipe-back-indicator.from-left.is-ready {
+  opacity: 1;
+  background-color: #587864;
+  border-color: #456150;
+  color: #fcfbf8;
+  transform: translate3d(8px, -50%, 0) scale(1.06);
+}
+
+.swipe-back-indicator.from-right.is-ready {
+  opacity: 1;
+  background-color: #587864;
+  border-color: #456150;
+  color: #fcfbf8;
+  transform: translate3d(-8px, -50%, 0) scale(1.06);
 }
 
 /* 目標達成進度條（原生 <progress>，符合嚴格 style-src 'self' CSP） */

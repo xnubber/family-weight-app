@@ -1235,13 +1235,52 @@ function extractPrivacySubmitPayload(prefix, existingMember) {
   return result;
 }
 
-export function initModals() {
-  const clearProfileModalState = () => {
-    activeProfileContext = null;
-    activeProfileInlineField = null;
-    setInlineAvatarDrawer(false);
-  };
+const MODAL_BACK_STACK = ['modal-pin', 'modal-record', 'modal-member', 'modal-profile'];
 
+function clearProfileModalState() {
+  activeProfileContext = null;
+  activeProfileInlineField = null;
+  setInlineAvatarDrawer(false);
+}
+
+export function hasOpenModal() {
+  return MODAL_BACK_STACK.some((id) => isModalOpen(id));
+}
+
+// 統一返回動作（供手機左／右滑返回、Android 系統返回鍵與 Esc 鍵共用）
+export function handleModalBackAction() {
+  for (const id of MODAL_BACK_STACK) {
+    if (!isModalOpen(id)) continue;
+
+    if (id === 'modal-profile') {
+      if (isInlineAvatarDrawerOpen) {
+        setInlineAvatarDrawer(false);
+        return true;
+      }
+      if (activeProfileInlineField && activeProfileContext) {
+        activeProfileInlineField = null;
+        openProfileModal(activeProfileContext.memberId, {
+          onNavigateToChart: activeProfileContext.onNavigateToChart
+        });
+        return true;
+      }
+      const editFields = document.getElementById('prof-edit-fields');
+      if (editFields && !editFields.classList.contains('hidden')) {
+        // 完整編輯模式先退回個人資訊檢視模式
+        document.getElementById('btn-prof-cancel-edit')?.click?.();
+        return true;
+      }
+      clearProfileModalState();
+    }
+
+    closeModal(id);
+    if (id === 'modal-pin') activePinRequest = null;
+    return true;
+  }
+  return false;
+}
+
+export function initModals() {
   // 關閉按鈕
   document.querySelectorAll('.btn-close-modal').forEach((btn) => {
     btn.onclick = () => {
@@ -1263,31 +1302,10 @@ export function initModals() {
     });
   });
 
-  // 支援 Esc 鍵：若個人資訊面板有展開原地編輯或頭像抽屜則先收合，否則平滑關閉最上層彈窗
+  // 支援 Esc 鍵：沿用統一返回邏輯逐層收合彈窗／原地編輯／頭像抽屜
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    const stack = ['modal-pin', 'modal-record', 'modal-member', 'modal-profile'];
-    for (const id of stack) {
-      if (isModalOpen(id)) {
-        if (id === 'modal-profile') {
-          if (isInlineAvatarDrawerOpen) {
-            setInlineAvatarDrawer(false);
-            break;
-          }
-          if (activeProfileInlineField && activeProfileContext) {
-            activeProfileInlineField = null;
-            openProfileModal(activeProfileContext.memberId, {
-              onNavigateToChart: activeProfileContext.onNavigateToChart
-            });
-            break;
-          }
-          clearProfileModalState();
-        }
-        closeModal(id);
-        if (id === 'modal-pin') activePinRequest = null;
-        break;
-      }
-    }
+    handleModalBackAction();
   });
 
   // PIN 解鎖彈窗操作

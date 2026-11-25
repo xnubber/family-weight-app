@@ -65,6 +65,9 @@ export function openModal(modalOrId) {
   nextFrame(() => {
     nextFrame(() => {
       modal.classList.add('is-open');
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('app:nav-state-change'));
+      }
     });
   });
 }
