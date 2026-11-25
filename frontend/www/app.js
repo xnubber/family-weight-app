@@ -1,8 +1,8 @@
 import { state } from './js/state.js';
 import { FamilyAPI } from './js/services/api.js';
-import { initSyncQueue, flushQueue, getPendingCount } from './js/services/syncQueue.js';
+import { initSyncQueue, flushQueue, getPendingCount, optimisticReorderMembers } from './js/services/syncQueue.js';
 import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.js';
-import { renderOverview } from './js/ui/overview.js';
+import { renderOverview, isOverviewReordering } from './js/ui/overview.js';
 import { renderCharts, initChartRangeControls, resizeChart } from './js/ui/charts.js';
 import {
   openProfileModal,
@@ -17,6 +17,7 @@ import { initPrivacyLifecycle } from './js/utils/privacy.js';
 import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 import { initSwipeBackGesture } from './js/utils/swipeBack.js';
 import { initOverviewPullToRefresh } from './js/utils/pullToRefresh.js';
+import { applyMemberOrder } from './js/utils/memberOrder.js';
 
 const TAB_ORDER = ['overview', 'charts', 'settings'];
 const PAGE_ANIM_CLASSES = [
@@ -170,7 +171,11 @@ function renderAll() {
           switchTab('charts');
           renderCharts();
         }
-      })
+      }),
+    onReorderMembers: (orderedIds) => {
+      optimisticReorderMembers(orderedIds);
+      showToast('已更新成員順序');
+    }
   });
   renderCharts();
   renderSettingsMembers({
@@ -183,7 +188,7 @@ function hydrateFromCache() {
   const cached = loadFamilyCache(state.familyCode);
   if (!cached) return false;
   state.appData = {
-    members: cached.members,
+    members: applyMemberOrder(cached.members, state.familyCode),
     records: cached.records,
     targetHistory: cached.targetHistory
   };
@@ -212,7 +217,7 @@ async function syncData() {
     if (getPendingCount() > 0) return;
 
     state.appData = {
-      members: data.members || [],
+      members: applyMemberOrder(data.members || [], targetFamilyCode),
       records: data.records || [],
       targetHistory: data.targetHistory || []
     };
@@ -300,11 +305,11 @@ document.getElementById('btn-refresh').onclick = syncData;
 
 initTapFeedback();
 initSwipeBackGesture({
-  canGoBack,
+  canGoBack: () => !isOverviewReordering() && canGoBack(),
   onBack: handleAppBack
 });
 initOverviewPullToRefresh({
-  canPull: () => currentTab === 'overview' && !hasOpenModal(),
+  canPull: () => currentTab === 'overview' && !hasOpenModal() && !isOverviewReordering(),
   isSyncing: () => isFetching,
   onRefresh: async () => {
     const ok = await syncData();

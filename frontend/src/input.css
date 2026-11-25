@@ -468,6 +468,55 @@ button:not(:disabled).is-pressed {
   transform: rotate(180deg);
 }
 
+/* 總覽成員卡片拖拉排序樣式（純 CSS 類別控制，符合嚴格 CSP） */
+.card-drag-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2px 0 8px;
+  margin-top: -6px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.card-drag-handle:active {
+  cursor: grabbing;
+}
+
+.card-drag-bar {
+  width: 30px;
+  height: 4px;
+  border-radius: 9999px;
+  background-color: #e2dcd0;
+  transition: background-color 160ms ease, width 160ms ease;
+}
+
+.card-drag-handle:hover .card-drag-bar,
+.member-card.is-dragging .card-drag-bar {
+  width: 38px;
+  background-color: #587864;
+}
+
+.member-cards-reordering {
+  touch-action: none;
+  user-select: none;
+}
+
+.member-cards-reordering .member-card:not(.is-dragging) {
+  opacity: 0.78;
+  transform: scale(0.99);
+}
+
+.member-card.is-dragging {
+  position: relative;
+  z-index: 15;
+  border-color: #587864;
+  background-color: #ffffff;
+  box-shadow: 0 12px 28px rgba(47, 52, 47, 0.16), 0 0 0 2px rgba(88, 120, 100, 0.2);
+  transform: scale(1.02);
+  cursor: grabbing;
+}
+
 /* 目標達成進度條（原生 <progress>，符合嚴格 style-src 'self' CSP） */
 .goal-progress {
   appearance: none;

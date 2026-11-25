@@ -162,6 +162,14 @@ export const verifyPinSchema = z.strictObject({
   pin: z.string().trim().regex(/^\d{4}$/, '請輸入 4 位數字密碼')
 });
 
+export const reorderMembersSchema = z.strictObject({
+  member_ids: z
+    .array(uuidSchema, { message: '成員排序清單格式不正確' })
+    .min(1, '排序清單不可為空')
+    .max(100, '排序清單過長')
+    .refine((ids) => new Set(ids).size === ids.length, '排序清單不可包含重複成員')
+});
+
 export const createRecordSchema = z.strictObject({
   family_code: z.string().optional(),
   member_id: uuidSchema,

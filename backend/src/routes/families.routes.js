@@ -54,13 +54,22 @@ router.get('/:familyCode/data', asyncHandler(async (req, res) => {
     targetHistory = historyRes.data || [];
   }
 
+  const sortedMembers = [...(membersRes.data || [])]
+    .sort((a, b) => {
+      const aOrder = Number.isInteger(a.sort_order) ? a.sort_order : Number.MAX_SAFE_INTEGER;
+      const bOrder = Number.isInteger(b.sort_order) ? b.sort_order : Number.MAX_SAFE_INTEGER;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    })
+    .map(sanitizeMember);
+
   logger.info('讀取家庭資料成功', {
-    membersCount: membersRes.data.length,
+    membersCount: sortedMembers.length,
     recordsCount: recordsRes.data.length,
     targetHistoryCount: targetHistory.length
   });
   res.json({
-    members: membersRes.data.map(sanitizeMember),
+    members: sortedMembers,
     records: recordsRes.data,
     targetHistory
   });

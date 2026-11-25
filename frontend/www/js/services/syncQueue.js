@@ -4,6 +4,7 @@ import { showToast } from '../utils/dom.js';
 import { getLocalTodayDate } from '../utils/metrics.js';
 import { isTempId } from '../utils/validation.js';
 import { saveLocalAvatar, migrateLocalAvatar, removeLocalAvatar } from '../utils/avatars.js';
+import { saveLocalMemberOrder } from '../utils/memberOrder.js';
 import {
   saveLocalPrivacy,
   migrateLocalPrivacy,
@@ -439,6 +440,53 @@ export function optimisticDeleteRecord(rawRecordId) {
       const restoredId = resolveId(rawRecordId);
       state.appData.records.push({ ...removedRecord, id: restoredId });
       sortRecordsInPlace();
+    }
+  });
+}
+
+// 6. 樂觀更新成員顯示順序（立即寫入本機排序與畫面，背景同步至雲端 sort_order）
+export function optimisticReorderMembers(orderedIds) {
+  const targetFamilyCode = state.familyCode;
+  if (!Array.isArray(orderedIds) || orderedIds.length <= 1) return;
+
+  const prevMembers = state.appData.members.map((m) => ({ ...m }));
+  const prevOrderIds = prevMembers.map((m) => m.id);
+  const rankMap = new Map(orderedIds.map((id, idx) => [id, idx]));
+
+  const nextMembers = [...state.appData.members]
+    .sort((a, b) => {
+      const ra = rankMap.has(a.id) ? rankMap.get(a.id) : Number.MAX_SAFE_INTEGER;
+      const rb = rankMap.has(b.id) ? rankMap.get(b.id) : Number.MAX_SAFE_INTEGER;
+      return ra - rb;
+    })
+    .map((m, idx) => ({ ...m, sort_order: idx }));
+
+  const nextOrderIds = nextMembers.map((m) => m.id);
+  if (
+    prevOrderIds.length === nextOrderIds.length &&
+    prevOrderIds.every((id, idx) => id === nextOrderIds[idx])
+  ) {
+    return;
+  }
+
+  state.appData.members = nextMembers;
+  saveLocalMemberOrder(targetFamilyCode, nextOrderIds);
+  onRenderCallback();
+
+  enqueue({
+    familyCode: targetFamilyCode,
+    errorPrefix: '成員排序同步失敗，已還原',
+    run: async () => {
+      const resolvedIds = nextOrderIds
+        .map((id) => resolveId(id))
+        .filter((id) => !isTempId(id));
+      if (resolvedIds.length === 0) return;
+      await FamilyAPI.reorderMembers(targetFamilyCode, resolvedIds);
+    },
+    rollback: () => {
+      saveLocalMemberOrder(targetFamilyCode, prevOrderIds);
+      if (state.familyCode !== targetFamilyCode) return;
+      state.appData.members = prevMembers;
     }
   });
 }

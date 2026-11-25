@@ -47,8 +47,153 @@ function createMetricCell(labelText, valueText, valueClass = 'text-ink-700') {
   return cell;
 }
 
-export function renderOverview({ onSelectMember }) {
+const LONG_PRESS_REORDER_MS = 240;
+const MOVE_CANCEL_THRESHOLD_PX = 10;
+
+let dragState = null;
+let suppressCardClickUntil = 0;
+let dragGlobalListenersBound = false;
+let activeReorderCallback = null;
+
+export function isOverviewReordering() {
+  return Boolean(dragState && dragState.active);
+}
+
+function getOrderedCardIds(container) {
+  if (!container) return [];
+  return Array.from(container.children)
+    .map((el) => el.dataset?.memberId)
+    .filter(Boolean);
+}
+
+function bindGlobalDragListeners() {
+  if (dragGlobalListenersBound || typeof window === 'undefined' || typeof document === 'undefined') {
+    return;
+  }
+  dragGlobalListenersBound = true;
+
+  // 拖拉進行中阻擋行動裝置預設頁面捲動（僅在真正進入拖拉狀態時介入）
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      if (dragState && dragState.active && e.cancelable) {
+        e.preventDefault();
+      }
+    },
+    { passive: false }
+  );
+
+  window.addEventListener('pointermove', (e) => {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+
+    if (!dragState.active) {
+      if (dragState.fromHandle && Math.hypot(dx, dy) >= 4) {
+        activateCardDrag();
+      } else if (!dragState.fromHandle && Math.hypot(dx, dy) > MOVE_CANCEL_THRESHOLD_PX) {
+        cancelCardDrag();
+        return;
+      } else {
+        return;
+      }
+    }
+
+    const container = dragState.container;
+    const draggingCard = dragState.card;
+    if (!container || !draggingCard) return;
+
+    const siblings = Array.from(container.children).filter(
+      (el) => el !== draggingCard && el.dataset?.memberId
+    );
+    for (const sib of siblings) {
+      const rect = sib.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const draggingRect = draggingCard.getBoundingClientRect();
+      const isBefore = draggingRect.top < rect.top;
+
+      if (isBefore && e.clientY > midY) {
+        container.insertBefore(draggingCard, sib.nextSibling);
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(8);
+        }
+        break;
+      } else if (!isBefore && e.clientY < midY) {
+        container.insertBefore(draggingCard, sib);
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(8);
+        }
+        break;
+      }
+    }
+
+    // 接近視窗上下緣時輕柔捲動，方便成員較多時跨屏調整順序
+    const vh = window.innerHeight || 0;
+    if (vh > 0 && typeof window.scrollBy === 'function') {
+      if (e.clientY < 88) {
+        window.scrollBy(0, -10);
+      } else if (e.clientY > vh - 96) {
+        window.scrollBy(0, 10);
+      }
+    }
+  });
+
+  const finishDrag = (e) => {
+    if (!dragState) return;
+    if (e && e.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
+
+    const { active, container, card, initialOrder } = dragState;
+    if (dragState.timer) clearTimeout(dragState.timer);
+    dragState = null;
+
+    if (card) card.classList.remove('is-dragging');
+    if (container) container.classList.remove('member-cards-reordering');
+
+    if (active) {
+      suppressCardClickUntil = Date.now() + 280;
+      const nextOrder = getOrderedCardIds(container);
+      const changed =
+        nextOrder.length === initialOrder.length &&
+        nextOrder.some((id, idx) => id !== initialOrder[idx]);
+      if (changed && typeof activeReorderCallback === 'function') {
+        activeReorderCallback(nextOrder);
+      }
+    }
+  };
+
+  window.addEventListener('pointerup', finishDrag);
+  window.addEventListener('pointercancel', finishDrag);
+}
+
+function activateCardDrag() {
+  if (!dragState || dragState.active) return;
+  if (dragState.timer) {
+    clearTimeout(dragState.timer);
+    dragState.timer = null;
+  }
+  dragState.active = true;
+  dragState.card.classList.add('is-dragging');
+  dragState.container.classList.add('member-cards-reordering');
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(14);
+  }
+}
+
+function cancelCardDrag() {
+  if (!dragState) return;
+  if (dragState.timer) clearTimeout(dragState.timer);
+  if (dragState.card) dragState.card.classList.remove('is-dragging');
+  if (dragState.container) dragState.container.classList.remove('member-cards-reordering');
+  dragState = null;
+}
+
+export function renderOverview({ onSelectMember, onReorderMembers = null }) {
   const container = document.getElementById('member-cards');
+  activeReorderCallback = onReorderMembers;
+  cancelCardDrag();
+  bindGlobalDragListeners();
+
   if (state.appData.members.length === 0) {
     const emptyBox = createEl(
       'div',
@@ -58,6 +203,8 @@ export function renderOverview({ onSelectMember }) {
     container.replaceChildren(emptyBox);
     return;
   }
+
+  const canReorder = state.appData.members.length > 1 && typeof onReorderMembers === 'function';
 
   const cards = state.appData.members.map((m) => {
     const recs = state.appData.records.filter((r) => r.member_id === m.id);
@@ -82,7 +229,39 @@ export function renderOverview({ onSelectMember }) {
       'member-card journal-card cursor-pointer p-4 rounded-2xl'
     );
     card.dataset.memberId = String(m.id);
-    card.onclick = () => onSelectMember(m.id);
+    card.onclick = () => {
+      if (Date.now() < suppressCardClickUntil) return;
+      onSelectMember(m.id);
+    };
+
+    if (canReorder) {
+      const handle = createEl('div', 'card-drag-handle');
+      handle.dataset.dragHandle = 'true';
+      handle.setAttribute('title', '拖拉調整順序');
+      handle.setAttribute('aria-label', '拖拉調整順序');
+      handle.appendChild(createEl('span', 'card-drag-bar'));
+      handle.onclick = (e) => e.stopPropagation();
+      card.appendChild(handle);
+
+      card.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        const fromHandle = Boolean(e.target?.closest?.('[data-drag-handle]'));
+        cancelCardDrag();
+        dragState = {
+          pointerId: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          fromHandle,
+          active: false,
+          container,
+          card,
+          initialOrder: getOrderedCardIds(container),
+          timer: fromHandle
+            ? null
+            : setTimeout(() => activateCardDrag(), LONG_PRESS_REORDER_MS)
+        };
+      });
+    }
 
     // 上排：左為頭像與名稱／更新日（長名稱優雅折行），右為當前體重（不換行不被擠壓）
     const topRow = createEl('div', 'flex justify-between items-center gap-3');

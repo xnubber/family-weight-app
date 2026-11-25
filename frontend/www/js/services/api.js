@@ -74,6 +74,8 @@ export const FamilyAPI = {
     request('/members', familyCode, { method: 'POST', body: JSON.stringify({ ...payload, family_code: familyCode }) }),
   updateMember: (familyCode, id, payload) =>
     request(`/members/${encodeURIComponent(id)}`, familyCode, { method: 'PUT', body: JSON.stringify(payload) }),
+  reorderMembers: (familyCode, memberIds) =>
+    request('/members/reorder', familyCode, { method: 'PUT', body: JSON.stringify({ member_ids: memberIds }) }),
   verifyMemberPin: (familyCode, id, pin) =>
     request(`/members/${encodeURIComponent(id)}/verify-pin`, familyCode, { method: 'POST', body: JSON.stringify({ pin }) }),
   deleteMember: (familyCode, id) =>

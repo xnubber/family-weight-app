@@ -7,6 +7,7 @@ import {
   createMemberSchema,
   updateMemberSchema,
   verifyPinSchema,
+  reorderMembersSchema,
   formatZodError
 } from '../schemas/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -45,7 +46,8 @@ const OPTIONAL_MEMBER_COLUMNS = [
   'breed',
   'birth_date',
   'bcs_score',
-  'pet_activity_factor'
+  'pet_activity_factor',
+  'sort_order'
 ];
 
 function detectMissingOptionalColumn(error) {
@@ -192,6 +194,45 @@ router.post('/', asyncHandler(async (req, res) => {
 
   logger.info('新增成員成功', { id: data.id, type });
   res.status(201).json(sanitizeMember(data));
+}));
+
+// 批量更新成員顯示順序（必須定義於 PUT /:id 之前）
+router.put('/reorder', asyncHandler(async (req, res) => {
+  const bodyParsed = reorderMembersSchema.safeParse(req.body);
+  if (!bodyParsed.success) {
+    return res.status(400).json({ error: formatZodError(bodyParsed.error) });
+  }
+
+  const resolved = resolveFamilyCode(req);
+  if (resolved.errorStatus) {
+    return res.status(resolved.errorStatus).json({ error: resolved.errorMessage });
+  }
+  const { familyCode } = resolved;
+  const { member_ids } = bodyParsed.data;
+  const supabase = getSupabaseClient();
+
+  const results = await Promise.all(
+    member_ids.map((memberId, index) =>
+      supabase
+        .from('members')
+        .update({ sort_order: index })
+        .eq('id', memberId)
+        .eq('family_code', familyCode)
+    )
+  );
+
+  const firstErr = results.find((r) => r.error)?.error || null;
+  if (firstErr) {
+    if (detectMissingOptionalColumn(firstErr) === 'sort_order') {
+      logger.warn('members 表尚未新增 sort_order 欄位，已略過雲端排序寫入（請執行 backend/sql/006_member_sort_order.sql）');
+      return res.json({ synced: false, migration_required: true });
+    }
+    logger.error('更新成員排序失敗', { error: firstErr.message });
+    return res.status(500).json({ error: '更新成員排序失敗，請稍後再試' });
+  }
+
+  logger.info('更新成員排序成功', { count: member_ids.length });
+  return res.json({ synced: true, count: member_ids.length });
 }));
 
 // 更新成員資料（名稱、頭像、品種、生日、BCS、活動係數、隱私設定、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼

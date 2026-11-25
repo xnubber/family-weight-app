@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.members (
     CONSTRAINT members_target_weight_check CHECK (target_weight IS NULL OR (target_weight >= 0.1 AND target_weight <= 500)),
   hide_weight BOOLEAN NOT NULL DEFAULT FALSE,
   privacy_pin_hash TEXT,
+  sort_order INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

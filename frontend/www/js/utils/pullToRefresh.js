@@ -8,7 +8,7 @@ const MIN_SYNC_DISPLAY_MS = 380;
 
 function isExcludedTarget(target) {
   if (!target || typeof target.closest !== 'function') return false;
-  return Boolean(target.closest('input, textarea, select, [data-no-pull-refresh]'));
+  return Boolean(target.closest('input, textarea, select, [data-drag-handle], [data-no-pull-refresh]'));
 }
 
 /**
