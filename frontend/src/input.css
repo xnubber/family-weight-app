@@ -566,6 +566,55 @@ button:not(:disabled).is-pressed {
   pointer-events: none;
 }
 
+/* 歷史紀錄右往左滑動刪除（僅顯示垃圾桶圖標，零行內 style 屬性、符合嚴格 CSP） */
+.history-swipe-row {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.history-swipe-action {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  bottom: 4px;
+  width: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #b4535a;
+  color: #fcfbf8;
+  border-radius: 0.75rem;
+  transition: background-color 160ms ease, width 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.history-swipe-action svg {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.history-swipe-row.is-armed .history-swipe-action {
+  background-color: #9f3e46;
+  width: 100%;
+  justify-content: flex-end;
+  padding-right: 1.35rem;
+}
+
+.history-swipe-row.is-armed .history-swipe-action svg {
+  transform: scale(1.18);
+}
+
+.history-swipe-content {
+  position: relative;
+  z-index: 1;
+  background-color: #fcfbf8;
+  will-change: transform;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.history-swipe-row.is-swiping .history-swipe-content {
+  transition: none;
+}
+
 /* 目標達成進度條（原生 <progress>，符合嚴格 style-src 'self' CSP） */
 .goal-progress {
   appearance: none;

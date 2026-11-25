@@ -677,11 +677,182 @@ function refreshCurrentMemberHistoryOnly(animate = false) {
   }
 }
 
+const SWIPE_ACTION_WIDTH_PX = 64;
+const SWIPE_OPEN_THRESHOLD_PX = 32;
+const SWIPE_ARM_DELETE_PX = 132;
+const SWIPE_LOCK_PX = 8;
+const SWIPE_SYNTHETIC_MOUSE_GUARD_MS = 700;
+
+let activeHistorySwipe = null;
+let openHistorySwipeRow = null; // { row, content }
+let historySwipeListenersBound = false;
+let suppressHistoryClickUntil = 0;
+let lastHistorySwipeTouchAt = 0;
+
+function closeOpenHistorySwipeRow(exceptRow = null) {
+  if (!openHistorySwipeRow || openHistorySwipeRow.row === exceptRow) return;
+  const { row, content } = openHistorySwipeRow;
+  openHistorySwipeRow = null;
+  row.classList.remove('is-swiping', 'is-armed');
+  if (content?.style) content.style.transform = 'translate3d(0, 0, 0)';
+}
+
+function updateHistorySwipeMove(clientX, clientY, nativeEvent = null) {
+  if (!activeHistorySwipe) return;
+  const s = activeHistorySwipe;
+  const dx = clientX - s.startX;
+  const dy = clientY - s.startY;
+
+  if (s.locked === null) {
+    if (Math.hypot(dx, dy) < SWIPE_LOCK_PX) return;
+    if (Math.abs(dy) > Math.abs(dx) * 0.8) {
+      s.locked = 'vertical';
+      return;
+    }
+    if (s.baseOffset === 0 && dx >= 0) {
+      s.locked = 'ignore';
+      return;
+    }
+    s.locked = 'horizontal';
+    closeOpenHistorySwipeRow(s.row);
+    s.row.classList.add('is-swiping');
+  }
+
+  if (s.locked !== 'horizontal') return;
+  if (s.inputKind === 'touch' && nativeEvent?.cancelable) {
+    nativeEvent.preventDefault();
+  }
+
+  const rawX = s.baseOffset + dx;
+  let nextX;
+  if (rawX >= 0) {
+    nextX = 0;
+  } else if (rawX >= -SWIPE_ACTION_WIDTH_PX) {
+    nextX = rawX;
+  } else {
+    const extra = rawX + SWIPE_ACTION_WIDTH_PX;
+    const maxPull = Math.max(168, (s.rowWidth || 280) * 0.65);
+    nextX = Math.max(-maxPull, -SWIPE_ACTION_WIDTH_PX + extra * 0.75);
+  }
+
+  s.currentOffset = nextX;
+  if (s.content?.style) {
+    s.content.style.transform = `translate3d(${nextX.toFixed(1)}px, 0, 0)`;
+  }
+
+  const shouldArm = nextX <= -SWIPE_ARM_DELETE_PX;
+  if (shouldArm !== s.armed) {
+    s.armed = shouldArm;
+    s.row.classList.toggle('is-armed', shouldArm);
+    if (shouldArm && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(10);
+    }
+  }
+}
+
+function finishHistorySwipe(canceled = false) {
+  if (!activeHistorySwipe) return;
+  const s = activeHistorySwipe;
+  activeHistorySwipe = null;
+
+  s.row.classList.remove('is-swiping', 'is-armed');
+  if (s.locked !== 'horizontal') return;
+
+  suppressHistoryClickUntil = Date.now() + 260;
+
+  if (canceled) {
+    const restoreX = s.baseOffset;
+    if (s.content?.style) s.content.style.transform = `translate3d(${restoreX}px, 0, 0)`;
+    return;
+  }
+
+  if (s.armed) {
+    if (s.content?.style) s.content.style.transform = `translate3d(-${SWIPE_ACTION_WIDTH_PX}px, 0, 0)`;
+    openHistorySwipeRow = { row: s.row, content: s.content };
+    const deleted = s.onDelete();
+    if (!deleted) {
+      closeOpenHistorySwipeRow();
+    }
+    return;
+  }
+
+  if (s.currentOffset <= -SWIPE_OPEN_THRESHOLD_PX) {
+    if (s.content?.style) s.content.style.transform = `translate3d(-${SWIPE_ACTION_WIDTH_PX}px, 0, 0)`;
+    openHistorySwipeRow = { row: s.row, content: s.content };
+  } else {
+    if (s.content?.style) s.content.style.transform = 'translate3d(0, 0, 0)';
+    if (openHistorySwipeRow?.row === s.row) {
+      openHistorySwipeRow = null;
+    }
+  }
+}
+
+function bindGlobalHistorySwipeListeners() {
+  if (historySwipeListenersBound || typeof document === 'undefined' || typeof window === 'undefined') {
+    return;
+  }
+  historySwipeListenersBound = true;
+
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!activeHistorySwipe || activeHistorySwipe.inputKind !== 'touch') return;
+      if (!e.touches || e.touches.length !== 1) {
+        finishHistorySwipe(true);
+        return;
+      }
+      const touch = e.touches[0];
+      updateHistorySwipeMove(touch.clientX, touch.clientY, e);
+    },
+    { passive: false }
+  );
+
+  document.addEventListener(
+    'touchend',
+    () => {
+      lastHistorySwipeTouchAt = Date.now();
+      if (activeHistorySwipe && activeHistorySwipe.inputKind === 'touch') {
+        finishHistorySwipe(false);
+      }
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    'touchcancel',
+    () => {
+      lastHistorySwipeTouchAt = Date.now();
+      if (activeHistorySwipe && activeHistorySwipe.inputKind === 'touch') {
+        finishHistorySwipe(true);
+      }
+    },
+    { passive: true }
+  );
+
+  window.addEventListener('mousemove', (e) => {
+    if (!activeHistorySwipe || activeHistorySwipe.inputKind !== 'mouse') return;
+    updateHistorySwipeMove(e.clientX, e.clientY, e);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (activeHistorySwipe && activeHistorySwipe.inputKind === 'mouse') {
+      finishHistorySwipe(false);
+    }
+  });
+
+  window.addEventListener('blur', () => {
+    finishHistorySwipe(true);
+  });
+}
+
 function renderHistoryList(member, memberHistory, filteredRecords) {
   const list = document.getElementById('history-list');
   const countEl = document.getElementById('history-count');
   const pagerEl = document.getElementById('history-pagination');
 
+  activeHistorySwipe = null;
+  openHistorySwipeRow = null;
+  bindGlobalHistorySwipeListeners();
   syncHistoryFilterUI();
 
   const reversed = filteredRecords.slice().reverse();
@@ -723,9 +894,9 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   );
 
   const items = pageRecords.map((r, idx) => {
-    const li = createEl('li', 'py-2.5');
-    const mainRow = createEl('div', 'flex items-center justify-between gap-2');
-    const info = createEl('div', 'min-w-0 flex-1');
+    const li = createEl('li', 'history-swipe-row');
+    const contentEl = createEl('div', 'history-swipe-content py-2.5');
+    const info = createEl('div', 'min-w-0');
 
     const numericWeight = Number(r.weight_kg);
     const weightDisplay = isHidden
@@ -793,37 +964,96 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
       noteBtn.type = 'button';
       noteBtn.setAttribute('title', noteText);
       noteBtn.setAttribute('aria-label', `查看備註：${noteText}`);
-      noteBtn.onclick = () => showToast(`${r.recorded_at} 備註：${noteText}`, false, 4000);
+      noteBtn.onclick = (e) => {
+        if (Date.now() < suppressHistoryClickUntil) return;
+        if (openHistorySwipeRow?.row === li) {
+          e.stopPropagation();
+          closeOpenHistorySwipeRow();
+          return;
+        }
+        showToast(`${r.recorded_at} 備註：${noteText}`, false, 4000);
+      };
       noteSlot.appendChild(noteBtn);
     }
     bottomRow.append(dateCell, noteSlot);
 
     info.append(topRow, bottomRow);
+    contentEl.appendChild(info);
 
     if (!isHidden) {
-      const delBtn = createEl(
-        'button',
-        '-mr-2 shrink-0 whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2 py-1.5 rounded-lg',
-        '刪除'
-      );
-      delBtn.type = 'button';
-      delBtn.onclick = () => {
+      li.dataset.swipeDeleteRow = 'true';
+
+      const triggerDelete = () => {
         if (isMemberWeightHidden(member)) {
           showToast('隱藏體重狀態下無法刪除紀錄，請先解鎖顯示', true);
           renderCharts();
-          return;
+          return false;
         }
-        if (!confirm('確定刪除此筆體重紀錄？')) return;
+        if (!confirm('確定刪除此筆體重紀錄？')) return false;
         if (optimisticDeleteRecord(r.id)) {
           showToast('已刪除紀錄');
+          return true;
+        }
+        return false;
+      };
+
+      const actionBtn = createEl('button', 'history-swipe-action');
+      actionBtn.type = 'button';
+      actionBtn.setAttribute('aria-label', '刪除此筆體重紀錄');
+      actionBtn.setAttribute('title', '刪除此筆體重紀錄');
+      actionBtn.appendChild(createIcon('trash', 'w-4 h-4 shrink-0'));
+      actionBtn.onclick = (e) => {
+        e.stopPropagation();
+        const deleted = triggerDelete();
+        if (!deleted) closeOpenHistorySwipeRow();
+      };
+
+      const startSwipe = (inputKind, clientX, clientY) => {
+        const isCurrentlyOpen = openHistorySwipeRow?.row === li;
+        activeHistorySwipe = {
+          row: li,
+          content: contentEl,
+          inputKind,
+          startX: clientX,
+          startY: clientY,
+          baseOffset: isCurrentlyOpen ? -SWIPE_ACTION_WIDTH_PX : 0,
+          currentOffset: isCurrentlyOpen ? -SWIPE_ACTION_WIDTH_PX : 0,
+          rowWidth: li.getBoundingClientRect?.().width || 280,
+          locked: null,
+          armed: false,
+          onDelete: triggerDelete
+        };
+      };
+
+      contentEl.addEventListener(
+        'touchstart',
+        (e) => {
+          lastHistorySwipeTouchAt = Date.now();
+          if (!e.touches || e.touches.length !== 1) return;
+          const touch = e.touches[0];
+          startSwipe('touch', touch.clientX, touch.clientY);
+        },
+        { passive: true }
+      );
+
+      contentEl.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (Date.now() - lastHistorySwipeTouchAt < SWIPE_SYNTHETIC_MOUSE_GUARD_MS) return;
+        startSwipe('mouse', e.clientX, e.clientY);
+      });
+
+      contentEl.onclick = () => {
+        if (Date.now() < suppressHistoryClickUntil) return;
+        if (openHistorySwipeRow?.row === li) {
+          closeOpenHistorySwipeRow();
         }
       };
-      mainRow.append(info, delBtn);
+
+      li.append(actionBtn, contentEl);
     } else {
-      mainRow.append(info);
+      li.appendChild(contentEl);
     }
 
-    li.appendChild(mainRow);
     return li;
   });
   list.replaceChildren(...items);

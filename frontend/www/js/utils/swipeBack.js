@@ -13,6 +13,9 @@ function isGestureExcludedTarget(target, edgeSide) {
   if (target.closest('canvas, input, textarea, select, [data-no-swipe-back]')) {
     return true;
   }
+  if (edgeSide === 'right' && target.closest('[data-swipe-delete-row]')) {
+    return true;
+  }
 
   // 若父層為可橫向捲動容器（例如統計頁成員切換膠囊列），檢查是否朝該容器可捲動方向滑動
   let el = target;
