@@ -248,13 +248,10 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
   renderBatchMemberRows();
 
   setRecordModalMode(mode);
-  openModal('modal-record');
-
-  if (mode === 'single') {
-    document.getElementById('rec-weight').focus();
-  } else {
-    document.querySelector('#batch-member-rows .batch-weight-input')?.focus();
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
   }
+  openModal('modal-record');
 }
 
 function setMemberModalAvatar(avatarId) {
@@ -349,8 +346,10 @@ export function openMemberModal(member = null) {
     syncPrivacyFormUI('mem', null);
   }
 
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
+  }
   openModal('modal-member');
-  nameInput.focus();
 }
 
 // 繪製個人資訊面板中的「自動健康指標卡」（家人 BMI / 區間、貓咪與狗狗 RER / DER，隱私模式防反推）
@@ -493,8 +492,8 @@ function setProfileEditMode(isEditing, animate = false) {
     playSoftFade(isEditing ? editFields : viewFields);
   }
 
-  if (isEditing) {
-    document.getElementById('prof-name').focus();
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    document.activeElement.blur();
   }
 }
 
