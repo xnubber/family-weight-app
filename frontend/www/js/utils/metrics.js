@@ -22,6 +22,38 @@ export function getLocalTodayDate() {
   return formatLocalDateStr(new Date());
 }
 
+// 產生歷史紀錄快捷區間（近 30 天／近 3 個月／近半年／近一年，皆符合最長一年限制）
+export function getPresetHistoryRange(preset, nowDate = new Date()) {
+  const end = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+  if (preset === '30d') {
+    start.setDate(start.getDate() - 30);
+  } else if (preset === '3m') {
+    start.setMonth(start.getMonth() - 3);
+  } else if (preset === '6m') {
+    start.setMonth(start.getMonth() - 6);
+  } else {
+    start.setFullYear(start.getFullYear() - 1);
+  }
+
+  return {
+    startDate: formatLocalDateStr(start),
+    endDate: formatLocalDateStr(end)
+  };
+}
+
+// 依自訂起迄日期篩選歷史紀錄並依日期由舊至新排序
+export function filterRecordsByDateRange(recs, startDate, endDate) {
+  return (recs || [])
+    .filter((r) => {
+      const d = String(r?.recorded_at || '').slice(0, 10);
+      return d >= startDate && d <= endDate;
+    })
+    .slice()
+    .sort((a, b) => String(a.recorded_at || '').localeCompare(String(b.recorded_at || '')));
+}
+
 const RANGE_SUMMARY_MAP = {
   day: '近 30 天 · 每日紀錄',
   week: '近 12 週 · 每週平均',

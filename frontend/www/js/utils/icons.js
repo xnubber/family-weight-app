@@ -83,6 +83,13 @@ const ICON_SHAPES = {
   unlock: [
     ['rect', { x: 5, y: 11, width: 14, height: 9, rx: 2.5 }],
     ['path', { d: 'M8.5 11V8.2a3.5 3.5 0 0 1 6.7-1.4' }]
+  ],
+  calendar: [
+    ['rect', { x: 3.5, y: 5, width: 17, height: 15.5, rx: 2.5 }],
+    ['path', { d: 'M8 3.5v3M16 3.5v3M3.5 9.5h17' }]
+  ],
+  close: [
+    ['path', { d: 'M6 6l12 12M18 6L6 18' }]
   ]
 };
 

@@ -13,5 +13,10 @@ export const state = {
   appData: { members: [], records: [], targetHistory: [] },
   selectedMemberId: null,
   selectedRange: 'day', // 'day' | 'week' | 'month' | 'year'
-  historyPage: 1
+  historyPage: 1,
+  historyFilter: {
+    active: false,
+    startDate: '',
+    endDate: ''
+  }
 };

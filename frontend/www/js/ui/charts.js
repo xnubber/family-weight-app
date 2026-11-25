@@ -17,8 +17,12 @@ import {
   calculateTargetGap,
   calculatePeriodStats,
   calculateGoalProgress,
-  getDaysSinceLastRecord
+  getDaysSinceLastRecord,
+  getLocalTodayDate,
+  getPresetHistoryRange,
+  filterRecordsByDateRange
 } from '../utils/metrics.js';
+import { addCalendarYears, validateHistoryDateRange } from '../utils/validation.js';
 
 const HISTORY_PAGE_SIZE = 10;
 const LONG_PRESS_MS = 260;
@@ -580,18 +584,116 @@ function createPagerButton({ label = '', iconName = '', iconPosition = 'left', a
   return btn;
 }
 
+let isHistoryFilterPanelOpen = false;
+
+function resolveHistoryRecords(allMemberRecs, chartFilteredRecords) {
+  const filter = state.historyFilter;
+  if (filter?.active && filter.startDate && filter.endDate) {
+    return filterRecordsByDateRange(allMemberRecs, filter.startDate, filter.endDate);
+  }
+  return chartFilteredRecords;
+}
+
+function syncHistoryDateInputBounds() {
+  const startInput = document.getElementById('history-start-date');
+  const endInput = document.getElementById('history-end-date');
+  if (!startInput || !endInput) return;
+
+  const today = getLocalTodayDate();
+  startInput.max = today;
+  endInput.max = today;
+
+  if (startInput.value && /^\d{4}-\d{2}-\d{2}$/.test(startInput.value)) {
+    const oneYearAfterStart = addCalendarYears(startInput.value, 1);
+    endInput.min = startInput.value;
+    endInput.max = oneYearAfterStart && oneYearAfterStart < today ? oneYearAfterStart : today;
+  } else {
+    endInput.min = '2000-01-01';
+  }
+}
+
+function syncHistoryFilterUI() {
+  const toggleBtn = document.getElementById('btn-history-filter-toggle');
+  const panel = document.getElementById('history-filter-panel');
+  const activeBar = document.getElementById('history-active-filter');
+  const filter = state.historyFilter;
+  const isActive = Boolean(filter?.active && filter.startDate && filter.endDate);
+
+  if (toggleBtn) {
+    toggleBtn.setAttribute('aria-expanded', isHistoryFilterPanelOpen ? 'true' : 'false');
+    toggleBtn.className = isActive || isHistoryFilterPanelOpen
+      ? 'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-xl border border-sage-200 bg-sage-50 text-sage-700 font-medium whitespace-nowrap'
+      : 'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-xl border border-oat-200 bg-oat-50 text-ink-600 hover:bg-oat-100 font-medium whitespace-nowrap';
+  }
+
+  if (panel) {
+    panel.classList.toggle('hidden', !isHistoryFilterPanelOpen);
+  }
+
+  if (activeBar) {
+    if (!isActive) {
+      activeBar.classList.add('hidden');
+      activeBar.replaceChildren();
+    } else {
+      activeBar.classList.remove('hidden');
+      const pill = createEl(
+        'div',
+        'inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-xl bg-sage-50 border border-sage-200 text-sage-700 text-xs'
+      );
+      const clearBtn = createEl(
+        'button',
+        'p-0.5 rounded-md hover:bg-sage-100 text-sage-700 shrink-0'
+      );
+      clearBtn.type = 'button';
+      clearBtn.setAttribute('aria-label', '清除查詢區間');
+      clearBtn.setAttribute('title', '清除查詢區間');
+      clearBtn.appendChild(createIcon('close', 'w-3.5 h-3.5'));
+      clearBtn.onclick = () => {
+        state.historyFilter = { active: false, startDate: '', endDate: '' };
+        state.historyPage = 1;
+        isHistoryFilterPanelOpen = false;
+        syncHistoryFilterUI();
+        refreshCurrentMemberHistoryOnly(true);
+      };
+      pill.append(
+        createIcon('calendar', 'w-3.5 h-3.5 shrink-0'),
+        createEl('span', 'tabular-nums truncate font-medium', `${filter.startDate} ～ ${filter.endDate}`),
+        clearBtn
+      );
+      activeBar.replaceChildren(pill);
+    }
+  }
+}
+
+function refreshCurrentMemberHistoryOnly(animate = false) {
+  const member = state.appData.members.find((m) => m.id === state.selectedMemberId);
+  const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
+  const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
+  const { filteredRecords } = aggregateRecords(recs, state.selectedRange);
+  const historyRecords = resolveHistoryRecords(recs, filteredRecords);
+  renderHistoryList(member, memberHistory, historyRecords);
+  if (animate) {
+    playSoftFade(document.getElementById('history-list'));
+  }
+}
+
 function renderHistoryList(member, memberHistory, filteredRecords) {
   const list = document.getElementById('history-list');
   const countEl = document.getElementById('history-count');
   const pagerEl = document.getElementById('history-pagination');
+
+  syncHistoryFilterUI();
 
   const reversed = filteredRecords.slice().reverse();
   const total = reversed.length;
 
   if (total === 0) {
     state.historyPage = 1;
-    if (countEl) countEl.textContent = '';
-    list.replaceChildren(createEl('li', 'py-3 text-center text-ink-400', '此區間尚無紀錄'));
+    if (countEl) countEl.textContent = '共 0 筆';
+    const emptyText = state.historyFilter?.active
+      ? '查詢區間內尚無紀錄'
+      : '此區間尚無紀錄';
+    list.replaceChildren(createEl('li', 'py-3 text-center text-ink-400', emptyText));
     if (pagerEl) {
       pagerEl.classList.add('hidden');
       pagerEl.replaceChildren();
@@ -852,12 +954,14 @@ export function renderCharts() {
   bindChartLongPressEvents(canvas);
   renderInspectBar();
 
+  const historyRecords = resolveHistoryRecords(recs, filteredRecords);
+
   const hasData = values.length > 0;
   if (canvasWrap) canvasWrap.classList.toggle('hidden', !hasData);
   if (emptyStateEl) emptyStateEl.classList.toggle('hidden', hasData);
 
   if (!hasData) {
-    renderHistoryList(member, memberHistory, filteredRecords);
+    renderHistoryList(member, memberHistory, historyRecords);
     return;
   }
 
@@ -998,7 +1102,7 @@ export function renderCharts() {
     }
   });
 
-  renderHistoryList(member, memberHistory, filteredRecords);
+  renderHistoryList(member, memberHistory, historyRecords);
 }
 
 export function initChartRangeControls({ onRangeChange }) {
@@ -1015,4 +1119,113 @@ export function initChartRangeControls({ onRangeChange }) {
       playSoftFade(document.getElementById('history-list'));
     };
   });
+
+  const toggleBtn = document.getElementById('btn-history-filter-toggle');
+  const startInput = document.getElementById('history-start-date');
+  const endInput = document.getElementById('history-end-date');
+  const applyBtn = document.getElementById('btn-history-filter-apply');
+  const resetBtn = document.getElementById('btn-history-filter-reset');
+
+  const applyCustomRange = (startDate, endDate, { closePanel = true } = {}) => {
+    const today = getLocalTodayDate();
+    const checked = validateHistoryDateRange(startDate, endDate, today);
+    if (checked.error) {
+      showToast(checked.error, true);
+      return false;
+    }
+    state.historyFilter = {
+      active: true,
+      startDate: checked.startDate,
+      endDate: checked.endDate
+    };
+    state.historyPage = 1;
+    if (startInput) startInput.value = checked.startDate;
+    if (endInput) endInput.value = checked.endDate;
+    syncHistoryDateInputBounds();
+    if (closePanel) isHistoryFilterPanelOpen = false;
+    syncHistoryFilterUI();
+    refreshCurrentMemberHistoryOnly(true);
+    return true;
+  };
+
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      isHistoryFilterPanelOpen = !isHistoryFilterPanelOpen;
+      if (isHistoryFilterPanelOpen && startInput && endInput) {
+        if (state.historyFilter.active) {
+          startInput.value = state.historyFilter.startDate;
+          endInput.value = state.historyFilter.endDate;
+        } else if (!startInput.value || !endInput.value) {
+          const def = getPresetHistoryRange('3m');
+          startInput.value = def.startDate;
+          endInput.value = def.endDate;
+        }
+        syncHistoryDateInputBounds();
+      }
+      syncHistoryFilterUI();
+      if (isHistoryFilterPanelOpen) {
+        playSoftFade(document.getElementById('history-filter-panel'));
+      }
+    };
+  }
+
+  if (startInput) {
+    startInput.onchange = () => {
+      syncHistoryDateInputBounds();
+      if (endInput && startInput.value) {
+        const today = getLocalTodayDate();
+        const maxEnd = addCalendarYears(startInput.value, 1);
+        const clampedMax = maxEnd && maxEnd < today ? maxEnd : today;
+        if (!endInput.value || endInput.value < startInput.value) {
+          endInput.value = clampedMax;
+        } else if (endInput.value > clampedMax) {
+          endInput.value = clampedMax;
+          showToast('查詢區間最多一年，已自動調整結束日期');
+        }
+      }
+    };
+  }
+
+  if (endInput) {
+    endInput.onchange = () => {
+      if (startInput && endInput.value && startInput.value) {
+        const maxEnd = addCalendarYears(startInput.value, 1);
+        if (endInput.value < startInput.value) {
+          startInput.value = endInput.value;
+        } else if (maxEnd && endInput.value > maxEnd) {
+          const adjustedStart = addCalendarYears(endInput.value, -1);
+          if (adjustedStart) {
+            startInput.value = adjustedStart;
+            syncHistoryDateInputBounds();
+            showToast('查詢區間最多一年，已自動調整開始日期');
+          }
+        }
+      }
+    };
+  }
+
+  document.querySelectorAll('.history-preset-btn').forEach((btn) => {
+    btn.onclick = () => {
+      const preset = btn.dataset.historyPreset || '30d';
+      const { startDate, endDate } = getPresetHistoryRange(preset);
+      applyCustomRange(startDate, endDate, { closePanel: true });
+    };
+  });
+
+  if (applyBtn) {
+    applyBtn.onclick = () => {
+      applyCustomRange(startInput?.value, endInput?.value, { closePanel: true });
+    };
+  }
+
+  if (resetBtn) {
+    resetBtn.onclick = () => {
+      state.historyFilter = { active: false, startDate: '', endDate: '' };
+      state.historyPage = 1;
+      isHistoryFilterPanelOpen = false;
+      syncHistoryFilterUI();
+      refreshCurrentMemberHistoryOnly(true);
+      showToast('已重設為跟隨圖表區間');
+    };
+  }
 }

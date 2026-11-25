@@ -162,3 +162,37 @@ export function checkWeightAnomaly({ member, weightKg, latestWeightKg = null, is
   return null;
 }
 
+// 計算 YYYY-MM-DD 加上指定年數後的日期（閏年 2/29 加 1 年自動收斂至 2/28）
+export function addCalendarYears(ymd, years = 1) {
+  if (typeof ymd !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '';
+  const [y, m, d] = ymd.split('-').map(Number);
+  const targetYear = y + years;
+  const maxDayOfMonth = new Date(Date.UTC(targetYear, m, 0)).getUTCDate();
+  const clampedDay = Math.min(d, maxDayOfMonth);
+  return `${targetYear}-${String(m).padStart(2, '0')}-${String(clampedDay).padStart(2, '0')}`;
+}
+
+// 驗證歷史紀錄自訂查詢區間（需為有效日期、起日 <= 迄日、迄日不可晚於今天，且區間最長不可超過一年）
+export function validateHistoryDateRange(startDate, endDate, todayStr) {
+  const start = String(startDate ?? '').trim();
+  const end = String(endDate ?? '').trim();
+  if (!start || !end) {
+    return { error: '請選擇開始與結束日期' };
+  }
+  if (!isValidRecordedDate(start) || !isValidRecordedDate(end)) {
+    return { error: '日期格式不正確或超出合理範圍' };
+  }
+  if (start > end) {
+    return { error: '開始日期不可晚於結束日期' };
+  }
+  if (todayStr && end > todayStr) {
+    return { error: '結束日期不可晚於今天' };
+  }
+  const maxEnd = addCalendarYears(start, 1);
+  if (maxEnd && end > maxEnd) {
+    return { error: '歷史紀錄查詢區間最多不可超過一年' };
+  }
+  return { startDate: start, endDate: end };
+}
+
+

@@ -89,10 +89,50 @@
         <div id="chart-empty-state" class="hidden py-10 text-center text-xs text-ink-400">此區間尚無體重紀錄，切換時間範圍或新增體重即可檢視趨勢。</div>
       </div>
       <div class="journal-card p-4 rounded-2xl">
-        <div class="flex items-center justify-between gap-2 mb-3">
+        <div class="flex items-center justify-between gap-2 mb-2.5">
           <h3 class="font-semibold text-sm text-ink-700 tracking-wide">歷史紀錄</h3>
-          <span id="history-count" class="text-fluid-label text-ink-400 tabular-nums shrink-0 whitespace-nowrap"></span>
+          <div class="flex items-center gap-2 shrink-0">
+            <span id="history-count" class="text-fluid-label text-ink-400 tabular-nums whitespace-nowrap"></span>
+            <button id="btn-history-filter-toggle" type="button" class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-xl border border-oat-200 bg-oat-50 text-ink-600 hover:bg-oat-100 font-medium whitespace-nowrap" aria-expanded="false">
+              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+                <path d="M8 3.5v3M16 3.5v3M3.5 9.5h17" />
+              </svg>
+              <span>區間查詢</span>
+            </button>
+          </div>
         </div>
+
+        <!-- 已套用的自訂查詢區間標籤列 -->
+        <div id="history-active-filter" class="hidden mb-2.5"></div>
+
+        <!-- 可收合之歷史紀錄區間查詢面板（最多查詢一年） -->
+        <div id="history-filter-panel" class="hidden mb-3 p-3 rounded-2xl bg-oat-50 border border-oat-200/80 space-y-2.5 text-xs">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" data-history-preset="30d" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近 30 天</button>
+            <button type="button" data-history-preset="3m" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近 3 個月</button>
+            <button type="button" data-history-preset="6m" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近半年</button>
+            <button type="button" data-history-preset="1y" class="history-preset-btn px-2.5 py-1 rounded-lg bg-linen border border-oat-200 text-ink-600 hover:bg-oat-100 font-medium">近一年</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="min-w-0">
+              <label for="history-start-date" class="block text-[11px] text-ink-400 mb-1">開始日期</label>
+              <input id="history-start-date" type="date" min="2000-01-01" class="w-full min-w-0 border rounded-xl px-2 py-1.5 text-xs tabular-nums bg-linen" />
+            </div>
+            <div class="min-w-0">
+              <label for="history-end-date" class="block text-[11px] text-ink-400 mb-1">結束日期</label>
+              <input id="history-end-date" type="date" min="2000-01-01" class="w-full min-w-0 border rounded-xl px-2 py-1.5 text-xs tabular-nums bg-linen" />
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-2 pt-0.5">
+            <span class="text-[11px] text-ink-400 leading-snug">最多可查詢 1 年區間</span>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button id="btn-history-filter-reset" type="button" class="px-2.5 py-1.5 rounded-xl bg-linen border border-oat-200 text-ink-600 font-medium">重設</button>
+              <button id="btn-history-filter-apply" type="button" class="px-3 py-1.5 rounded-xl bg-sage-600 hover:bg-sage-700 text-linen font-medium">查詢</button>
+            </div>
+          </div>
+        </div>
+
         <ul id="history-list" class="divide-y divide-oat-100 text-sm"></ul>
         <div id="history-pagination" class="hidden pt-3 mt-2 border-t border-oat-100 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-xs"></div>
       </div>
