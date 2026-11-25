@@ -47,16 +47,34 @@ function createMetricCell(labelText, valueText, valueClass = 'text-ink-700') {
   return cell;
 }
 
-const LONG_PRESS_REORDER_MS = 240;
+const LONG_PRESS_REORDER_MS = 220;
 const MOVE_CANCEL_THRESHOLD_PX = 10;
+const SWAP_HYSTERESIS_PX = 8;
+const FLIP_DURATION_MS = 240;
+const SETTLE_DURATION_MS = 210;
+const SPRING_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 let dragState = null;
 let suppressCardClickUntil = 0;
 let dragGlobalListenersBound = false;
 let activeReorderCallback = null;
+const siblingFlipAnims = new WeakMap();
 
 export function isOverviewReordering() {
   return Boolean(dragState && dragState.active);
+}
+
+function prefersReducedMotion() {
+  return Boolean(
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+function getWindowScrollY() {
+  if (typeof window === 'undefined') return 0;
+  return window.scrollY || document.documentElement?.scrollTop || 0;
 }
 
 function getOrderedCardIds(container) {
@@ -64,6 +82,167 @@ function getOrderedCardIds(container) {
   return Array.from(container.children)
     .map((el) => el.dataset?.memberId)
     .filter(Boolean);
+}
+
+// 透過 Web Animations API 在 GPU 合成層即時跟隨手指位置（零行內 style，完全符合嚴格 CSP）
+function applyCardVisualOffset(stateObj, offsetY, scale = 1.025) {
+  stateObj.currentOffsetY = offsetY;
+  const card = stateObj.card;
+  if (!card || typeof card.animate !== 'function') return;
+
+  const prevAnim = stateObj.cardAnim;
+  stateObj.cardAnim = card.animate(
+    [{ transform: `translate3d(0, ${offsetY.toFixed(1)}px, 0) scale(${scale})` }],
+    { duration: 1, fill: 'forwards' }
+  );
+  if (prevAnim) {
+    try {
+      prevAnim.cancel();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function clearCardVisualAnim(stateObj) {
+  if (stateObj?.cardAnim) {
+    try {
+      stateObj.cardAnim.cancel();
+    } catch {
+      // ignore
+    }
+    stateObj.cardAnim = null;
+  }
+}
+
+function stopAutoScroll(stateObj) {
+  if (stateObj?.autoScrollRaf && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(stateObj.autoScrollRaf);
+    stateObj.autoScrollRaf = 0;
+  }
+}
+
+function performDragLayoutStep() {
+  if (!dragState || !dragState.active) return;
+
+  const { container, card, lastClientY } = dragState;
+  if (!container || !card) return;
+
+  // 以未縮放的文件座標基準計算偏移量，確保 1:1 緊貼手指且零縮放漂移
+  const scrollY = getWindowScrollY();
+  const baseTop = dragState.baseDocTop - scrollY;
+  const targetOffsetY = lastClientY - dragState.grabOffsetY - baseTop;
+  applyCardVisualOffset(dragState, targetOffsetY, 1.025);
+
+  const siblings = Array.from(container.children).filter(
+    (el) => el !== card && el.dataset?.memberId
+  );
+
+  // 檢查是否越過相鄰卡片中線（加入些微遲滯避免邊界抖動），並用可中斷 FLIP 讓其他卡片絲滑讓位
+  const cardIdx = Array.from(container.children).indexOf(card);
+  let swapTarget = null;
+  let insertAfter = false;
+
+  for (const sib of siblings) {
+    const sibRect = sib.getBoundingClientRect();
+    const sibMidY = sibRect.top + sibRect.height / 2;
+    const sibIdx = Array.from(container.children).indexOf(sib);
+    const isCardBefore = cardIdx < sibIdx;
+
+    if (isCardBefore && lastClientY > sibMidY + SWAP_HYSTERESIS_PX) {
+      swapTarget = sib;
+      insertAfter = true;
+      break;
+    }
+    if (!isCardBefore && lastClientY < sibMidY - SWAP_HYSTERESIS_PX) {
+      swapTarget = sib;
+      insertAfter = false;
+      break;
+    }
+  }
+
+  if (swapTarget) {
+    // First：先記下所有相鄰卡片此刻的實際視覺位置（含動畫中途位置），並取消舊 FLIP
+    const beforeRects = new Map();
+    for (const sib of siblings) {
+      beforeRects.set(sib, sib.getBoundingClientRect().top);
+      const prevFlip = siblingFlipAnims.get(sib);
+      if (prevFlip) {
+        try {
+          prevFlip.cancel();
+        } catch {
+          // ignore
+        }
+        siblingFlipAnims.delete(sib);
+      }
+    }
+    const visualTopBeforeSwap = baseTop + targetOffsetY;
+
+    // Last：執行 DOM 位置交換
+    container.insertBefore(card, insertAfter ? swapTarget.nextSibling : swapTarget);
+
+    // 立即於無縮放狀態重測基準文件座標並補償偏移，確保卡片完全不跳動
+    clearCardVisualAnim(dragState);
+    const newBaseTop = card.getBoundingClientRect().top;
+    dragState.baseDocTop = newBaseTop + getWindowScrollY();
+    const compensatedOffsetY = visualTopBeforeSwap - newBaseTop;
+    applyCardVisualOffset(dragState, compensatedOffsetY, 1.025);
+
+    // Invert & Play：讓所有移動位置的相鄰卡片從原視覺位置以彈簧曲線絲滑滑入新位
+    if (!prefersReducedMotion()) {
+      for (const sib of siblings) {
+        const prevTop = beforeRects.get(sib);
+        const nextTop = sib.getBoundingClientRect().top;
+        const deltaY = prevTop - nextTop;
+        if (Math.abs(deltaY) > 1 && typeof sib.animate === 'function') {
+          const anim = sib.animate(
+            [
+              { transform: `translate3d(0, ${deltaY.toFixed(1)}px, 0)` },
+              { transform: 'translate3d(0, 0, 0)' }
+            ],
+            { duration: FLIP_DURATION_MS, easing: SPRING_EASING }
+          );
+          siblingFlipAnims.set(sib, anim);
+          anim.onfinish = () => {
+            if (siblingFlipAnims.get(sib) === anim) siblingFlipAnims.delete(sib);
+          };
+        }
+      }
+    }
+
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(8);
+    }
+  }
+}
+
+function startAutoScrollLoop() {
+  if (!dragState || !dragState.active || dragState.autoScrollRaf) return;
+  if (typeof requestAnimationFrame !== 'function') return;
+
+  const tick = () => {
+    if (!dragState || !dragState.active) return;
+    const vh = window.innerHeight || 0;
+    const y = dragState.lastClientY;
+    let delta = 0;
+
+    if (vh > 0) {
+      if (y < 92) {
+        delta = -Math.max(3, Math.round(((92 - y) / 92) * 14));
+      } else if (y > vh - 104) {
+        delta = Math.max(3, Math.round(((y - (vh - 104)) / 104) * 14));
+      }
+    }
+
+    if (delta !== 0 && typeof window.scrollBy === 'function') {
+      window.scrollBy(0, delta);
+      performDragLayoutStep();
+    }
+
+    dragState.autoScrollRaf = requestAnimationFrame(tick);
+  };
+
+  dragState.autoScrollRaf = requestAnimationFrame(tick);
 }
 
 function bindGlobalDragListeners() {
@@ -86,11 +265,13 @@ function bindGlobalDragListeners() {
   window.addEventListener('pointermove', (e) => {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
 
+    dragState.lastClientX = e.clientX;
+    dragState.lastClientY = e.clientY;
     const dx = e.clientX - dragState.startX;
     const dy = e.clientY - dragState.startY;
 
     if (!dragState.active) {
-      if (dragState.fromHandle && Math.hypot(dx, dy) >= 4) {
+      if (dragState.fromHandle && Math.hypot(dx, dy) >= 3) {
         activateCardDrag();
       } else if (!dragState.fromHandle && Math.hypot(dx, dy) > MOVE_CANCEL_THRESHOLD_PX) {
         cancelCardDrag();
@@ -100,65 +281,75 @@ function bindGlobalDragListeners() {
       }
     }
 
-    const container = dragState.container;
-    const draggingCard = dragState.card;
-    if (!container || !draggingCard) return;
-
-    const siblings = Array.from(container.children).filter(
-      (el) => el !== draggingCard && el.dataset?.memberId
-    );
-    for (const sib of siblings) {
-      const rect = sib.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      const draggingRect = draggingCard.getBoundingClientRect();
-      const isBefore = draggingRect.top < rect.top;
-
-      if (isBefore && e.clientY > midY) {
-        container.insertBefore(draggingCard, sib.nextSibling);
-        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-          navigator.vibrate(8);
-        }
-        break;
-      } else if (!isBefore && e.clientY < midY) {
-        container.insertBefore(draggingCard, sib);
-        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-          navigator.vibrate(8);
-        }
-        break;
-      }
-    }
-
-    // 接近視窗上下緣時輕柔捲動，方便成員較多時跨屏調整順序
-    const vh = window.innerHeight || 0;
-    if (vh > 0 && typeof window.scrollBy === 'function') {
-      if (e.clientY < 88) {
-        window.scrollBy(0, -10);
-      } else if (e.clientY > vh - 96) {
-        window.scrollBy(0, 10);
-      }
-    }
+    performDragLayoutStep();
   });
 
   const finishDrag = (e) => {
     if (!dragState) return;
     if (e && e.pointerId !== undefined && e.pointerId !== dragState.pointerId) return;
 
-    const { active, container, card, initialOrder } = dragState;
-    if (dragState.timer) clearTimeout(dragState.timer);
+    const finished = dragState;
+    if (finished.timer) clearTimeout(finished.timer);
+    stopAutoScroll(finished);
     dragState = null;
 
-    if (card) card.classList.remove('is-dragging');
+    const { active, container, card, initialOrder, currentOffsetY, pointerId } = finished;
+    try {
+      card?.releasePointerCapture?.(pointerId);
+    } catch {
+      // ignore
+    }
+
+    if (!active) {
+      clearCardVisualAnim(finished);
+      if (card) card.classList.remove('is-dragging');
+      if (container) container.classList.remove('member-cards-reordering');
+      return;
+    }
+
+    suppressCardClickUntil = Date.now() + 300;
+    const nextOrder = getOrderedCardIds(container);
+    const changed =
+      nextOrder.length === initialOrder.length &&
+      nextOrder.some((id, idx) => id !== initialOrder[idx]);
+
     if (container) container.classList.remove('member-cards-reordering');
 
-    if (active) {
-      suppressCardClickUntil = Date.now() + 280;
-      const nextOrder = getOrderedCardIds(container);
-      const changed =
-        nextOrder.length === initialOrder.length &&
-        nextOrder.some((id, idx) => id !== initialOrder[idx]);
+    const finalizeCommit = () => {
+      if (card) card.classList.remove('is-dragging', 'is-settling');
       if (changed && typeof activeReorderCallback === 'function') {
         activeReorderCallback(nextOrder);
       }
+    };
+
+    // 放開手指時以彈簧曲線輕柔落回定位，再提交狀態重繪，消除瞬間跳位感
+    clearCardVisualAnim(finished);
+    if (
+      card &&
+      typeof card.animate === 'function' &&
+      !prefersReducedMotion() &&
+      Math.abs(currentOffsetY) > 0.5
+    ) {
+      card.classList.remove('is-dragging');
+      card.classList.add('is-settling');
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        finalizeCommit();
+      };
+      const settleAnim = card.animate(
+        [
+          { transform: `translate3d(0, ${currentOffsetY.toFixed(1)}px, 0) scale(1.025)` },
+          { transform: 'translate3d(0, 0, 0) scale(1)' }
+        ],
+        { duration: SETTLE_DURATION_MS, easing: SPRING_EASING }
+      );
+      settleAnim.onfinish = done;
+      settleAnim.oncancel = done;
+      setTimeout(done, SETTLE_DURATION_MS + 40);
+    } else {
+      finalizeCommit();
     }
   };
 
@@ -172,9 +363,26 @@ function activateCardDrag() {
     clearTimeout(dragState.timer);
     dragState.timer = null;
   }
+
+  const { card, container, pointerId, startY } = dragState;
+  const rect = card.getBoundingClientRect();
   dragState.active = true;
-  dragState.card.classList.add('is-dragging');
-  dragState.container.classList.add('member-cards-reordering');
+  dragState.baseDocTop = rect.top + getWindowScrollY();
+  dragState.grabOffsetY = startY - rect.top;
+  dragState.currentOffsetY = 0;
+
+  card.classList.add('is-dragging');
+  container.classList.add('member-cards-reordering');
+  try {
+    card.setPointerCapture?.(pointerId);
+  } catch {
+    // ignore
+  }
+
+  // 柔和浮起微縮放，接著 1:1 跟隨手指移動
+  applyCardVisualOffset(dragState, 0, 1.025);
+  startAutoScrollLoop();
+
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
     navigator.vibrate(14);
   }
@@ -183,7 +391,9 @@ function activateCardDrag() {
 function cancelCardDrag() {
   if (!dragState) return;
   if (dragState.timer) clearTimeout(dragState.timer);
-  if (dragState.card) dragState.card.classList.remove('is-dragging');
+  stopAutoScroll(dragState);
+  clearCardVisualAnim(dragState);
+  if (dragState.card) dragState.card.classList.remove('is-dragging', 'is-settling');
   if (dragState.container) dragState.container.classList.remove('member-cards-reordering');
   dragState = null;
 }
@@ -251,6 +461,12 @@ export function renderOverview({ onSelectMember, onReorderMembers = null }) {
           pointerId: e.pointerId,
           startX: e.clientX,
           startY: e.clientY,
+          lastClientX: e.clientX,
+          lastClientY: e.clientY,
+          grabOffsetY: 0,
+          currentOffsetY: 0,
+          cardAnim: null,
+          autoScrollRaf: 0,
           fromHandle,
           active: false,
           container,

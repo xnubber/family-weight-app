@@ -502,19 +502,29 @@ button:not(:disabled).is-pressed {
   user-select: none;
 }
 
+.member-cards-reordering .member-card {
+  will-change: transform;
+}
+
 .member-cards-reordering .member-card:not(.is-dragging) {
-  opacity: 0.78;
-  transform: scale(0.99);
+  opacity: 0.88;
+  transition: opacity 180ms ease;
 }
 
 .member-card.is-dragging {
   position: relative;
-  z-index: 15;
+  z-index: 20;
   border-color: #587864;
   background-color: #ffffff;
-  box-shadow: 0 12px 28px rgba(47, 52, 47, 0.16), 0 0 0 2px rgba(88, 120, 100, 0.2);
-  transform: scale(1.02);
+  box-shadow: 0 16px 34px rgba(47, 52, 47, 0.16), 0 0 0 2px rgba(88, 120, 100, 0.18);
+  transition: box-shadow 180ms ease, border-color 180ms ease, background-color 180ms ease;
   cursor: grabbing;
+}
+
+.member-card.is-settling {
+  position: relative;
+  z-index: 15;
+  pointer-events: none;
 }
 
 /* 目標達成進度條（原生 <progress>，符合嚴格 style-src 'self' CSP） */
