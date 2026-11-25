@@ -533,6 +533,62 @@
     </form>
   </div>
 
+  <!-- 彈窗：獨立體重隱私設定（不離開個人資訊檢視面板） -->
+  <div id="modal-privacy" class="modal-overlay hidden fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-[55] flex items-center justify-center p-4">
+    <form id="form-privacy" class="modal-sheet bg-linen border border-oat-200 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
+      <div class="flex items-center gap-3 border-b border-oat-200 pb-3">
+        <div class="w-10 h-10 shrink-0 rounded-full bg-sage-50 border border-sage-200 text-sage-700 flex items-center justify-center" aria-hidden="true">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="11" width="14" height="9" rx="2.5" />
+            <path d="M8.5 11V8.2a3.5 3.5 0 0 1 7 0V11" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <h3 id="priv-modal-title" class="font-semibold text-base text-ink leading-snug">體重隱私設定</h3>
+          <p id="priv-modal-subtitle" class="text-fluid-label text-ink-400 truncate">管理個人體重顯示與密碼保護</p>
+        </div>
+      </div>
+
+      <input type="hidden" id="priv-member-id" />
+
+      <div class="bg-oat-50 border border-oat-200 rounded-2xl p-3.5 space-y-2.5">
+        <div id="priv-privacy-locked-box" class="hidden flex flex-wrap items-center justify-between gap-2 text-xs text-ink-500">
+          <span class="min-w-0 flex-1 leading-snug">已啟用密碼保護，解鎖後可修改隱私設定</span>
+          <button type="button" id="btn-priv-unlock" class="shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-lg font-medium">解鎖編輯</button>
+        </div>
+        <div id="priv-privacy-controls" class="space-y-2.5">
+          <label class="flex items-start gap-2.5 cursor-pointer select-none">
+            <input id="priv-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
+            <span class="text-xs leading-relaxed">
+              <span class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
+              <span class="text-ink-400">遮蔽公斤數與精確 BMI，只顯示變化趨勢與達標進度</span>
+            </span>
+          </label>
+          <div id="priv-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
+            <div>
+              <label id="priv-pin-label" for="priv-pin" class="text-xs text-ink-500">個人 4 位數密碼（選填，建議共用同步碼時設定）</label>
+              <input id="priv-pin" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="留空表示不設密碼，或輸入 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+            </div>
+            <div id="priv-pin-confirm-wrap" class="hidden">
+              <label for="priv-pin-confirm" class="text-xs text-ink-500">再次輸入 4 位數密碼確認</label>
+              <input id="priv-pin-confirm" type="password" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="請再次輸入相同 4 位數字" class="w-full border rounded-xl p-2 text-sm font-mono tracking-widest mt-1" />
+              <p id="priv-pin-feedback" class="hidden text-[11px] mt-1 leading-snug" aria-live="polite"></p>
+            </div>
+            <label id="priv-clear-pin-wrap" class="hidden flex items-center gap-2 text-xs text-ink-500 cursor-pointer select-none">
+              <input id="priv-clear-pin" type="checkbox" class="rounded border-oat-300" />
+              <span>清除現有密碼（改為無密碼點擊暫時檢視）</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-1">
+        <button type="button" id="btn-priv-cancel" class="flex-1 py-2.5 bg-oat-100 text-ink-700 rounded-xl text-sm font-medium">取消</button>
+        <button type="submit" id="btn-priv-submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">儲存設定</button>
+      </div>
+    </form>
+  </div>
+
   <!-- 彈窗：個人 4 位數 PIN 隱私解鎖 -->
   <div id="modal-pin" class="modal-overlay hidden fixed inset-0 bg-ink/45 backdrop-blur-[2px] z-[60] flex items-center justify-center p-4">
     <form id="form-pin" class="modal-sheet bg-linen border border-oat-200 w-full max-w-xs rounded-3xl p-5 space-y-4 shadow-soft">

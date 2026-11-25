@@ -946,11 +946,18 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     const startInlineEdit = (fieldKey) => {
       setInlineAvatarDrawer(false);
       if (fieldKey === 'privacy') {
-        setProfileEditMode(true, true);
-        const privTarget = document.getElementById(
-          isLockedWithPin ? 'prof-privacy-locked-box' : 'prof-privacy-controls'
-        );
-        privTarget?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+        if (activeProfileInlineField) {
+          activeProfileInlineField = null;
+          renderProfileViewFields();
+        }
+        if (isLockedWithPin) {
+          requestMemberUnlock(m, () => {
+            openProfileModal(m.id, { onNavigateToChart });
+            openPrivacySettingsModal(m.id);
+          });
+          return;
+        }
+        openPrivacySettingsModal(m.id);
         return;
       }
       if (fieldKey === 'target_weight' && isHidden) {
@@ -1428,7 +1435,32 @@ function extractPrivacySubmitPayload(prefix, existingMember) {
   return result;
 }
 
-const MODAL_BACK_STACK = ['modal-pin', 'modal-record', 'modal-member', 'modal-profile'];
+export function openPrivacySettingsModal(memberId) {
+  const m = state.appData.members.find((x) => x.id === memberId);
+  if (!m) return;
+
+  const isLockedWithPin = memberHasPrivacyPin(m) && !isMemberUnlocked(m.id);
+  document.getElementById('priv-member-id').value = m.id;
+  document.getElementById('priv-modal-subtitle').textContent = m.name
+    ? `${m.name} 的體重隱私與密碼保護`
+    : '管理個人體重顯示與密碼保護';
+  syncPrivacyFormUI('priv', m);
+  document.getElementById('btn-priv-submit')?.classList.toggle('hidden', isLockedWithPin);
+
+  document.getElementById('btn-priv-unlock').onclick = () => {
+    requestMemberUnlock(m, () => {
+      syncPrivacyFormUI('priv', m);
+      document.getElementById('btn-priv-submit')?.classList.remove('hidden');
+      if (activeProfileContext?.memberId === m.id && isModalOpen('modal-profile')) {
+        openProfileModal(m.id, { onNavigateToChart: activeProfileContext.onNavigateToChart });
+      }
+    });
+  };
+
+  openModal('modal-privacy');
+}
+
+const MODAL_BACK_STACK = ['modal-pin', 'modal-privacy', 'modal-record', 'modal-member', 'modal-profile'];
 
 function clearProfileModalState() {
   activeProfileContext = null;
@@ -1484,7 +1516,7 @@ export function initModals() {
   });
 
   // 點擊彈窗外部（深色背景）即可平滑關閉
-  ['modal-record', 'modal-member', 'modal-profile', 'modal-pin'].forEach((id) => {
+  ['modal-record', 'modal-member', 'modal-profile', 'modal-privacy', 'modal-pin'].forEach((id) => {
     const modal = document.getElementById(id);
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
@@ -1570,6 +1602,54 @@ export function initModals() {
 
   bindPrivacyControlEvents('mem');
   bindPrivacyControlEvents('prof');
+  bindPrivacyControlEvents('priv');
+
+  // 獨立體重隱私設定彈窗：取消與儲存（不切換至個人資訊完整編輯面板）
+  document.getElementById('btn-priv-cancel').onclick = () => {
+    closeModal('modal-privacy');
+  };
+
+  document.getElementById('form-privacy').onsubmit = (e) => {
+    e.preventDefault();
+    const id = document.getElementById('priv-member-id').value.trim();
+    if (!isValidResourceId(id)) return showToast('無效的成員識別碼', true);
+    const member = state.appData.members.find((x) => x.id === id);
+    if (!member) return showToast('找不到該成員資料', true);
+
+    const privacyData = extractPrivacySubmitPayload('priv', member);
+    if (privacyData.locked) {
+      syncPrivacyFormUI('priv', member);
+      document.getElementById('btn-priv-submit')?.classList.add('hidden');
+      return showToast('隱私解鎖已逾時，請先解鎖後再修改設定', true);
+    }
+    if (privacyData.error) {
+      showPrivacyPinSubmitError('priv', privacyData.error, privacyData.focusField);
+      return showToast(privacyData.error, true);
+    }
+
+    const updatePayload = {
+      hide_weight: privacyData.hide_weight
+    };
+    if (privacyData.privacy_pin !== undefined) updatePayload.privacy_pin = privacyData.privacy_pin;
+    if (privacyData.current_pin) updatePayload.current_pin = privacyData.current_pin;
+
+    closeModal('modal-privacy');
+    optimisticUpdateMember(id, updatePayload);
+
+    if (!updatePayload.hide_weight) {
+      showToast('已關閉體重隱私模式');
+    } else if (updatePayload.privacy_pin) {
+      showToast('已儲存隱私設定與個人密碼');
+    } else if (updatePayload.privacy_pin === null) {
+      showToast('已清除個人密碼（維持隱藏體重）');
+    } else {
+      showToast('體重隱私設定已更新');
+    }
+
+    if (activeProfileContext?.memberId === id && isModalOpen('modal-profile')) {
+      openProfileModal(id, { onNavigateToChart: activeProfileContext.onNavigateToChart });
+    }
+  };
 
   // 記錄體重彈窗：批量／單筆模式切換、單筆成員遮蔽輸入與可視切換、全站體重即時防呆
   document.getElementById('btn-rec-mode-batch').onclick = () => setRecordModalMode('batch', true);
