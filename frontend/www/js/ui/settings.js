@@ -29,18 +29,18 @@ export function renderSettingsMembers({ onEditMember }) {
       ? (memberHasPrivacyPin(m) ? ' · 密碼隱私' : ' · 體重隱私')
       : '';
     nameGroup.append(
-      createEl('div', 'font-medium text-ink truncate', String(m.name ?? '')),
-      createEl('div', 'text-[13px] text-ink-400', `${getMemberTypeLabel(m.type)}${privSuffix}`)
+      createEl('div', 'font-medium text-ink leading-snug break-words', String(m.name ?? '')),
+      createEl('div', 'text-fluid-label text-ink-400 mt-0.5', `${getMemberTypeLabel(m.type)}${privSuffix}`)
     );
     identity.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), nameGroup);
 
     const actions = createEl('div', 'flex items-center gap-1.5 shrink-0');
 
-    const editBtn = createEl('button', 'text-xs text-sage-700 hover:bg-sage-50 px-2.5 py-1 rounded-lg font-medium', '編輯');
+    const editBtn = createEl('button', 'whitespace-nowrap text-xs text-sage-700 hover:bg-sage-50 px-2.5 py-1 rounded-lg font-medium', '編輯');
     editBtn.type = 'button';
     editBtn.onclick = () => onEditMember(m);
 
-    const delBtn = createEl('button', 'text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1 rounded-lg font-medium', '刪除');
+    const delBtn = createEl('button', 'whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1 rounded-lg font-medium', '刪除');
     delBtn.type = 'button';
     delBtn.onclick = () => {
       if (!confirm('刪除成員會連同所有體重紀錄一起刪除，確定嗎？')) return;

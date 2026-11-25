@@ -11,6 +11,7 @@
     padding-bottom: 92px;
     -webkit-font-smoothing: antialiased;
     letter-spacing: 0.015em;
+    overflow-wrap: break-word;
   }
 
   input,
@@ -31,6 +32,22 @@
     border-color: #6d8d79;
     box-shadow: 0 0 0 3px rgba(88, 120, 100, 0.14);
   }
+}
+
+/* 流體字級：依螢幕寬度平滑微調，小螢幕不截斷爆框、大螢幕保持舒暢閱讀 */
+.text-fluid-label {
+  font-size: clamp(0.75rem, 3.2vw, 0.8125rem);
+  line-height: 1.3;
+}
+
+.text-fluid-metric {
+  font-size: clamp(0.8125rem, 3.6vw, 0.9375rem);
+  line-height: 1.35;
+}
+
+.text-fluid-weight {
+  font-size: clamp(1.375rem, 6vw, 1.65rem);
+  line-height: 1.15;
 }
 
 .tab-active {

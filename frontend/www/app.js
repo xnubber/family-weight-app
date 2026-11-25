@@ -99,8 +99,16 @@ function switchTab(tabName) {
   }, 300);
 }
 
+function formatCompactFamilyCode(code) {
+  const str = String(code || '').trim();
+  if (str.length <= 14) return str;
+  return `${str.slice(0, 7)}…${str.slice(-4)}`;
+}
+
 function renderAll() {
-  document.getElementById('header-family-code').textContent = `同步碼：${state.familyCode}`;
+  const headerCodeEl = document.getElementById('header-family-code');
+  headerCodeEl.textContent = `同步碼：${formatCompactFamilyCode(state.familyCode)}`;
+  headerCodeEl.title = `同步碼：${state.familyCode}`;
   document.getElementById('input-family-code').value = state.familyCode;
 
   renderOverview({

@@ -181,13 +181,13 @@ function renderInspectBar() {
   const idx = inspectState.activeIndex;
 
   if (idx === null || idx < 0 || idx >= ctxData.values.length) {
-    bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-[13px] bg-oat-50 border border-oat-200/70 text-ink-400';
+    bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400';
     const hintText = ctxData.isHidden
-      ? '長按圖表並左右拖曳，可檢視各點位變化趨勢'
-      : '長按圖表並左右拖曳，可檢視各點位體重';
+      ? '長按圖表檢視趨勢'
+      : '長按圖表左右拖曳檢視';
     bar.replaceChildren(
-      createEl('span', 'truncate', hintText),
-      createEl('span', 'shrink-0 tabular-nums text-ink-400', `共 ${ctxData.values.length} 點`)
+      createEl('span', 'min-w-0 leading-snug', hintText),
+      createEl('span', 'shrink-0 whitespace-nowrap tabular-nums text-ink-400', `共 ${ctxData.values.length} 點`)
     );
     return;
   }
@@ -198,15 +198,15 @@ function renderInspectBar() {
     ? String(pointDates[idx] || labels[idx] || '')
     : `${labels[idx] || ''}（平均）`;
 
-  bar.className = `min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-xs border transition-colors ${theme.inspectBarClass}`;
+  bar.className = `min-h-[34px] rounded-xl px-3 py-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs border transition-colors ${theme.inspectBarClass}`;
 
   const leftWrap = createEl('div', 'flex items-center gap-2 min-w-0');
   leftWrap.append(
     createEl('span', `w-2 h-2 rounded-full shrink-0 ${theme.dotBgClass}`),
-    createEl('span', 'font-medium tabular-nums truncate', dateDisplay)
+    createEl('span', 'font-medium tabular-nums whitespace-nowrap', dateDisplay)
   );
 
-  const rightWrap = createEl('div', 'flex items-center gap-2 shrink-0 tabular-nums');
+  const rightWrap = createEl('div', 'flex items-center gap-2 shrink-0 tabular-nums whitespace-nowrap');
 
   if (isHidden) {
     const baseline = Number(values[0]);
@@ -217,7 +217,7 @@ function renderInspectBar() {
       relText = `較起點 ${sign}${delta.toFixed(2)} kg`;
     }
     rightWrap.append(
-      createEl('span', 'text-[13px] opacity-80', relText),
+      createEl('span', 'text-fluid-label opacity-80', relText),
       createEl('span', 'font-semibold text-sm text-ink-400 inline-flex items-center gap-1', `${MASKED_WEIGHT} kg`)
     );
   } else {
@@ -226,7 +226,7 @@ function renderInspectBar() {
       const sign = stepDelta > 0 ? '+' : '';
       const deltaClass = stepDelta > 0 ? 'text-rosewood-600' : 'text-sage-700';
       rightWrap.appendChild(
-        createEl('span', `text-[13px] font-medium ${deltaClass}`, `${sign}${stepDelta.toFixed(2)}`)
+        createEl('span', `text-fluid-label font-medium ${deltaClass}`, `${sign}${stepDelta.toFixed(2)}`)
       );
     }
     rightWrap.appendChild(
@@ -374,10 +374,10 @@ function bindChartLongPressEvents(canvas) {
 }
 
 function createStatCell(labelText, valueText, valueClass = 'text-ink') {
-  const cell = createEl('div', 'px-1 min-w-0 text-center');
+  const cell = createEl('div', 'bg-oat-50 border border-oat-200/70 rounded-xl px-3 py-2 text-center min-w-0');
   cell.append(
-    createEl('div', 'text-[13px] text-ink-400 truncate', labelText),
-    createEl('div', `text-xs font-semibold tabular-nums mt-0.5 truncate ${valueClass}`, valueText)
+    createEl('div', 'text-fluid-label text-ink-400', labelText),
+    createEl('div', `text-fluid-metric font-semibold tabular-nums mt-0.5 whitespace-nowrap ${valueClass}`, valueText)
   );
   return cell;
 }
@@ -402,26 +402,26 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     const privBanner = createEl(
       'div',
       isHidden
-        ? 'bg-oat-100 border border-oat-200 text-ink-700 rounded-2xl px-3.5 py-2.5 text-xs flex items-center justify-between gap-2'
-        : 'bg-sage-50 border border-sage-200 text-sage-700 rounded-2xl px-3.5 py-2.5 text-xs flex items-center justify-between gap-2'
+        ? 'bg-oat-100 border border-oat-200 text-ink-700 rounded-2xl px-3.5 py-2.5 text-xs flex flex-wrap items-center justify-between gap-2'
+        : 'bg-sage-50 border border-sage-200 text-sage-700 rounded-2xl px-3.5 py-2.5 text-xs flex flex-wrap items-center justify-between gap-2'
     );
-    const leftText = createEl('div', 'flex items-center gap-2 min-w-0');
+    const leftText = createEl('div', 'flex items-center gap-2 min-w-0 flex-1');
     leftText.append(
       createIcon(isHidden ? (hasPin ? 'lock' : 'eyeOff') : 'unlock', 'w-4 h-4 shrink-0'),
       createEl(
         'span',
         'leading-snug',
         isHidden
-          ? '隱私模式：已遮蔽真實體重與圖表刻度，僅呈現變化趨勢'
-          : '已暫時顯示真實體重（5 分鐘或離開畫面將自動隱藏）'
+          ? '隱私模式：已遮蔽體重與刻度'
+          : '已暫時顯示（5 分鐘或離頁自動隱藏）'
       )
     );
 
     const toggleBtn = createEl(
       'button',
       isHidden
-        ? 'shrink-0 bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-xl font-medium inline-flex items-center gap-1'
-        : 'shrink-0 bg-linen border border-sage-200 text-sage-700 px-2.5 py-1 rounded-xl font-medium inline-flex items-center gap-1'
+        ? 'shrink-0 whitespace-nowrap bg-linen border border-oat-200 text-sage-700 px-2.5 py-1 rounded-xl font-medium inline-flex items-center gap-1'
+        : 'shrink-0 whitespace-nowrap bg-linen border border-sage-200 text-sage-700 px-2.5 py-1 rounded-xl font-medium inline-flex items-center gap-1'
     );
     toggleBtn.type = 'button';
     toggleBtn.append(
@@ -446,13 +446,13 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
   if (daysSince === null || daysSince >= 7) {
     const notice = createEl(
       'div',
-      'bg-ochre-50 border border-ochre-200 text-ochre-700 rounded-2xl px-3.5 py-2.5 text-xs font-medium flex items-center gap-2'
+      'bg-ochre-50 border border-ochre-200 text-ochre-700 rounded-2xl px-3.5 py-2.5 text-xs font-medium flex items-start gap-2 leading-relaxed'
     );
     notice.append(
-      createIcon('clock', 'w-4 h-4 shrink-0 text-ochre-600'),
+      createIcon('clock', 'w-4 h-4 shrink-0 mt-0.5 text-ochre-600'),
       createEl(
         'span',
-        '',
+        'min-w-0 break-words',
         daysSince === null
           ? `${member.name} 尚未有體重紀錄，回總覽寫下第一筆紀錄吧。`
           : `${member.name} 已 ${daysSince} 天未記錄體重，記得定期量測追蹤變化喔。`
@@ -461,11 +461,11 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     blocks.push(notice);
   }
 
-  // 2. 區間統計摘要（隱私模式遮蔽平均／最低／最高，保留區間變化）
+  // 2. 區間統計摘要（2 × 2 格狀，避免窄螢幕擠壓裁切；隱私模式保留區間變化）
   const stats = calculatePeriodStats(filteredRecords);
   const statsCard = createEl(
     'div',
-    'journal-card p-3.5 rounded-2xl grid grid-cols-4 divide-x divide-oat-200'
+    'journal-card p-3 rounded-2xl grid grid-cols-2 gap-2'
   );
   if (stats) {
     const deltaText = stats.delta === null
@@ -479,16 +479,16 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
 
     statsCard.append(
       createStatCell('區間平均', isHidden ? MASKED_WEIGHT : `${stats.avg} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
+      createStatCell('區間變化', deltaText === '--' ? '--' : `${deltaText} kg`, deltaColor),
       createStatCell('區間最低', isHidden ? MASKED_WEIGHT : `${stats.min} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
-      createStatCell('區間最高', isHidden ? MASKED_WEIGHT : `${stats.max} kg`, isHidden ? 'text-ink-400' : 'text-ink'),
-      createStatCell('區間變化', deltaText === '--' ? '--' : `${deltaText} kg`, deltaColor)
+      createStatCell('區間最高', isHidden ? MASKED_WEIGHT : `${stats.max} kg`, isHidden ? 'text-ink-400' : 'text-ink')
     );
   } else {
     statsCard.append(
       createStatCell('區間平均', '--', 'text-ink-400'),
+      createStatCell('區間變化', '--', 'text-ink-400'),
       createStatCell('區間最低', '--', 'text-ink-400'),
-      createStatCell('區間最高', '--', 'text-ink-400'),
-      createStatCell('區間變化', '--', 'text-ink-400')
+      createStatCell('區間最高', '--', 'text-ink-400')
     );
   }
   blocks.push(statsCard);
@@ -497,7 +497,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
   const progress = calculateGoalProgress(allMemberRecs, member.target_weight);
   if (progress) {
     const progCard = createEl('div', 'journal-card p-3.5 rounded-2xl space-y-2');
-    const headRow = createEl('div', 'flex justify-between items-center text-xs');
+    const headRow = createEl('div', 'flex flex-wrap justify-between items-center gap-x-2 gap-y-0.5 text-xs');
 
     const titleWrap = createEl('span', 'font-medium text-ink-700 inline-flex items-center gap-1.5');
     titleWrap.append(
@@ -507,7 +507,7 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
 
     const statusWrap = createEl(
       'span',
-      `font-semibold tabular-nums inline-flex items-center gap-1 ${progress.isAchieved ? 'text-sage-600' : theme.accentText}`
+      `font-semibold tabular-nums whitespace-nowrap inline-flex items-center gap-1 ${progress.isAchieved ? 'text-sage-600' : theme.accentText}`
     );
     if (progress.isAchieved) {
       statusWrap.append(
@@ -525,18 +525,18 @@ function renderStatsSummary(member, allMemberRecs, filteredRecords) {
     bar.value = progress.percent;
     bar.max = 100;
 
-    const footRow = createEl('div', 'flex justify-between text-[13px] text-ink-400 tabular-nums');
+    const footRow = createEl('div', 'flex flex-wrap justify-between gap-x-2 gap-y-0.5 text-fluid-label text-ink-400 tabular-nums');
     if (isHidden) {
       footRow.append(
-        createEl('span', '', `起始 ${MASKED_WEIGHT} kg`),
-        createEl('span', 'text-ink-500 font-medium', `目前 ${MASKED_WEIGHT} kg`),
-        createEl('span', '', `目標 ${MASKED_WEIGHT} kg`)
+        createEl('span', 'whitespace-nowrap', `起始 ${MASKED_WEIGHT} kg`),
+        createEl('span', 'text-ink-500 font-medium whitespace-nowrap', `目前 ${MASKED_WEIGHT} kg`),
+        createEl('span', 'whitespace-nowrap', `目標 ${MASKED_WEIGHT} kg`)
       );
     } else {
       footRow.append(
-        createEl('span', '', `起始 ${progress.startWeight} kg`),
-        createEl('span', 'text-ink-700 font-medium', `目前 ${progress.currentWeight} kg`),
-        createEl('span', '', `目標 ${progress.targetWeight} kg`)
+        createEl('span', 'whitespace-nowrap', `起始 ${progress.startWeight} kg`),
+        createEl('span', 'text-ink-700 font-medium whitespace-nowrap', `目前 ${progress.currentWeight} kg`),
+        createEl('span', 'whitespace-nowrap', `目標 ${progress.targetWeight} kg`)
       );
     }
 
@@ -603,7 +603,7 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
   if (countEl) {
     countEl.textContent = totalPages > 1
-      ? `第 ${startIdx + 1}–${endIdx} 筆 / 共 ${total} 筆`
+      ? `第 ${startIdx + 1}–${endIdx} / ${total} 筆`
       : `共 ${total} 筆`;
   }
 
@@ -615,17 +615,17 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
   );
 
   const items = pageRecords.map((r, idx) => {
-    const li = createEl('li', 'py-2.5 flex justify-between items-center gap-2');
+    const li = createEl('li', 'py-2.5 flex justify-between items-start gap-2.5');
     const info = createEl('div', 'min-w-0 flex-1');
 
-    const topRow = createEl('div', 'flex items-baseline flex-wrap gap-x-2 gap-y-0.5');
-    topRow.append(
+    // 第 1 行：體重 + 精簡目標差距膠囊（取代固定寬度橫排，避免折行錯位）
+    const topRow = createEl('div', 'flex items-center flex-wrap gap-x-2 gap-y-1');
+    topRow.appendChild(
       createEl(
         'span',
-        `w-24 shrink-0 font-semibold tabular-nums ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+        `font-semibold text-sm tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
         isHidden ? `${MASKED_WEIGHT} kg` : `${r.weight_kg} kg`
-      ),
-      createEl('span', 'w-24 shrink-0 text-xs text-ink-400 tabular-nums', String(r.recorded_at ?? ''))
+      )
     );
 
     const activeTarget = recordTargetSeries.values[idx];
@@ -633,24 +633,37 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
     if (targetGap) {
       if (isHidden) {
         if (targetGap.isAchieved) {
-          topRow.appendChild(createEl('span', 'text-xs font-medium shrink-0 text-sage-600', '已達標'));
+          topRow.appendChild(
+            createEl(
+              'span',
+              'rounded-full px-2 py-0.5 text-[12px] font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
+              '已達標'
+            )
+          );
         }
       } else {
-        const gapColor = targetGap.isAchieved
-          ? 'text-sage-600'
+        const pillStyle = targetGap.isAchieved
+          ? 'bg-sage-50 text-sage-700 border border-sage-200/80'
           : targetGap.gap > 0
-            ? 'text-ochre-600'
-            : 'text-sage-700';
+            ? 'bg-ochre-50 text-ochre-700 border border-ochre-200/80'
+            : 'bg-sage-50 text-sage-700 border border-sage-200/80';
         topRow.appendChild(
-          createEl('span', `text-xs font-medium tabular-nums shrink-0 ${gapColor}`, targetGap.compactLabel)
+          createEl(
+            'span',
+            `rounded-full px-2 py-0.5 text-[12px] font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
+            targetGap.compactLabel
+          )
         );
       }
     }
 
-    info.appendChild(topRow);
+    // 第 2 行：量測日期（獨立成行保持左側整齊）
+    const dateRow = createEl('div', 'text-fluid-label text-ink-400 tabular-nums mt-0.5', String(r.recorded_at ?? ''));
+
+    info.append(topRow, dateRow);
 
     if (r.note) {
-      info.appendChild(createEl('p', 'text-xs text-ink-500 mt-0.5 break-words', String(r.note)));
+      info.appendChild(createEl('p', 'text-xs text-ink-500 mt-1 leading-relaxed break-words', String(r.note)));
     }
 
     const delBtn = createEl(
@@ -685,28 +698,45 @@ function renderHistoryList(member, memberHistory, filteredRecords) {
 
   const isFirst = state.historyPage <= 1;
   const isLast = state.historyPage >= totalPages;
+  const isMulti = totalPages > 2;
 
   const leftGroup = createEl('div', 'flex items-center gap-1');
-  if (totalPages > 2) {
+  if (isMulti) {
     leftGroup.appendChild(
       createPagerButton({ iconName: 'chevronsLeft', ariaLabel: '第一頁', disabled: isFirst, onClick: () => goToPage(1), compact: true })
     );
   }
   leftGroup.appendChild(
-    createPagerButton({ label: '上一頁', iconName: 'chevronLeft', iconPosition: 'left', ariaLabel: '上一頁', disabled: isFirst, onClick: () => goToPage(state.historyPage - 1) })
+    createPagerButton({
+      label: isMulti ? '上頁' : '上一頁',
+      iconName: 'chevronLeft',
+      iconPosition: 'left',
+      ariaLabel: '上一頁',
+      disabled: isFirst,
+      onClick: () => goToPage(state.historyPage - 1),
+      compact: isMulti,
+    })
   );
 
   const pageLabel = createEl(
     'span',
     'text-ink-500 font-medium tabular-nums whitespace-nowrap',
-    totalPages > 2 ? `${state.historyPage} / ${totalPages} 頁` : `第 ${state.historyPage} / ${totalPages} 頁`
+    isMulti ? `${state.historyPage} / ${totalPages}` : `第 ${state.historyPage} / ${totalPages} 頁`
   );
 
   const rightGroup = createEl('div', 'flex items-center gap-1');
   rightGroup.appendChild(
-    createPagerButton({ label: '下一頁', iconName: 'chevronRight', iconPosition: 'right', ariaLabel: '下一頁', disabled: isLast, onClick: () => goToPage(state.historyPage + 1) })
+    createPagerButton({
+      label: isMulti ? '下頁' : '下一頁',
+      iconName: 'chevronRight',
+      iconPosition: 'right',
+      ariaLabel: '下一頁',
+      disabled: isLast,
+      onClick: () => goToPage(state.historyPage + 1),
+      compact: isMulti,
+    })
   );
-  if (totalPages > 2) {
+  if (isMulti) {
     rightGroup.appendChild(
       createPagerButton({ iconName: 'chevronsRight', ariaLabel: '最後一頁', disabled: isLast, onClick: () => goToPage(totalPages), compact: true })
     );

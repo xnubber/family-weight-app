@@ -33,10 +33,10 @@ function getMemberTypeMeta(type) {
 }
 
 function createMetricCell(labelText, valueText, valueClass = 'text-ink-700') {
-  const cell = createEl('div', 'px-1 min-w-0');
+  const cell = createEl('div', 'px-1.5 min-w-0');
   cell.append(
-    createEl('div', 'text-[13px] text-ink-400 truncate tabular-nums', labelText),
-    createEl('div', `text-xs font-semibold tabular-nums mt-0.5 truncate ${valueClass}`, valueText)
+    createEl('div', 'text-fluid-label text-ink-400 whitespace-nowrap', labelText),
+    createEl('div', `text-fluid-metric font-semibold tabular-nums mt-0.5 whitespace-nowrap ${valueClass}`, valueText)
   );
   return cell;
 }
@@ -75,15 +75,15 @@ export function renderOverview({ onSelectMember }) {
     card.dataset.memberId = String(m.id);
     card.onclick = () => onSelectMember(m.id);
 
-    // 上排：左為頭像與名稱／更新日，右為當前體重（隱私模式自動遮蔽）
+    // 上排：左為頭像與名稱／更新日（長名稱優雅折行），右為當前體重（不換行不被擠壓）
     const topRow = createEl('div', 'flex justify-between items-center gap-3');
     const identityWrap = createEl('div', 'flex items-center gap-3 min-w-0 flex-1');
     const avatarNode = createAvatarNode(resolveMemberAvatar(m), 'w-11 h-11');
 
     const textWrap = createEl('div', 'min-w-0 flex-1');
-    const nameLine = createEl('div', 'flex items-center gap-1.5 min-w-0');
+    const nameLine = createEl('div', 'flex items-center flex-wrap gap-1.5 min-w-0');
     nameLine.append(
-      createEl('span', 'font-semibold text-base text-ink truncate', String(m.name ?? '')),
+      createEl('span', 'font-semibold text-base text-ink leading-snug break-words', String(m.name ?? '')),
       createEl('span', `shrink-0 text-[12px] px-2 py-0.5 rounded-full font-medium leading-none ${typeMeta.pillClass}`, typeMeta.label)
     );
     if (isPrivacyOn) {
@@ -100,13 +100,13 @@ export function renderOverview({ onSelectMember }) {
       nameLine,
       createEl(
         'p',
-        'text-xs text-ink-400 mt-1 tabular-nums truncate',
-        `${latest ? `最後更新：${latest.recorded_at}` : '尚未有體重紀錄'} · 點擊查看`
+        'text-fluid-label text-ink-400 mt-1 tabular-nums whitespace-nowrap',
+        latest ? `${latest.recorded_at} 更新` : '尚未有紀錄'
       )
     );
     identityWrap.append(avatarNode, textWrap);
 
-    const weightRow = createEl('div', 'text-2xl font-semibold text-ink tabular-nums shrink-0 text-right');
+    const weightRow = createEl('div', 'text-fluid-weight font-semibold text-ink tabular-nums shrink-0 text-right whitespace-nowrap');
     if (isHidden) {
       weightRow.append(
         createEl('span', 'text-ink-400 tracking-wider', latest ? MASKED_WEIGHT : '--'),
@@ -121,7 +121,7 @@ export function renderOverview({ onSelectMember }) {
 
     topRow.append(identityWrap, weightRow);
 
-    // 下排：三欄等寬對齊指標列（較前次 / 距目標或進度 / BMI 狀態或類別）
+    // 下排：三欄等寬精簡指標列（較前次 / 距目標或進度 / BMI 狀態或類別，全數零截斷）
     const diffColor = diffNum === null
       ? 'text-ink-400'
       : diffNum > 0
@@ -141,9 +141,7 @@ export function renderOverview({ onSelectMember }) {
         targetColor = 'text-ink-400';
       }
     } else {
-      targetLabel = m.target_weight !== null && m.target_weight !== undefined
-        ? `距目標 (${m.target_weight}kg)`
-        : '距目標';
+      targetLabel = '距目標';
       targetValue = targetGap
         ? (targetGap.isAchieved ? '已達標' : `${targetGap.signedText} kg`)
         : '--';
@@ -169,7 +167,7 @@ export function renderOverview({ onSelectMember }) {
 
     const metricsGrid = createEl(
       'div',
-      'mt-3.5 bg-oat-50 border border-oat-200/70 rounded-xl py-2 px-1 grid grid-cols-3 divide-x divide-oat-200 text-center'
+      'mt-3.5 bg-oat-50 border border-oat-200/70 rounded-xl py-2.5 px-1 grid grid-cols-3 divide-x divide-oat-200 text-center'
     );
     metricsGrid.append(
       createMetricCell('較前次', diffStr, diffColor),

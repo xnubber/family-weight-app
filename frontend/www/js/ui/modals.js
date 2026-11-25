@@ -181,16 +181,16 @@ function renderBatchMemberRows() {
     const latest = recs[recs.length - 1];
     const isHidden = isMemberWeightHidden(m);
 
-    const row = createEl('div', 'py-2.5 flex items-center justify-between gap-3');
+    const row = createEl('div', 'py-2.5 flex items-center justify-between gap-2.5');
     const leftGroup = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
     const labelWrap = createEl('div', 'min-w-0 flex-1');
     const subtitleText = isHidden
-      ? (latest ? `已隱藏上次體重（${latest.recorded_at}）` : '隱私模式 · 尚未有紀錄')
-      : (latest ? `上次 ${latest.weight_kg} kg（${latest.recorded_at}）` : '尚未有紀錄');
+      ? (latest ? '已隱藏上次體重' : '隱私模式')
+      : (latest ? `上次 ${latest.weight_kg} kg` : '尚未有紀錄');
 
     labelWrap.append(
-      createEl('div', 'font-medium text-sm text-ink truncate', String(m.name ?? '')),
-      createEl('div', 'text-[13px] text-ink-400 tabular-nums', subtitleText)
+      createEl('div', 'font-medium text-sm text-ink leading-snug break-words', String(m.name ?? '')),
+      createEl('div', 'text-fluid-label text-ink-400 tabular-nums mt-0.5', subtitleText)
     );
     leftGroup.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), labelWrap);
 
@@ -372,7 +372,7 @@ function renderProfileHealthCard(member, latest) {
     hasProfileHealthCard = true;
     card.className = 'rounded-2xl p-3.5 text-sm space-y-2 border bg-sage-50/75 border-sage-200';
 
-    const header = createEl('div', 'flex justify-between items-center gap-2');
+    const header = createEl('div', 'flex flex-wrap justify-between items-center gap-1.5');
     const titleWrap = createEl('span', 'font-medium text-sage-700 text-xs inline-flex items-center gap-1.5');
     titleWrap.append(
       createIcon('leaf', 'w-3.5 h-3.5 shrink-0'),
@@ -391,16 +391,16 @@ function renderProfileHealthCard(member, latest) {
         ? bmiRes.status
         : `BMI ${bmiRes.bmi.toFixed(1)} · ${bmiRes.status}`;
       header.appendChild(
-        createEl('span', `text-xs font-medium px-2 py-0.5 rounded-full tabular-nums ${badgeClass}`, badgeText)
+        createEl('span', `text-xs font-medium px-2 py-0.5 rounded-full tabular-nums whitespace-nowrap ${badgeClass}`, badgeText)
       );
     }
 
     const children = [header];
     if (range) {
-      const row = createEl('div', 'flex justify-between items-center text-xs text-ink-500');
+      const row = createEl('div', 'flex flex-wrap justify-between items-baseline gap-x-2 gap-y-0.5 text-xs text-ink-500');
       row.append(
-        createEl('span', '', '建議健康體重區間（BMI 18.5–24）'),
-        createEl('strong', 'text-ink font-semibold tabular-nums', `${range.minKg}–${range.maxKg} kg`)
+        createEl('span', '', '建議健康區間（BMI 18.5–24）'),
+        createEl('strong', 'text-ink font-semibold tabular-nums whitespace-nowrap', `${range.minKg}–${range.maxKg} kg`)
       );
       children.push(row);
     }
@@ -423,7 +423,7 @@ function renderProfileHealthCard(member, latest) {
     ? 'rounded-2xl p-3.5 text-sm space-y-2.5 border bg-ochre-50/80 border-ochre-200'
     : 'rounded-2xl p-3.5 text-sm space-y-2.5 border bg-clay-50/80 border-clay-200';
 
-  const header = createEl('div', 'flex justify-between items-center gap-2');
+  const header = createEl('div', 'flex flex-wrap justify-between items-center gap-2');
   const titleWrap = createEl(
     'span',
     `font-medium text-xs shrink-0 inline-flex items-center gap-1.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`
@@ -435,14 +435,14 @@ function renderProfileHealthCard(member, latest) {
   header.appendChild(titleWrap);
 
   if (isHidden) {
-    const hiddenNote = createEl('p', 'text-xs text-ink-500', '已開啟體重隱私保護，解鎖後可檢視每日熱量建議（RER / DER）。');
+    const hiddenNote = createEl('p', 'text-xs text-ink-500 leading-relaxed', '已開啟體重隱私保護，解鎖後可檢視每日熱量建議（RER / DER）。');
     card.replaceChildren(header, hiddenNote);
     return;
   }
 
   const factors = getPetFactors(member.type);
   const factorSelect = document.createElement('select');
-  factorSelect.className = `border rounded-lg px-2 py-1 text-xs bg-linen text-ink-700 ${isDog ? 'border-ochre-200' : 'border-clay-200'}`;
+  factorSelect.className = `max-w-full border rounded-lg px-2 py-1 text-xs bg-linen text-ink-700 ${isDog ? 'border-ochre-200' : 'border-clay-200'}`;
   factors.forEach((optCfg) => {
     const opt = document.createElement('option');
     opt.value = optCfg.value;
@@ -455,15 +455,15 @@ function renderProfileHealthCard(member, latest) {
   const renderPetResult = () => {
     const res = calculatePetCalories(latest.weight_kg, factorSelect.value);
     if (!res) return;
-    const colRer = createEl('div');
+    const colRer = createEl('div', 'min-w-0');
     colRer.append(
-      createEl('div', 'text-[13px] text-ink-400', '基礎代謝 RER'),
-      createEl('div', 'font-semibold text-ink tabular-nums', `${res.rer} kcal`)
+      createEl('div', 'text-fluid-label text-ink-400', '基礎代謝 RER'),
+      createEl('div', 'text-fluid-metric font-semibold text-ink tabular-nums whitespace-nowrap mt-0.5', `${res.rer} kcal`)
     );
-    const colDer = createEl('div');
+    const colDer = createEl('div', 'min-w-0');
     colDer.append(
-      createEl('div', 'text-[13px] text-ink-400', '每日建議攝取 DER'),
-      createEl('div', `font-semibold tabular-nums ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, `${res.der} kcal`)
+      createEl('div', 'text-fluid-label text-ink-400', '每日建議 DER'),
+      createEl('div', `text-fluid-metric font-semibold tabular-nums whitespace-nowrap mt-0.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, `${res.der} kcal`)
     );
     resultGrid.replaceChildren(colRer, colDer);
   };
