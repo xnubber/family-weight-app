@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isValidRecordedDate } from '../utils/date.js';
+import { isValidBirthDate, isValidRecordedDate } from '../utils/date.js';
 
 // 家庭同步碼驗證規則：12-64 字元英數字、- 或 _，禁止使用弱預設碼
 export const FAMILY_CODE_REGEX = /^[A-Za-z0-9_-]{12,64}$/;
@@ -42,6 +42,37 @@ const privacyPinSchema = z
   .nullable()
   .optional();
 
+const breedSchema = z
+  .string()
+  .trim()
+  .max(40, '品種不可超過 40 字元')
+  .nullable()
+  .optional()
+  .transform((v) => (v === '' ? null : v));
+
+const birthDateSchema = z
+  .string()
+  .trim()
+  .refine(isValidBirthDate, '生日格式不正確或超出合理範圍')
+  .nullable()
+  .optional();
+
+const bcsScoreSchema = z
+  .number({ message: 'BCS 體態評分必須為數字' })
+  .int('BCS 體態評分須為 1–9 的整數')
+  .min(1, 'BCS 體態評分須介於 1–9')
+  .max(9, 'BCS 體態評分須介於 1–9')
+  .nullable()
+  .optional();
+
+const petActivityFactorSchema = z
+  .number({ message: '活動係數必須為數字' })
+  .finite('活動係數必須為有效數值')
+  .min(0.5, '活動係數須介於 0.5–5.0')
+  .max(5.0, '活動係數須介於 0.5–5.0')
+  .nullable()
+  .optional();
+
 // Zod 嚴格輸入驗證 Schema（z.strictObject 拒絕任何未定義的額外欄位，防止 Mass Assignment）
 export const uuidSchema = z.uuid('無效的資源識別碼');
 
@@ -50,6 +81,10 @@ export const createMemberSchema = z.strictObject({
   name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元'),
   type: z.enum(MEMBER_TYPES, { message: '成員類型必須為 human、cat 或 dog' }),
   avatar: avatarSchema,
+  breed: breedSchema,
+  birth_date: birthDateSchema,
+  bcs_score: bcsScoreSchema,
+  pet_activity_factor: petActivityFactorSchema,
   hide_weight: z.boolean({ message: '隱私設定必須為布林值' }).optional(),
   privacy_pin: privacyPinSchema,
   height_cm: z
@@ -77,6 +112,10 @@ export const updateMemberSchema = z
   .strictObject({
     name: z.string().trim().min(1, '名稱不可為空').max(50, '名稱不可超過 50 字元').optional(),
     avatar: avatarSchema,
+    breed: breedSchema,
+    birth_date: birthDateSchema,
+    bcs_score: bcsScoreSchema,
+    pet_activity_factor: petActivityFactorSchema,
     hide_weight: z.boolean({ message: '隱私設定必須為布林值' }).optional(),
     privacy_pin: privacyPinSchema,
     current_pin: z
@@ -108,11 +147,15 @@ export const updateMemberSchema = z
     (data) =>
       data.name !== undefined ||
       data.avatar !== undefined ||
+      data.breed !== undefined ||
+      data.birth_date !== undefined ||
+      data.bcs_score !== undefined ||
+      data.pet_activity_factor !== undefined ||
       data.hide_weight !== undefined ||
       data.privacy_pin !== undefined ||
       data.height_cm !== undefined ||
       data.target_weight !== undefined,
-    { message: '至少需提供名稱、頭像、隱私設定、身高或目標體重其中一項欄位' }
+    { message: '至少需提供一項欲更新的成員資料欄位' }
   );
 
 export const verifyPinSchema = z.strictObject({

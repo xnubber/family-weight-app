@@ -38,7 +38,15 @@ async function appendTargetHistory(supabase, { familyCode, memberId, targetWeigh
   }
 }
 
-const OPTIONAL_MEMBER_COLUMNS = ['avatar', 'hide_weight', 'privacy_pin_hash'];
+const OPTIONAL_MEMBER_COLUMNS = [
+  'avatar',
+  'hide_weight',
+  'privacy_pin_hash',
+  'breed',
+  'birth_date',
+  'bcs_score',
+  'pet_activity_factor'
+];
 
 function detectMissingOptionalColumn(error) {
   if (error?.code !== '42703' && error?.code !== 'PGRST204') return null;
@@ -106,6 +114,10 @@ router.post('/', asyncHandler(async (req, res) => {
     name,
     type,
     avatar,
+    breed,
+    birth_date,
+    bcs_score,
+    pet_activity_factor,
     hide_weight,
     privacy_pin,
     height_cm,
@@ -118,15 +130,22 @@ router.post('/', asyncHandler(async (req, res) => {
   }
   const familyCode = resolved.familyCode;
   const supabase = getSupabaseClient();
+  const isPet = type === 'cat' || type === 'dog';
 
   const insertPayload = {
     family_code: familyCode,
     name,
     type,
-    height_cm: height_cm ?? null,
+    height_cm: isPet ? null : (height_cm ?? null),
     target_weight: target_weight ?? null
   };
   if (avatar !== undefined) insertPayload.avatar = avatar;
+  if (birth_date !== undefined) insertPayload.birth_date = birth_date;
+  if (isPet) {
+    if (breed !== undefined) insertPayload.breed = breed;
+    if (bcs_score !== undefined) insertPayload.bcs_score = bcs_score;
+    if (pet_activity_factor !== undefined) insertPayload.pet_activity_factor = pet_activity_factor;
+  }
   if (hide_weight !== undefined) insertPayload.hide_weight = Boolean(hide_weight);
   if (hide_weight && privacy_pin) {
     insertPayload.privacy_pin_hash = hashPrivacyPin(privacy_pin);
@@ -175,7 +194,7 @@ router.post('/', asyncHandler(async (req, res) => {
   res.status(201).json(sanitizeMember(data));
 }));
 
-// 更新成員資料（名稱、頭像、隱私設定、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
+// 更新成員資料（名稱、頭像、品種、生日、BCS、活動係數、隱私設定、身高、目標體重）— 強制驗證 UUID 與所屬家庭同步碼
 router.put('/:id', asyncHandler(async (req, res) => {
   const idParsed = uuidSchema.safeParse(req.params.id);
   if (!idParsed.success) {
@@ -230,10 +249,20 @@ router.put('/:id', asyncHandler(async (req, res) => {
     }
   }
 
+  const isExistingPet = existing.type === 'cat' || existing.type === 'dog';
   const updatePayload = {};
   if (bodyParsed.data.name !== undefined) updatePayload.name = bodyParsed.data.name;
   if (bodyParsed.data.avatar !== undefined) updatePayload.avatar = bodyParsed.data.avatar;
-  if (bodyParsed.data.height_cm !== undefined) updatePayload.height_cm = bodyParsed.data.height_cm;
+  if (bodyParsed.data.birth_date !== undefined) updatePayload.birth_date = bodyParsed.data.birth_date;
+  if (isExistingPet) {
+    if (bodyParsed.data.breed !== undefined) updatePayload.breed = bodyParsed.data.breed;
+    if (bodyParsed.data.bcs_score !== undefined) updatePayload.bcs_score = bodyParsed.data.bcs_score;
+    if (bodyParsed.data.pet_activity_factor !== undefined) {
+      updatePayload.pet_activity_factor = bodyParsed.data.pet_activity_factor;
+    }
+  } else if (bodyParsed.data.height_cm !== undefined) {
+    updatePayload.height_cm = bodyParsed.data.height_cm;
+  }
   if (bodyParsed.data.target_weight !== undefined) updatePayload.target_weight = bodyParsed.data.target_weight;
   if (bodyParsed.data.hide_weight !== undefined) {
     updatePayload.hide_weight = Boolean(bodyParsed.data.hide_weight);

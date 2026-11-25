@@ -27,13 +27,22 @@ import {
   verifyLocalPin
 } from '../utils/privacy.js';
 import {
+  calculateAgeInfo,
   calculateBmi,
   calculateGoalProgress,
   calculateHealthyWeightRange,
   calculatePetCalories,
+  calculateWeeklyWeightChangePct,
+  getBcsMeta,
   getLocalTodayDate
 } from '../utils/metrics.js';
-import { isTempId, isValidResourceId, isValidRecordedDate, parseStrictNumber } from '../utils/validation.js';
+import {
+  isTempId,
+  isValidBirthDate,
+  isValidRecordedDate,
+  isValidResourceId,
+  parseStrictNumber
+} from '../utils/validation.js';
 
 const CAT_FACTORS = [
   { value: '1.2', label: '已結紮成貓 (1.2x)' },
@@ -72,13 +81,42 @@ function getPetFactors(type) {
   return type === 'dog' ? DOG_FACTORS : CAT_FACTORS;
 }
 
-function getSavedPetFactor(memberId, type) {
+function getDefaultPetFactorNumber(type) {
+  return type === 'dog' ? 1.6 : 1.2;
+}
+
+function getSavedPetFactor(member, type) {
   const factors = getPetFactors(type);
-  const defaultFactor = type === 'dog' ? '1.6' : '1.2';
-  const saved =
-    localStorage.getItem(`petFactor:${memberId}`) ||
-    (type === 'cat' ? localStorage.getItem(`catFactor:${memberId}`) : null);
+  const defaultFactor = String(getDefaultPetFactorNumber(type).toFixed(1));
+  if (member?.pet_activity_factor !== null && member?.pet_activity_factor !== undefined) {
+    const cloudVal = Number(member.pet_activity_factor).toFixed(1);
+    if (factors.some((f) => f.value === cloudVal)) return cloudVal;
+  }
+  const memberId = member?.id;
+  const saved = memberId
+    ? (localStorage.getItem(`petFactor:${memberId}`) ||
+      (type === 'cat' ? localStorage.getItem(`catFactor:${memberId}`) : null))
+    : null;
   return factors.some((f) => f.value === saved) ? saved : defaultFactor;
+}
+
+function parseOptionalBcsInput(rawValue) {
+  const trimmed = String(rawValue ?? '').trim();
+  if (trimmed === '') return { value: null };
+  const num = Number(trimmed);
+  if (!Number.isInteger(num) || num < 1 || num > 9) {
+    return { error: '體態評分 BCS 須為 1–9 的整數' };
+  }
+  return { value: num };
+}
+
+function parseOptionalBirthDateInput(rawValue) {
+  const trimmed = String(rawValue ?? '').trim();
+  if (trimmed === '') return { value: null };
+  if (!isValidBirthDate(trimmed)) {
+    return { error: '生日格式不正確或超出合理範圍' };
+  }
+  return { value: trimmed };
 }
 
 // 請求解鎖受隱私保護的成員（無 PIN 直接暫時顯示；有 PIN 則彈出 4 位數驗證視窗）
@@ -298,7 +336,7 @@ function syncPrivacyFormUI(prefix, member) {
   clearWrap.classList.toggle('hidden', !hideEnabled || !hasPin);
 }
 
-// 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、頭像、隱私設定、身高與目標體重）
+// 開啟新增／編輯成員彈窗（傳入 member 物件則進入編輯模式，支援修改名稱、頭像、品種、生日、BCS、隱私設定、身高與目標體重）
 export function openMemberModal(member = null) {
   const form = document.getElementById('form-member');
   const titleEl = document.getElementById('mem-modal-title');
@@ -306,11 +344,17 @@ export function openMemberModal(member = null) {
   const idInput = document.getElementById('mem-id');
   const nameInput = document.getElementById('mem-name');
   const typeSelect = document.getElementById('mem-type');
+  const breedWrap = document.getElementById('mem-breed-wrap');
+  const breedInput = document.getElementById('mem-breed');
+  const birthDateInput = document.getElementById('mem-birth-date');
   const heightWrap = document.getElementById('mem-height-wrap');
   const heightInput = document.getElementById('mem-height');
+  const bcsWrap = document.getElementById('mem-bcs-wrap');
+  const bcsSelect = document.getElementById('mem-bcs');
   const targetInput = document.getElementById('mem-target');
 
   form.reset();
+  birthDateInput.max = getLocalTodayDate();
 
   if (member) {
     const isPet = isPetType(member.type);
@@ -322,8 +366,13 @@ export function openMemberModal(member = null) {
     nameInput.value = member.name || '';
     typeSelect.value = VALID_MEMBER_TYPES.has(member.type) ? member.type : 'human';
     typeSelect.disabled = true;
+    breedWrap.classList.toggle('hidden', !isPet);
+    breedInput.value = isPet ? (member.breed || '') : '';
+    birthDateInput.value = member.birth_date ? String(member.birth_date).slice(0, 10) : '';
     heightWrap.classList.toggle('hidden', isPet);
     heightInput.value = isPet ? '' : (member.height_cm ?? '');
+    bcsWrap.classList.toggle('hidden', !isPet);
+    bcsSelect.value = isPet && member.bcs_score ? String(member.bcs_score) : '';
     targetInput.value = isLockedWithPin ? '' : (member.target_weight ?? '');
     setMemberModalAvatar(resolveMemberAvatar(member));
     syncPrivacyFormUI('mem', member);
@@ -341,7 +390,12 @@ export function openMemberModal(member = null) {
     idInput.value = '';
     typeSelect.value = 'human';
     typeSelect.disabled = false;
+    breedWrap.classList.add('hidden');
+    breedInput.value = '';
+    birthDateInput.value = '';
     heightWrap.classList.remove('hidden');
+    bcsWrap.classList.add('hidden');
+    bcsSelect.value = '';
     setMemberModalAvatar(getDefaultAvatarForType('human'));
     syncPrivacyFormUI('mem', null);
   }
@@ -352,7 +406,7 @@ export function openMemberModal(member = null) {
   openModal('modal-member');
 }
 
-// 繪製個人資訊面板中的「自動健康指標卡」（家人 BMI / 區間、貓咪與狗狗 RER / DER，隱私模式防反推）
+// 繪製個人資訊面板中的「自動健康指標卡」（家人 BMI / 區間、貓咪與狗狗 RER / DER 與 BCS 指南，隱私模式防反推）
 function renderProfileHealthCard(member, latest) {
   const card = document.getElementById('prof-health-card');
   const isHuman = member.type === 'human';
@@ -409,8 +463,9 @@ function renderProfileHealthCard(member, latest) {
     return;
   }
 
-  // 貓咪／狗狗自動每日熱量建議（RER / DER）
-  if (!latest) {
+  // 貓咪／狗狗自動每日熱量建議（RER / DER，活動係數雲端同步）＋ WSAVA BCS 體態參考
+  const bcsMeta = getBcsMeta(member.bcs_score);
+  if (!latest && !bcsMeta) {
     hasProfileHealthCard = false;
     card.classList.add('hidden');
     card.replaceChildren();
@@ -423,59 +478,87 @@ function renderProfileHealthCard(member, latest) {
     ? 'rounded-2xl p-3.5 text-sm space-y-2.5 border bg-ochre-50/80 border-ochre-200'
     : 'rounded-2xl p-3.5 text-sm space-y-2.5 border bg-clay-50/80 border-clay-200';
 
-  const header = createEl('div', 'flex flex-wrap justify-between items-center gap-2');
-  const titleWrap = createEl(
-    'span',
-    `font-medium text-xs shrink-0 inline-flex items-center gap-1.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`
-  );
-  titleWrap.append(
-    createIcon('paw', 'w-3.5 h-3.5 shrink-0'),
-    createEl('span', '', isDog ? '狗狗每日熱量建議' : '貓咪每日熱量建議')
-  );
-  header.appendChild(titleWrap);
+  const children = [];
 
-  if (isHidden) {
-    const hiddenNote = createEl('p', 'text-xs text-ink-500 leading-relaxed', '已開啟體重隱私保護，解鎖後可檢視每日熱量建議（RER / DER）。');
-    card.replaceChildren(header, hiddenNote);
-    return;
+  if (latest) {
+    const header = createEl('div', 'flex flex-wrap justify-between items-center gap-2');
+    const titleWrap = createEl(
+      'span',
+      `font-medium text-xs shrink-0 inline-flex items-center gap-1.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`
+    );
+    titleWrap.append(
+      createIcon('paw', 'w-3.5 h-3.5 shrink-0'),
+      createEl('span', '', isDog ? '狗狗每日熱量建議' : '貓咪每日熱量建議')
+    );
+    header.appendChild(titleWrap);
+
+    if (isHidden) {
+      children.push(
+        header,
+        createEl('p', 'text-xs text-ink-500 leading-relaxed', '已開啟體重隱私保護，解鎖後可檢視每日熱量建議（RER / DER）。')
+      );
+    } else {
+      const factors = getPetFactors(member.type);
+      const factorSelect = document.createElement('select');
+      factorSelect.className = `max-w-full border rounded-lg px-2 py-1 text-xs bg-linen text-ink-700 ${isDog ? 'border-ochre-200' : 'border-clay-200'}`;
+      factors.forEach((optCfg) => {
+        const opt = document.createElement('option');
+        opt.value = optCfg.value;
+        opt.textContent = optCfg.label;
+        factorSelect.appendChild(opt);
+      });
+      factorSelect.value = getSavedPetFactor(member, member.type);
+
+      const resultGrid = createEl('div', 'grid grid-cols-2 gap-2 bg-linen/90 border border-oat-200/70 rounded-xl p-2.5 text-center');
+      const renderPetResult = () => {
+        const res = calculatePetCalories(latest.weight_kg, factorSelect.value);
+        if (!res) return;
+        const colRer = createEl('div', 'min-w-0');
+        colRer.append(
+          createEl('div', 'text-fluid-label text-ink-400', '基礎代謝 RER'),
+          createEl('div', 'text-fluid-metric font-semibold text-ink tabular-nums whitespace-nowrap mt-0.5', `${res.rer} kcal`)
+        );
+        const colDer = createEl('div', 'min-w-0');
+        colDer.append(
+          createEl('div', 'text-fluid-label text-ink-400', '每日建議 DER'),
+          createEl('div', `text-fluid-metric font-semibold tabular-nums whitespace-nowrap mt-0.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, `${res.der} kcal`)
+        );
+        resultGrid.replaceChildren(colRer, colDer);
+      };
+
+      factorSelect.onchange = () => {
+        const nextFactor = Number(factorSelect.value);
+        localStorage.setItem(`petFactor:${member.id}`, factorSelect.value);
+        renderPetResult();
+        if (Number.isFinite(nextFactor)) {
+          optimisticUpdateMember(member.id, { pet_activity_factor: nextFactor });
+        }
+      };
+
+      header.appendChild(factorSelect);
+      renderPetResult();
+      children.push(header, resultGrid);
+    }
   }
 
-  const factors = getPetFactors(member.type);
-  const factorSelect = document.createElement('select');
-  factorSelect.className = `max-w-full border rounded-lg px-2 py-1 text-xs bg-linen text-ink-700 ${isDog ? 'border-ochre-200' : 'border-clay-200'}`;
-  factors.forEach((optCfg) => {
-    const opt = document.createElement('option');
-    opt.value = optCfg.value;
-    opt.textContent = optCfg.label;
-    factorSelect.appendChild(opt);
-  });
-  factorSelect.value = getSavedPetFactor(member.id, member.type);
-
-  const resultGrid = createEl('div', 'grid grid-cols-2 gap-2 bg-linen/90 border border-oat-200/70 rounded-xl p-2.5 text-center');
-  const renderPetResult = () => {
-    const res = calculatePetCalories(latest.weight_kg, factorSelect.value);
-    if (!res) return;
-    const colRer = createEl('div', 'min-w-0');
-    colRer.append(
-      createEl('div', 'text-fluid-label text-ink-400', '基礎代謝 RER'),
-      createEl('div', 'text-fluid-metric font-semibold text-ink tabular-nums whitespace-nowrap mt-0.5', `${res.rer} kcal`)
+  if (bcsMeta) {
+    const bcsBox = createEl(
+      'div',
+      latest ? 'pt-2 border-t border-oat-200/80 space-y-1' : 'space-y-1'
     );
-    const colDer = createEl('div', 'min-w-0');
-    colDer.append(
-      createEl('div', 'text-fluid-label text-ink-400', '每日建議 DER'),
-      createEl('div', `text-fluid-metric font-semibold tabular-nums whitespace-nowrap mt-0.5 ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, `${res.der} kcal`)
+    const bcsHead = createEl('div', 'flex flex-wrap items-center justify-between gap-1.5');
+    bcsHead.append(
+      createEl('span', `text-xs font-medium ${isDog ? 'text-ochre-700' : 'text-clay-700'}`, 'WSAVA 體態評分'),
+      createEl('span', `text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${bcsMeta.badgeClass}`, bcsMeta.compact)
     );
-    resultGrid.replaceChildren(colRer, colDer);
-  };
+    bcsBox.append(
+      bcsHead,
+      createEl('p', 'text-fluid-label text-ink-500 leading-relaxed', bcsMeta.guide)
+    );
+    children.push(bcsBox);
+  }
 
-  factorSelect.onchange = () => {
-    localStorage.setItem(`petFactor:${member.id}`, factorSelect.value);
-    renderPetResult();
-  };
-
-  header.appendChild(factorSelect);
-  renderPetResult();
-  card.replaceChildren(header, resultGrid);
+  card.replaceChildren(...children);
 }
 
 function setProfileEditMode(isEditing, animate = false) {
@@ -510,6 +593,9 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   const isHidden = isMemberWeightHidden(m);
   const hasPin = memberHasPrivacyPin(m);
   const isLockedWithPin = hasPin && !isMemberUnlocked(m.id);
+  const ageInfo = calculateAgeInfo(m.birth_date, m.type);
+  const bcsMeta = isPet ? getBcsMeta(m.bcs_score) : null;
+  const weeklyPct = isPet ? calculateWeeklyWeightChangePct(recs) : null;
 
   const renderProfileAvatarPreview = (avatarId) => {
     const slot = document.getElementById('prof-avatar-slot');
@@ -520,7 +606,12 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
 
   const fillEditInputs = () => {
     document.getElementById('prof-name').value = m.name || '';
+    document.getElementById('prof-breed').value = isPet ? (m.breed || '') : '';
+    const profBirthEl = document.getElementById('prof-birth-date');
+    profBirthEl.max = getLocalTodayDate();
+    profBirthEl.value = m.birth_date ? String(m.birth_date).slice(0, 10) : '';
     document.getElementById('prof-height').value = isPet ? '' : (m.height_cm ?? '');
+    document.getElementById('prof-bcs').value = isPet && m.bcs_score ? String(m.bcs_score) : '';
     document.getElementById('prof-target').value = isLockedWithPin ? '' : (m.target_weight ?? '');
     document.getElementById('prof-avatar').value = initialAvatar;
     renderProfileAvatarPreview(initialAvatar);
@@ -533,7 +624,16 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
 
   document.getElementById('prof-id').value = m.id;
   document.getElementById('prof-title').textContent = m.name || '個人資訊';
-  document.getElementById('prof-subtitle').textContent = `${getMemberTypeLabel(m.type)}檔案`;
+
+  const subtitleParts = [getMemberTypeLabel(m.type)];
+  if (isPet && m.breed) subtitleParts.push(String(m.breed).trim());
+  if (isPet && ageInfo?.lifeStage) {
+    subtitleParts.push(ageInfo.lifeStage);
+  } else if (!isPet && ageInfo?.shortText) {
+    subtitleParts.push(ageInfo.shortText);
+  }
+  document.getElementById('prof-subtitle').textContent =
+    subtitleParts.length > 1 ? subtitleParts.join(' · ') : `${subtitleParts[0]}檔案`;
 
   // 頂部快速解鎖／隱藏按鈕
   const toggleBtn = document.getElementById('btn-prof-privacy-toggle');
@@ -560,8 +660,13 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   // 檢視模式文字
   document.getElementById('prof-view-name').textContent = m.name || '--';
   document.getElementById('prof-view-type').textContent = getMemberTypeLabel(m.type);
+  document.getElementById('prof-view-breed-row').classList.toggle('hidden', !isPet);
+  document.getElementById('prof-view-breed').textContent = m.breed ? String(m.breed).trim() : '未設定';
+  document.getElementById('prof-view-birth').textContent = ageInfo ? ageInfo.displayText : '未設定';
   document.getElementById('prof-view-height-row').classList.toggle('hidden', isPet);
   document.getElementById('prof-view-height').textContent = m.height_cm ? `${m.height_cm} cm` : '未設定';
+  document.getElementById('prof-view-bcs-row').classList.toggle('hidden', !isPet);
+  document.getElementById('prof-view-bcs').textContent = bcsMeta ? bcsMeta.compact : '未評分';
   document.getElementById('prof-view-target').textContent = isHidden
     ? (m.target_weight ? '已隱藏' : '未設定')
     : (m.target_weight ? `${m.target_weight} kg` : '未設定');
@@ -573,7 +678,9 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   renderProfileHealthCard(m, latest);
 
   // 編輯模式欄位初始值
+  document.getElementById('prof-breed-wrap').classList.toggle('hidden', !isPet);
   document.getElementById('prof-height-wrap').classList.toggle('hidden', isPet);
+  document.getElementById('prof-bcs-wrap').classList.toggle('hidden', !isPet);
   fillEditInputs();
   setProfileEditMode(false);
 
@@ -586,9 +693,32 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
 
   let metricLabel = '目標差距';
   let metricVal = '--';
+  let metricColor = 'text-sage-700';
   const bmiRes = !isPet && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
   const goalProgress = calculateGoalProgress(recs, m.target_weight);
-  if (isHidden) {
+  if (isPet) {
+    if (bcsMeta) {
+      metricLabel = '體態 BCS';
+      metricVal = bcsMeta.compact;
+      metricColor = bcsMeta.colorClass;
+    } else if (weeklyPct) {
+      metricLabel = '一週變化';
+      metricVal = weeklyPct.signedText;
+      metricColor = weeklyPct.isAlert
+        ? 'text-rosewood-600'
+        : weeklyPct.pct > 0
+          ? 'text-ochre-600'
+          : weeklyPct.pct < 0
+            ? 'text-sage-700'
+            : 'text-ink-700';
+    } else if (isHidden) {
+      metricLabel = '目標進度';
+      metricVal = goalProgress ? (goalProgress.isAchieved ? '已達標' : `${goalProgress.percent}%`) : '--';
+    } else if (latest && m.target_weight) {
+      const gapNum = Number((Number(latest.weight_kg) - Number(m.target_weight)).toFixed(2));
+      metricVal = `${gapNum > 0 ? '+' : ''}${gapNum.toFixed(2)} kg`;
+    }
+  } else if (isHidden) {
     if (bmiRes) {
       metricLabel = '體位狀態';
       metricVal = bmiRes.status;
@@ -620,7 +750,7 @@ export function openProfileModal(memberId, { onNavigateToChart }) {
   const col2 = createEl('div');
   col2.append(
     createEl('div', 'text-xs text-ink-400', metricLabel),
-    createEl('div', 'font-semibold text-base text-sage-700 tabular-nums mt-0.5', metricVal)
+    createEl('div', `font-semibold text-base tabular-nums mt-0.5 ${metricColor}`, metricVal)
   );
   summary.replaceChildren(col1, col2);
 
@@ -825,12 +955,19 @@ export function initModals() {
   document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single', true);
   document.getElementById('rec-member').onchange = () => updateSingleWeightInputMask();
 
-  // 切換成員類型時自動隱藏／顯示身高欄位，並在未手動挑頭像時貼心帶入對應風格頭像
+  // 切換成員類型時自動切換家人（身高）與毛孩（品種、BCS）欄位，並在未手動挑頭像時貼心帶入對應風格頭像
   document.getElementById('mem-type').onchange = (e) => {
     const nextType = e.target.value;
     const isPet = isPetType(nextType);
     document.getElementById('mem-height-wrap').classList.toggle('hidden', isPet);
-    if (isPet) document.getElementById('mem-height').value = '';
+    document.getElementById('mem-breed-wrap').classList.toggle('hidden', !isPet);
+    document.getElementById('mem-bcs-wrap').classList.toggle('hidden', !isPet);
+    if (isPet) {
+      document.getElementById('mem-height').value = '';
+    } else {
+      document.getElementById('mem-breed').value = '';
+      document.getElementById('mem-bcs').value = '';
+    }
     if (!memberAvatarManuallyPicked) {
       setMemberModalAvatar(getDefaultAvatarForType(nextType));
     }
@@ -918,7 +1055,7 @@ export function initModals() {
     showToast('體重已記錄');
   };
 
-  // 表單送出：樂觀新增或編輯成員（含自訂頭像、狗狗類型與隱私設定）
+  // 表單送出：樂觀新增或編輯成員（含自訂頭像、品種、生日、BCS 與隱私設定）
   document.getElementById('form-member').onsubmit = (e) => {
     e.preventDefault();
     const editId = document.getElementById('mem-id').value.trim();
@@ -928,6 +1065,10 @@ export function initModals() {
     const rawAvatar = document.getElementById('mem-avatar').value.trim();
     const avatar = isValidAvatarId(rawAvatar) ? rawAvatar : getDefaultAvatarForType(type);
     const isPet = isPetType(type);
+    const rawBreed = isPet ? document.getElementById('mem-breed').value.trim() : '';
+    const breed = isPet ? (rawBreed || null) : null;
+    const birthParsed = parseOptionalBirthDateInput(document.getElementById('mem-birth-date').value);
+    const bcsParsed = isPet ? parseOptionalBcsInput(document.getElementById('mem-bcs').value) : { value: null };
     const heightParsed = isPet
       ? { value: null }
       : parseStrictNumber(document.getElementById('mem-height').value, {
@@ -951,6 +1092,9 @@ export function initModals() {
 
     if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
     if (!VALID_MEMBER_TYPES.has(type)) return showToast('成員類型不正確', true);
+    if (rawBreed.length > 40) return showToast('品種不可超過 40 字元', true);
+    if (birthParsed.error) return showToast(birthParsed.error, true);
+    if (bcsParsed.error) return showToast(bcsParsed.error, true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
     if (targetParsed.error) return showToast(targetParsed.error, true);
 
@@ -959,8 +1103,13 @@ export function initModals() {
       const updatePayload = {
         name,
         avatar,
+        birth_date: birthParsed.value,
         height_cm: heightParsed.value
       };
+      if (isPet) {
+        updatePayload.breed = breed;
+        updatePayload.bcs_score = bcsParsed.value;
+      }
       if (!privacyData.locked) {
         updatePayload.target_weight = targetParsed.value;
         updatePayload.target_effective_date = getLocalTodayDate();
@@ -978,11 +1127,17 @@ export function initModals() {
         name,
         type,
         avatar,
+        birth_date: birthParsed.value,
         hide_weight: privacyData.hide_weight,
         height_cm: heightParsed.value,
         target_weight: targetParsed.value,
         target_effective_date: getLocalTodayDate()
       };
+      if (isPet) {
+        addPayload.breed = breed;
+        addPayload.bcs_score = bcsParsed.value;
+        addPayload.pet_activity_factor = getDefaultPetFactorNumber(type);
+      }
       if (privacyData.privacy_pin) addPayload.privacy_pin = privacyData.privacy_pin;
 
       closeModal('modal-member');
@@ -992,7 +1147,7 @@ export function initModals() {
     }
   };
 
-  // 表單送出：樂觀更新個人資訊（含名稱、頭像、隱私設定、身高、目標體重）
+  // 表單送出：樂觀更新個人資訊（含名稱、頭像、品種、生日、BCS、隱私設定、身高、目標體重）
   document.getElementById('form-profile').onsubmit = (e) => {
     e.preventDefault();
     const id = document.getElementById('prof-id').value.trim();
@@ -1001,6 +1156,10 @@ export function initModals() {
     const name = document.getElementById('prof-name').value.trim();
     const rawAvatar = document.getElementById('prof-avatar').value.trim();
     const avatar = isValidAvatarId(rawAvatar) ? rawAvatar : resolveMemberAvatar(member);
+    const rawBreed = isPet ? document.getElementById('prof-breed').value.trim() : '';
+    const breed = isPet ? (rawBreed || null) : null;
+    const birthParsed = parseOptionalBirthDateInput(document.getElementById('prof-birth-date').value);
+    const bcsParsed = isPet ? parseOptionalBcsInput(document.getElementById('prof-bcs').value) : { value: null };
     const heightParsed = isPet
       ? { value: null }
       : parseStrictNumber(document.getElementById('prof-height').value, {
@@ -1024,14 +1183,22 @@ export function initModals() {
 
     if (!isValidResourceId(id)) return showToast('無效的成員識別碼', true);
     if (!name || name.length > 50) return showToast('名稱須為 1–50 字元', true);
+    if (rawBreed.length > 40) return showToast('品種不可超過 40 字元', true);
+    if (birthParsed.error) return showToast(birthParsed.error, true);
+    if (bcsParsed.error) return showToast(bcsParsed.error, true);
     if (heightParsed.error) return showToast(heightParsed.error, true);
     if (targetParsed.error) return showToast(targetParsed.error, true);
 
     const updatePayload = {
       name,
       avatar,
+      birth_date: birthParsed.value,
       height_cm: heightParsed.value
     };
+    if (isPet) {
+      updatePayload.breed = breed;
+      updatePayload.bcs_score = bcsParsed.value;
+    }
     if (!privacyData.locked) {
       updatePayload.target_weight = targetParsed.value;
       updatePayload.target_effective_date = getLocalTodayDate();

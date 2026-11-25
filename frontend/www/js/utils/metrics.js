@@ -236,3 +236,175 @@ export function getDaysSinceLastRecord(memberRecords, todayStr = getLocalTodayDa
   const diffMs = Date.UTC(ty, tm - 1, td) - Date.UTC(ly, lm - 1, ld);
   return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
 }
+
+// 獸醫 WSAVA 9 分制體態評分（Body Condition Score）解讀
+export function getBcsMeta(score) {
+  const num = Number(score);
+  if (!Number.isInteger(num) || num < 1 || num > 9) return null;
+  if (num <= 3) {
+    return {
+      score: num,
+      status: '偏瘦',
+      compact: `${num}/9 偏瘦`,
+      colorClass: 'text-ink-700',
+      badgeClass: 'bg-oat-100 text-ink-700 border border-oat-200',
+      guide: '肋骨與腰椎明顯易見，建議與獸醫討論適度補充營養。'
+    };
+  }
+  if (num <= 5) {
+    return {
+      score: num,
+      status: '理想',
+      compact: `${num}/9 理想`,
+      colorClass: 'text-sage-700',
+      badgeClass: 'bg-sage-100 text-sage-700 border border-sage-200',
+      guide: '輕摸可感到肋骨、上方可見自然腰身，體態維持良好。'
+    };
+  }
+  if (num <= 7) {
+    return {
+      score: num,
+      status: '過重',
+      compact: `${num}/9 過重`,
+      colorClass: 'text-ochre-600',
+      badgeClass: 'bg-ochre-100 text-ochre-700 border border-ochre-200',
+      guide: '肋骨較難摸到、腰身變不明顯，建議控制熱量並適度活動。'
+    };
+  }
+  return {
+    score: num,
+    status: '肥胖',
+    compact: `${num}/9 肥胖`,
+    colorClass: 'text-rosewood-600',
+    badgeClass: 'bg-rosewood-50 text-rosewood-600 border border-rosewood-200',
+    guide: '腹部明顯下垂且不易摸到肋骨，建議諮詢獸醫規劃減重。'
+  };
+}
+
+function parseUtcDayMs(dateStr) {
+  const iso = String(dateStr || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+/**
+ * 計算毛孩「一週體重變化幅度（%）」：
+ * - 以最新一筆體重為終點，優先取 1–7 天內最早的一筆（例如 7 天前）為基準
+ * - 若 1–7 天內無紀錄，但 8–14 天內有每週量測紀錄，取最接近 7 天的那一筆為基準
+ * - 百分比不曝露絕對公斤數，隱私模式下亦可安心顯示；單週變動達 ±5% 以上標記為警戒
+ */
+export function calculateWeeklyWeightChangePct(memberRecords) {
+  if (!Array.isArray(memberRecords) || memberRecords.length < 2) return null;
+  const latest = memberRecords[memberRecords.length - 1];
+  const latestWeight = Number(latest?.weight_kg);
+  const latestMs = parseUtcDayMs(latest?.recorded_at);
+  if (!(latestWeight > 0) || latestMs === null) return null;
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  let bestWithinWeek = null; // { rec, diffDays } 盡量接近 7 天（diffDays 最大）
+  let bestNearWeek = null; // { rec, diffDays } 8–14 天內最接近 7 天（diffDays 最小）
+
+  for (let i = 0; i < memberRecords.length - 1; i++) {
+    const rec = memberRecords[i];
+    const w = Number(rec?.weight_kg);
+    const ms = parseUtcDayMs(rec?.recorded_at);
+    if (!(w > 0) || ms === null) continue;
+    const diffDays = Math.round((latestMs - ms) / DAY_MS);
+    if (diffDays >= 1 && diffDays <= 7) {
+      if (!bestWithinWeek || diffDays > bestWithinWeek.diffDays) {
+        bestWithinWeek = { rec, diffDays };
+      }
+    } else if (diffDays > 7 && diffDays <= 14) {
+      if (!bestNearWeek || diffDays < bestNearWeek.diffDays) {
+        bestNearWeek = { rec, diffDays };
+      }
+    }
+  }
+
+  const chosen = bestWithinWeek || bestNearWeek;
+  if (!chosen) return null;
+
+  const baseWeight = Number(chosen.rec.weight_kg);
+  const rawPct = ((latestWeight - baseWeight) / baseWeight) * 100;
+  const pct = Number(rawPct.toFixed(1));
+  const absFixed = Math.abs(pct).toFixed(1);
+  const signedText = pct === 0 ? '0.0%' : `${pct > 0 ? '+' : '-'}${absFixed}%`;
+
+  return {
+    pct,
+    signedText,
+    daysSpan: chosen.diffDays,
+    isAlert: Math.abs(pct) >= 5
+  };
+}
+
+// 依生日計算年齡、毛孩生命階段與約略相當人類年齡（支援家人／貓咪／狗狗）
+export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLocalTodayDate()) {
+  const iso = String(birthDateStr || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || !/^\d{4}-\d{2}-\d{2}$/.test(todayStr)) return null;
+
+  const [by, bm, bd] = iso.split('-').map(Number);
+  const [ty, tm, td] = todayStr.split('-').map(Number);
+
+  let years = ty - by;
+  let months = tm - bm;
+  let days = td - bd;
+  if (days < 0) {
+    months -= 1;
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  if (years < 0) return null;
+
+  let shortText;
+  if (years >= 1 && months > 0) {
+    shortText = `${years}歲${months}月`;
+  } else if (years >= 1) {
+    shortText = `${years}歲`;
+  } else if (months >= 1) {
+    shortText = `${months}個月`;
+  } else {
+    shortText = '未滿 1 個月';
+  }
+
+  const totalYears = years + months / 12;
+  if (type !== 'cat' && type !== 'dog') {
+    return {
+      years,
+      months,
+      shortText,
+      lifeStage: null,
+      humanAgeYears: null,
+      displayText: `${iso}（${shortText}）`
+    };
+  }
+
+  const isDog = type === 'dog';
+  const lifeStage = totalYears < 1
+    ? (isDog ? '幼犬' : '幼貓')
+    : totalYears >= (isDog ? 7 : 10)
+      ? (isDog ? '熟齡犬' : '熟齡貓')
+      : (isDog ? '成犬' : '成貓');
+
+  // 獸醫常見換算參考：第 1 年 ≈ 15 歲、第 2 年 +9（24 歲），之後貓每年 +4、狗每年 +5
+  let humanAgeYears;
+  if (totalYears <= 1) {
+    humanAgeYears = Math.max(1, Math.round(totalYears * 15));
+  } else if (totalYears <= 2) {
+    humanAgeYears = Math.round(15 + (totalYears - 1) * 9);
+  } else {
+    humanAgeYears = Math.round(24 + (totalYears - 2) * (isDog ? 5 : 4));
+  }
+
+  return {
+    years,
+    months,
+    shortText,
+    lifeStage,
+    humanAgeYears,
+    displayText: `${iso}（${shortText} · 約人類 ${humanAgeYears} 歲）`
+  };
+}

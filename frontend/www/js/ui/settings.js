@@ -25,12 +25,13 @@ export function renderSettingsMembers({ onEditMember }) {
 
     const identity = createEl('div', 'flex items-center gap-2.5 min-w-0 flex-1');
     const nameGroup = createEl('div', 'min-w-0');
+    const breedSuffix = m.type !== 'human' && m.breed ? ` · ${String(m.breed).trim()}` : '';
     const privSuffix = isMemberPrivacyEnabled(m)
       ? (memberHasPrivacyPin(m) ? ' · 密碼隱私' : ' · 體重隱私')
       : '';
     nameGroup.append(
       createEl('div', 'font-medium text-ink leading-snug break-words', String(m.name ?? '')),
-      createEl('div', 'text-fluid-label text-ink-400 mt-0.5', `${getMemberTypeLabel(m.type)}${privSuffix}`)
+      createEl('div', 'text-fluid-label text-ink-400 mt-0.5', `${getMemberTypeLabel(m.type)}${breedSuffix}${privSuffix}`)
     );
     identity.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), nameGroup);
 

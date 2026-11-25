@@ -141,6 +141,10 @@ export function optimisticAddMember(payload) {
     name: payload.name,
     type: payload.type,
     avatar: payload.avatar ?? null,
+    breed: payload.breed ?? null,
+    birth_date: payload.birth_date ?? null,
+    bcs_score: payload.bcs_score ?? null,
+    pet_activity_factor: payload.pet_activity_factor ?? null,
     hide_weight: hideWeight,
     has_privacy_pin: hasPrivacyPin,
     height_cm: payload.height_cm ?? null,
@@ -203,7 +207,7 @@ export function optimisticAddMember(payload) {
   });
 }
 
-// 2. 樂觀更新成員（名稱、頭像、隱私設定、身高、目標體重）
+// 2. 樂觀更新成員（名稱、頭像、品種、生日、BCS、活動係數、隱私設定、身高、目標體重）
 export function optimisticUpdateMember(rawMemberId, payload) {
   const targetFamilyCode = state.familyCode;
   const currentId = resolveId(rawMemberId);
@@ -221,6 +225,10 @@ export function optimisticUpdateMember(rawMemberId, payload) {
     member.avatar = payload.avatar;
     if (payload.avatar) saveLocalAvatar(member.id, payload.avatar);
   }
+  if (payload.breed !== undefined) member.breed = payload.breed;
+  if (payload.birth_date !== undefined) member.birth_date = payload.birth_date;
+  if (payload.bcs_score !== undefined) member.bcs_score = payload.bcs_score;
+  if (payload.pet_activity_factor !== undefined) member.pet_activity_factor = payload.pet_activity_factor;
   if (payload.height_cm !== undefined) member.height_cm = payload.height_cm;
   if (payload.target_weight !== undefined) member.target_weight = payload.target_weight;
 

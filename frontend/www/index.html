@@ -258,9 +258,32 @@
         </div>
         <div id="mem-avatar-picker" class="grid grid-cols-4 gap-1.5 mt-1.5"></div>
       </div>
+      <div id="mem-breed-wrap" class="hidden">
+        <label class="text-xs text-ink-500">品種（選填）</label>
+        <input id="mem-breed" type="text" maxlength="40" placeholder="例：橘貓、米克斯、柴犬、貴賓" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+      </div>
+      <div id="mem-birth-date-wrap">
+        <label class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
+        <input id="mem-birth-date" type="date" min="1900-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+      </div>
       <div id="mem-height-wrap">
         <label class="text-xs text-ink-500">身高 (cm)</label>
         <input id="mem-height" type="number" min="20" max="300" step="0.1" placeholder="家人計算 BMI 用，毛孩可留空" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+      </div>
+      <div id="mem-bcs-wrap" class="hidden">
+        <label class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
+        <select id="mem-bcs" class="w-full border rounded-xl p-2.5 text-sm mt-1">
+          <option value="">未評分（總覽顯示一週體重變化）</option>
+          <option value="1">1 分 · 極瘦（肋骨腰椎極明顯）</option>
+          <option value="2">2 分 · 過瘦（幾乎無脂肪覆蓋）</option>
+          <option value="3">3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）</option>
+          <option value="4">4 分 · 適中偏瘦（輕摸可感肋骨）</option>
+          <option value="5">5 分 · 理想體態（肋骨好摸、腰身自然）</option>
+          <option value="6">6 分 · 略重（肋骨需稍用力才摸到）</option>
+          <option value="7">7 分 · 過重（肋骨難摸、腰身不明顯）</option>
+          <option value="8">8 分 · 肥胖（摸不到肋骨、腹部下垂）</option>
+          <option value="9">9 分 · 重度肥胖（明顯脂肪堆積）</option>
+        </select>
       </div>
       <div id="mem-target-wrap">
         <label class="text-xs text-ink-500">目標體重 (kg)</label>
@@ -346,9 +369,21 @@
           <span class="text-ink-500 shrink-0 whitespace-nowrap">成員類型</span>
           <span id="prof-view-type" class="font-medium text-ink text-right break-words min-w-0">--</span>
         </div>
+        <div id="prof-view-breed-row" class="hidden py-2.5 flex justify-between items-baseline gap-3">
+          <span class="text-ink-500 shrink-0 whitespace-nowrap">品種</span>
+          <span id="prof-view-breed" class="font-medium text-ink text-right break-words min-w-0">--</span>
+        </div>
+        <div id="prof-view-birth-row" class="py-2.5 flex justify-between items-baseline gap-3">
+          <span class="text-ink-500 shrink-0 whitespace-nowrap">生日與年齡</span>
+          <span id="prof-view-birth" class="font-medium text-ink text-right break-words min-w-0">--</span>
+        </div>
         <div id="prof-view-height-row" class="py-2.5 flex justify-between items-baseline gap-3">
           <span class="text-ink-500 shrink-0 whitespace-nowrap">身高</span>
           <span id="prof-view-height" class="font-medium text-ink text-right tabular-nums whitespace-nowrap">--</span>
+        </div>
+        <div id="prof-view-bcs-row" class="hidden py-2.5 flex justify-between items-baseline gap-3">
+          <span class="text-ink-500 shrink-0 whitespace-nowrap">體態評分 BCS</span>
+          <span id="prof-view-bcs" class="font-medium text-ink text-right whitespace-nowrap">--</span>
         </div>
         <div class="py-2.5 flex justify-between items-baseline gap-3">
           <span class="text-ink-500 shrink-0 whitespace-nowrap">目標體重</span>
@@ -360,7 +395,7 @@
         </div>
       </div>
 
-      <!-- 檢視模式：自動健康指標卡（家人顯示 BMI 判定與健康體重區間；貓狗顯示 RER / DER 熱量） -->
+      <!-- 檢視模式：自動健康指標卡（家人顯示 BMI 判定與健康體重區間；貓狗顯示 RER / DER 熱量與 BCS 指南） -->
       <div id="prof-health-card" class="hidden rounded-2xl p-3.5 text-sm space-y-2 border"></div>
 
       <!-- 編輯模式：點擊編輯後才顯示輸入框與頭像選擇器 -->
@@ -375,9 +410,35 @@
           <div id="prof-avatar-picker" class="grid grid-cols-4 gap-1.5 mt-1.5"></div>
         </div>
 
+        <div id="prof-breed-wrap" class="hidden">
+          <label class="text-xs text-ink-500">品種（選填）</label>
+          <input id="prof-breed" type="text" maxlength="40" placeholder="例：橘貓、米克斯、柴犬、貴賓" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        </div>
+
+        <div id="prof-birth-date-wrap">
+          <label class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
+          <input id="prof-birth-date" type="date" min="1900-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        </div>
+
         <div id="prof-height-wrap">
           <label class="text-xs text-ink-500">身高 (cm)</label>
           <input id="prof-height" type="number" min="20" max="300" step="0.1" placeholder="例：172.5" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        </div>
+
+        <div id="prof-bcs-wrap" class="hidden">
+          <label class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
+          <select id="prof-bcs" class="w-full border rounded-xl p-2.5 text-sm mt-1">
+            <option value="">未評分（總覽顯示一週體重變化）</option>
+            <option value="1">1 分 · 極瘦（肋骨腰椎極明顯）</option>
+            <option value="2">2 分 · 過瘦（幾乎無脂肪覆蓋）</option>
+            <option value="3">3 分 · 偏瘦（肋骨易見、腰身明顯凹陷）</option>
+            <option value="4">4 分 · 適中偏瘦（輕摸可感肋骨）</option>
+            <option value="5">5 分 · 理想體態（肋骨好摸、腰身自然）</option>
+            <option value="6">6 分 · 略重（肋骨需稍用力才摸到）</option>
+            <option value="7">7 分 · 過重（肋骨難摸、腰身不明顯）</option>
+            <option value="8">8 分 · 肥胖（摸不到肋骨、腹部下垂）</option>
+            <option value="9">9 分 · 重度肥胖（明顯脂肪堆積）</option>
+          </select>
         </div>
 
         <div id="prof-target-wrap">

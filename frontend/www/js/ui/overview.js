@@ -1,7 +1,13 @@
 import { state } from '../state.js';
 import { createEl } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
-import { calculateBmi, calculateGoalProgress, calculateTargetGap } from '../utils/metrics.js';
+import {
+  calculateBmi,
+  calculateGoalProgress,
+  calculateTargetGap,
+  calculateWeeklyWeightChangePct,
+  getBcsMeta
+} from '../utils/metrics.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import {
   MASKED_WEIGHT,
@@ -63,7 +69,10 @@ export function renderOverview({ onSelectMember }) {
     const goalProgress = calculateGoalProgress(recs, m.target_weight);
     const isHuman = m.type === 'human';
     const typeMeta = getMemberTypeMeta(m.type);
+    const badgeLabel = !isHuman && m.breed ? String(m.breed).trim() : typeMeta.label;
     const bmiRes = isHuman && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
+    const bcsMeta = !isHuman ? getBcsMeta(m.bcs_score) : null;
+    const weeklyPct = !isHuman && !bcsMeta ? calculateWeeklyWeightChangePct(recs) : null;
     const isPrivacyOn = isMemberPrivacyEnabled(m);
     const isHidden = isMemberWeightHidden(m);
     const hasPin = memberHasPrivacyPin(m);
@@ -84,7 +93,7 @@ export function renderOverview({ onSelectMember }) {
     const nameLine = createEl('div', 'flex items-center flex-wrap gap-1.5 min-w-0');
     nameLine.append(
       createEl('span', 'font-semibold text-base text-ink leading-snug break-words', String(m.name ?? '')),
-      createEl('span', `shrink-0 text-[12px] px-2 py-0.5 rounded-full font-medium leading-none ${typeMeta.pillClass}`, typeMeta.label)
+      createEl('span', `shrink-0 max-w-[9rem] truncate text-[12px] px-2 py-0.5 rounded-full font-medium leading-none ${typeMeta.pillClass}`, badgeLabel)
     );
     if (isPrivacyOn) {
       const privBadge = createEl(
@@ -121,7 +130,7 @@ export function renderOverview({ onSelectMember }) {
 
     topRow.append(identityWrap, weightRow);
 
-    // 下排：三欄等寬精簡指標列（較前次 / 距目標或進度 / BMI 狀態或類別，全數零截斷）
+    // 下排：三欄等寬精簡指標列（較前次 / 距目標或進度 / 家人 BMI 或毛孩 BCS・一週變化）
     const diffColor = diffNum === null
       ? 'text-ink-400'
       : diffNum > 0
@@ -154,16 +163,33 @@ export function renderOverview({ onSelectMember }) {
             : 'text-sage-700';
     }
 
-    // 隱私模式下不顯示精確 BMI 數值（避免透過 BMI × 身高² 反推體重），僅顯示衛福部健康狀態
-    const thirdLabel = isHuman ? (isHidden ? '體位狀態' : 'BMI') : '類別';
-    const thirdValue = isHuman
-      ? (bmiRes ? (isHidden ? bmiRes.status : bmiRes.bmi.toFixed(1)) : '--')
-      : typeMeta.label;
-    const thirdColor = isHuman
-      ? (bmiRes
-          ? (bmiRes.status === '正常範圍' ? 'text-sage-700' : 'text-ochre-600')
-          : 'text-ink-400')
-      : typeMeta.accentClass;
+    // 第 3 欄：家人顯示 BMI（隱私模式僅顯體位狀態）；毛孩優先顯示 BCS 體態評分，未填則顯示一週體重變化幅度（%）
+    let thirdLabel;
+    let thirdValue;
+    let thirdColor;
+    if (isHuman) {
+      thirdLabel = isHidden ? '體位狀態' : 'BMI';
+      thirdValue = bmiRes ? (isHidden ? bmiRes.status : bmiRes.bmi.toFixed(1)) : '--';
+      thirdColor = bmiRes
+        ? (bmiRes.status === '正常範圍' ? 'text-sage-700' : 'text-ochre-600')
+        : 'text-ink-400';
+    } else if (bcsMeta) {
+      thirdLabel = '體態 BCS';
+      thirdValue = bcsMeta.compact;
+      thirdColor = bcsMeta.colorClass;
+    } else {
+      thirdLabel = '一週變化';
+      thirdValue = weeklyPct ? weeklyPct.signedText : '--';
+      thirdColor = !weeklyPct
+        ? 'text-ink-400'
+        : weeklyPct.isAlert
+          ? 'text-rosewood-600'
+          : weeklyPct.pct > 0
+            ? 'text-ochre-600'
+            : weeklyPct.pct < 0
+              ? 'text-sage-700'
+              : 'text-ink-700';
+    }
 
     const metricsGrid = createEl(
       'div',
