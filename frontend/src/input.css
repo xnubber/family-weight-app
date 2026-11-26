@@ -684,8 +684,18 @@ button:not(:disabled).is-pressed {
   padding-top: calc(0.75rem + var(--safe-top));
 }
 
+/* 預設緊貼螢幕最底部（bottom: 0），將系統手勢區安全間距吸收為內部 padding，消除導覽列下方空隙 */
 .app-bottom-nav {
+  bottom: 0;
+  height: calc(4rem + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+}
+
+/* 僅於商店版實際顯示原生橫幅廣告時，導覽列再上移至廣告正上方 */
+html.has-ad-banner .app-bottom-nav {
   bottom: var(--bottom-bar-offset);
+  height: 4rem;
+  padding-bottom: 0;
 }
 
 .ad-banner-spacer {

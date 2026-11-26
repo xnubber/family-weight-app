@@ -13,8 +13,9 @@ export function setAdBannerInsetHeight(heightPx = 0) {
   const safePx = Number.isFinite(Number(heightPx)) && Number(heightPx) > 0
     ? Math.round(Number(heightPx))
     : 0;
-  if (typeof document !== 'undefined' && document.documentElement?.style) {
-    document.documentElement.style.setProperty('--ad-banner-height', `${safePx}px`);
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.style?.setProperty('--ad-banner-height', `${safePx}px`);
+    document.documentElement.classList?.toggle('has-ad-banner', safePx > 0);
   }
   const spacer = typeof document !== 'undefined' ? document.getElementById('ad-banner-spacer') : null;
   if (spacer) {
