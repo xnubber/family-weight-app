@@ -272,6 +272,7 @@ const DICTIONARY = {
     'memberModal.bcs': '體態評分 BCS（1–9 分，選填）',
     'memberModal.targetWeight': '目標體重 ({unit})',
     'memberModal.targetPlaceholder': '選填',
+    'memberModal.targetStepperAria': '微調目標體重 {delta} {unit}',
     'memberModal.added': '成員已新增',
     'memberModal.updated': '成員資料已更新',
 
@@ -768,6 +769,7 @@ const DICTIONARY = {
     'memberModal.bcs': 'Body Condition Score BCS (1–9, Optional)',
     'memberModal.targetWeight': 'Goal Weight ({unit})',
     'memberModal.targetPlaceholder': 'Optional',
+    'memberModal.targetStepperAria': 'Adjust goal weight {delta} {unit}',
     'memberModal.added': 'Member added',
     'memberModal.updated': 'Member updated',
 
@@ -1264,6 +1266,7 @@ const DICTIONARY = {
     'memberModal.bcs': '体型スコア BCS（1〜9・任意）',
     'memberModal.targetWeight': '目標体重 ({unit})',
     'memberModal.targetPlaceholder': '任意',
+    'memberModal.targetStepperAria': '目標体重を {delta} {unit} 調整',
     'memberModal.added': 'メンバーを追加しました',
     'memberModal.updated': 'メンバー情報を更新しました',
 

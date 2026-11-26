@@ -180,6 +180,32 @@ export function parseWeightValue(raw, { required = false, unit = getWeightUnit()
   return { value: kgValue, displayValue };
 }
 
+// 目標體重微調：以整數分位（×100）增減目前顯示單位數值，避免浮點誤差並自動限制於合理範圍（空欄時可由參考體重起算）
+export function adjustWeightInputValue(raw, delta, { fallbackDisplayValue = null, unit = getWeightUnit() } = {}) {
+  const bounds = getWeightInputBounds(unit);
+  const step = Number(delta);
+  if (!Number.isFinite(step)) return String(raw ?? '').trim();
+
+  const cleaned = sanitizeWeightInputValue(raw, { unit });
+  let base = cleaned !== '' ? Number(cleaned) : null;
+
+  if (base === null || !Number.isFinite(base)) {
+    const fb = fallbackDisplayValue !== null && fallbackDisplayValue !== undefined
+      ? Number(fallbackDisplayValue)
+      : null;
+    if (fb !== null && Number.isFinite(fb) && fb > 0) {
+      base = fb;
+    } else {
+      base = step > 0 ? 0 : bounds.min;
+    }
+  }
+
+  let next = Math.round((base + step) * 100) / 100;
+  if (next < bounds.min) next = bounds.min;
+  if (next > bounds.max) next = bounds.max;
+  return next.toFixed(2).replace(/\.?0+$/, '');
+}
+
 // 抱毛孩相減計算：輸入「抱著毛孩總重」與「主人單獨體重」，自動防浮點誤差相減並驗證範圍（依目前顯示單位 kg / lb）
 export function computePetHoldWeight(withPetRaw, ownerRaw, { unit = getWeightUnit() } = {}) {
   const withTrimmed = normalizeDecimalSymbols(withPetRaw).trim();

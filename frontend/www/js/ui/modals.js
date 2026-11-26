@@ -39,6 +39,7 @@ import {
   getLocalTodayDate
 } from '../utils/metrics.js';
 import {
+  adjustWeightInputValue,
   checkWeightAnomaly,
   computePetHoldWeight,
   isTempId,
@@ -268,6 +269,35 @@ function createBirthDateInlineControl(initialIso, { onEnter, onEscape } = {}) {
     yearInput: yPart.input,
     readParsed: () => parseBirthDateParts(yPart.input.value, mPart.input.value, dPart.input.value)
   };
+}
+
+const TARGET_WEIGHT_STEPS = [-1, -0.5, -0.1, 0.1, 0.5, 1];
+
+// 渲染目標體重微調按鈕列（-1 / -0.5 / -0.1 / +0.1 / +0.5 / +1，支援 kg / lb 與空欄由最新體重起算）
+function renderTargetWeightStepper(container, inputEl, { getFallbackDisplayValue = () => null } = {}) {
+  if (!container || !inputEl) return;
+  const unitLabel = getWeightUnitLabel();
+  const buttons = TARGET_WEIGHT_STEPS.map((step) => {
+    const isPositive = step > 0;
+    const label = `${isPositive ? '+' : ''}${step}`;
+    const btn = createEl(
+      'button',
+      isPositive
+        ? 'py-1.5 px-0.5 rounded-lg text-[11px] font-medium tabular-nums bg-sage-50 hover:bg-sage-100 text-sage-700 border border-sage-200 transition'
+        : 'py-1.5 px-0.5 rounded-lg text-[11px] font-medium tabular-nums bg-oat-100 hover:bg-oat-200/80 text-ink-700 border border-oat-200 transition',
+      label
+    );
+    btn.type = 'button';
+    btn.setAttribute('aria-label', t('memberModal.targetStepperAria', { delta: label, unit: unitLabel }));
+    btn.onclick = () => {
+      inputEl.value = adjustWeightInputValue(inputEl.value, step, {
+        fallbackDisplayValue: getFallbackDisplayValue()
+      });
+      setWeightInputErrorState(inputEl, false);
+    };
+    return btn;
+  });
+  container.replaceChildren(...buttons);
 }
 
 // 請求解鎖受隱私保護的成員（無 PIN 直接暫時顯示；有 PIN 則彈出 4 位數驗證視窗）
@@ -980,6 +1010,15 @@ export function openMemberModal(member = null) {
     syncPrivacyFormUI('mem', null);
   }
 
+  renderTargetWeightStepper(document.getElementById('mem-target-stepper'), targetInput, {
+    getFallbackDisplayValue: () => {
+      if (!member || isMemberWeightHidden(member)) return null;
+      const memberRecs = state.appData.records.filter((r) => r.member_id === member.id);
+      const latestRec = memberRecs[memberRecs.length - 1];
+      return latestRec ? formatWeightNumber(latestRec.weight_kg, { trimTrailingZeros: true }) : null;
+    }
+  });
+
   if (document.activeElement && typeof document.activeElement.blur === 'function') {
     document.activeElement.blur();
   }
@@ -1249,7 +1288,14 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     setBirthDateGroupValue('prof', m.birth_date);
     document.getElementById('prof-height').value = isPet ? '' : (m.height_cm ?? '');
     document.getElementById('prof-bcs').value = isPet && m.bcs_score ? String(m.bcs_score) : '';
-    document.getElementById('prof-target').value = isLockedWithPin ? '' : targetDisplay;
+    const profTargetEl = document.getElementById('prof-target');
+    profTargetEl.value = isLockedWithPin ? '' : targetDisplay;
+    renderTargetWeightStepper(document.getElementById('prof-target-stepper'), profTargetEl, {
+      getFallbackDisplayValue: () =>
+        !isMemberWeightHidden(m) && latest
+          ? formatWeightNumber(latest.weight_kg, { trimTrailingZeros: true })
+          : null
+    });
     document.getElementById('prof-avatar').value = initialAvatar;
     renderProfileAvatarPreview(initialAvatar);
     renderAvatarPicker(document.getElementById('prof-avatar-picker'), initialAvatar, (picked) => {
@@ -1527,14 +1573,14 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         }
 
         const btnRow = createEl('div', 'flex items-center justify-end gap-1.5');
-        if (field.key === 'birth_date' && m.birth_date) {
+        if ((field.key === 'birth_date' && m.birth_date) || (field.key === 'target_weight' && m.target_weight)) {
           const clearBtn = createEl(
             'button',
             'mr-auto text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1.5 rounded-xl font-medium',
             t('common.clear')
           );
           clearBtn.type = 'button';
-          clearBtn.onclick = () => commitInlineField('birth_date', '');
+          clearBtn.onclick = () => commitInlineField(field.key, '');
           btnRow.appendChild(clearBtn);
         }
 
@@ -1559,11 +1605,24 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           commitInlineField(field.key, birthDateInline ? birthDateInline.readParsed() : controlEl.value);
 
         btnRow.append(cancelBtn, saveBtn);
-        editRow.append(labelRow, controlEl, btnRow);
+        editRow.append(labelRow, controlEl);
+
+        if (field.key === 'target_weight') {
+          const stepperRow = createEl('div', 'grid grid-cols-6 gap-1');
+          renderTargetWeightStepper(stepperRow, controlEl, {
+            getFallbackDisplayValue: () =>
+              !isMemberWeightHidden(m) && latest
+                ? formatWeightNumber(latest.weight_kg, { trimTrailingZeros: true })
+                : null
+          });
+          editRow.append(stepperRow);
+        }
+
+        editRow.append(btnRow);
 
         if (field.key === 'birth_date' && birthDateInline?.yearInput) {
           queueMicrotask(() => birthDateInline.yearInput.focus());
-        } else if (field.key !== 'bcs_score') {
+        } else if (field.key !== 'bcs_score' && field.key !== 'target_weight') {
           queueMicrotask(() => {
             if (typeof controlEl.focus === 'function') {
               controlEl.focus();
