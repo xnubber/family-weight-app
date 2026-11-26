@@ -11,6 +11,7 @@
 
 | 日期 | 版本號 | 對應 Commit | 修改內容摘要 |
 | :--- | :--- | :--- | :--- |
+| 2026-11-26 | **v2.18.2** | `b9e6fa6` | 修正自用版（及無廣告狀態）底部導覽列下方殘留空隙：`.app-bottom-nav` 改為固定貼齊 `bottom: 0` 並改以內部 `padding-bottom: var(--safe-bottom)` 吸收安全區高度，僅於商店版實際顯示原生廣告時才套用 `html.has-ad-banner` 上移 |
 | 2026-11-26 | **v2.18.1** | `f5b5a30` | 自用雲端版徹底移除所有廣告相關設計（零廣告組態欄位、不載入 `adBanner.js`、移除 `#ad-banner-spacer`／廣告隱私條款與 Pro 廣告 DOM、解耦底部安全區 CSS）；精準對齊歷史紀錄三欄版面（左／右欄皆改固定 `w-[5.75rem]` 與統一列高 `min-h-[3.5rem]`，消除右側分隔線參差與左欄溢出） |
 | 2026-11-26 | **v2.18.0** | `911f3bc` | 底部導覽列升級為 4 分頁（總覽／統計／家庭／設定），新增獨立「APP 設定」專頁（自用版與單機上架版皆完整支援）：4 款文青主題（含護眼深色「靜夜墨林」與跟隨系統深淺色、Chart.js 動態配色）、本機通知提醒（每日排程與逾 7 天提醒）、資料匯出／還原、隱私權政策、版本與「關於此 APP」彈窗 |
 | 2026-11-26 | **v2.17.0** | `cd372db` | 新增單一程式碼庫雙版本建置架構（`build:selfhost` 自用雲端版 `com.familyweight.app`／`build:store` Google Play 單機上架版 `com.xnubber.kinpaws`，自動隔離 `config.js` 防金鑰外洩）；實作 IndexedDB 離線儲存與 PBKDF2 本機 PIN、JSON 備份還原、Pro 雲端付費解鎖介面、健康免責與隱私權政策（含 `docs/privacy-policy.html`），以及 AdMob 底部橫幅安全區動態避讓 |
@@ -73,6 +74,11 @@
 ---
 
 ## 各版本詳細變更紀錄
+
+### v2.18.2（2026-11-26）
+- **對應 Commit**：`b9e6fa6`
+- **修改內容**：
+  - **修正底部導覽列下方殘留空隙（`input.css`、`index.html`、`adBanner.js`、`styles.css`）**：將 `.app-bottom-nav` 改為固定貼齊 `bottom: 0`（移除衝突的 `h-16`），以內部 `padding-bottom: var(--safe-bottom)` 與 `height: calc(4rem + var(--safe-bottom))` 吸收系統手勢區安全高度，讓導覽列底色無縫延伸至螢幕最底緣；僅於商店版實際載入原生廣告（`height > 0`）時才由 `adBanner.js` 加上 `html.has-ad-banner` 上移導覽列。
 
 ### v2.18.1（2026-11-26）
 - **對應 Commit**：`f5b5a30`
