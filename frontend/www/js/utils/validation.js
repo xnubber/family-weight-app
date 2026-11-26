@@ -67,6 +67,39 @@ export function isValidBirthDate(dateStr) {
   return parsed.getTime() >= minTime && parsed.getTime() <= maxTime;
 }
 
+// 清理年／月／日數字輸入（支援全形數字轉半形並移除非數字字元）
+export function sanitizeDatePartDigits(raw, maxLen = 2) {
+  return String(raw ?? '')
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/\D/g, '')
+    .slice(0, maxLen);
+}
+
+// 將獨立輸入的年／月／日組合並驗證為標準 YYYY-MM-DD（全空回傳 null，部分漏填回傳錯誤）
+export function parseBirthDateParts(yearRaw, monthRaw, dayRaw) {
+  const y = sanitizeDatePartDigits(yearRaw, 4);
+  const m = sanitizeDatePartDigits(monthRaw, 2);
+  const d = sanitizeDatePartDigits(dayRaw, 2);
+
+  if (!y && !m && !d) {
+    return { value: null };
+  }
+  if (!y || !m || !d) {
+    return { error: t('val.birthDateIncomplete') };
+  }
+  if (y.length !== 4) {
+    return { error: t('val.birthDateInvalid') };
+  }
+
+  const mm = m.padStart(2, '0');
+  const dd = d.padStart(2, '0');
+  const iso = `${y}-${mm}-${dd}`;
+  if (!isValidBirthDate(iso)) {
+    return { error: t('val.birthDateInvalid') };
+  }
+  return { value: iso };
+}
+
 // 嚴格解析數字欄位（使用 Number() 避免 parseFloat 接受 "65abc"，且不讓 0 或 NaN 靜默轉為 null）
 export function parseStrictNumber(raw, { required = false, min, max, label }) {
   const trimmed = String(raw ?? '').trim();

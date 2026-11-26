@@ -546,9 +546,11 @@ export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLoc
   if (years < 0) return null;
 
   let shortText;
-  if (years >= 1 && months > 0) {
+  if (years >= 2) {
+    shortText = t('age.y', { years }, locale);
+  } else if (years === 1 && months > 0) {
     shortText = t('age.ym', { years, months }, locale);
-  } else if (years >= 1) {
+  } else if (years === 1) {
     shortText = t('age.y', { years }, locale);
   } else if (months >= 1) {
     shortText = t('age.m', { months }, locale);
@@ -556,6 +558,7 @@ export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLoc
     shortText = t('age.underMonth', {}, locale);
   }
 
+  const compactDate = `${by}/${String(bm).padStart(2, '0')}/${String(bd).padStart(2, '0')}`;
   const totalYears = years + months / 12;
   if (type !== 'cat' && type !== 'dog') {
     return {
@@ -564,7 +567,7 @@ export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLoc
       shortText,
       lifeStage: null,
       humanAgeYears: null,
-      displayText: t('age.humanDisplay', { date: iso, short: shortText }, locale)
+      displayText: t('age.humanDisplay', { date: compactDate, short: shortText }, locale)
     };
   }
 
@@ -590,6 +593,6 @@ export function calculateAgeInfo(birthDateStr, type = 'human', todayStr = getLoc
     shortText,
     lifeStage,
     humanAgeYears,
-    displayText: t('age.petDisplay', { date: iso, short: shortText, human: humanAgeYears }, locale)
+    displayText: t('age.petDisplay', { date: compactDate, short: shortText, human: humanAgeYears }, locale)
   };
 }

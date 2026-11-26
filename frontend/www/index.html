@@ -409,8 +409,21 @@
         <input id="mem-breed" type="text" maxlength="40" data-i18n-placeholder="memberModal.breedPlaceholder" placeholder="例：橘貓、米克斯、柴犬、貴賓" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
       <div id="mem-birth-date-wrap">
-        <label data-i18n="memberModal.birthDate" class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
-        <input id="mem-birth-date" type="date" min="1900-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        <label for="mem-birth-year" data-i18n="memberModal.birthDate" class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
+        <div class="grid grid-cols-[1.45fr_1fr_1fr] gap-2 mt-1">
+          <div class="relative">
+            <input id="mem-birth-year" type="text" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="birthInput.yearPlaceholder" placeholder="1990" data-i18n-aria-label="birthInput.yearAria" aria-label="出生年份" class="w-full border rounded-xl pl-2.5 pr-7 py-2.5 text-sm text-center tabular-nums" />
+            <span data-i18n="birthInput.yearUnit" class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-400">年</span>
+          </div>
+          <div class="relative">
+            <input id="mem-birth-month" type="text" inputmode="numeric" maxlength="2" autocomplete="off" data-i18n-placeholder="birthInput.monthPlaceholder" placeholder="05" data-i18n-aria-label="birthInput.monthAria" aria-label="出生月份" class="w-full border rounded-xl pl-2.5 pr-6 py-2.5 text-sm text-center tabular-nums" />
+            <span data-i18n="birthInput.monthUnit" class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-400">月</span>
+          </div>
+          <div class="relative">
+            <input id="mem-birth-day" type="text" inputmode="numeric" maxlength="2" autocomplete="off" data-i18n-placeholder="birthInput.dayPlaceholder" placeholder="18" data-i18n-aria-label="birthInput.dayAria" aria-label="出生日期" class="w-full border rounded-xl pl-2.5 pr-6 py-2.5 text-sm text-center tabular-nums" />
+            <span data-i18n="birthInput.dayUnit" class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-400">日</span>
+          </div>
+        </div>
       </div>
       <div id="mem-height-wrap">
         <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
@@ -543,8 +556,21 @@
         </div>
 
         <div id="prof-birth-date-wrap">
-          <label data-i18n="memberModal.birthDate" class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
-          <input id="prof-birth-date" type="date" min="1900-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+          <label for="prof-birth-year" data-i18n="memberModal.birthDate" class="text-xs text-ink-500">生日（選填，自動計算年齡）</label>
+          <div class="grid grid-cols-[1.45fr_1fr_1fr] gap-2 mt-1">
+            <div class="relative">
+              <input id="prof-birth-year" type="text" inputmode="numeric" maxlength="4" autocomplete="off" data-i18n-placeholder="birthInput.yearPlaceholder" placeholder="1990" data-i18n-aria-label="birthInput.yearAria" aria-label="出生年份" class="w-full border rounded-xl pl-2.5 pr-7 py-2.5 text-sm text-center tabular-nums" />
+              <span data-i18n="birthInput.yearUnit" class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-400">年</span>
+            </div>
+            <div class="relative">
+              <input id="prof-birth-month" type="text" inputmode="numeric" maxlength="2" autocomplete="off" data-i18n-placeholder="birthInput.monthPlaceholder" placeholder="05" data-i18n-aria-label="birthInput.monthAria" aria-label="出生月份" class="w-full border rounded-xl pl-2.5 pr-6 py-2.5 text-sm text-center tabular-nums" />
+              <span data-i18n="birthInput.monthUnit" class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-400">月</span>
+            </div>
+            <div class="relative">
+              <input id="prof-birth-day" type="text" inputmode="numeric" maxlength="2" autocomplete="off" data-i18n-placeholder="birthInput.dayPlaceholder" placeholder="18" data-i18n-aria-label="birthInput.dayAria" aria-label="出生日期" class="w-full border rounded-xl pl-2.5 pr-6 py-2.5 text-sm text-center tabular-nums" />
+              <span data-i18n="birthInput.dayUnit" class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-ink-400">日</span>
+            </div>
+          </div>
         </div>
 
         <div id="prof-height-wrap">

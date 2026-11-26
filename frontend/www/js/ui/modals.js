@@ -45,8 +45,10 @@ import {
   isValidBirthDate,
   isValidRecordedDate,
   isValidResourceId,
+  parseBirthDateParts,
   parseStrictNumber,
   parseWeightValue,
+  sanitizeDatePartDigits,
   sanitizeWeightInputValue
 } from '../utils/validation.js';
 import { t } from '../utils/i18n.js';
@@ -153,6 +155,119 @@ function parseOptionalBirthDateInput(rawValue) {
     return { error: t('val.birthDateInvalid') };
   }
   return { value: trimmed };
+}
+
+// 綁定獨立「年／月／日」數字輸入格（支援全形數字清理、自動跳下一格、空欄 Backspace 返回上一格與單碼補零）
+function wireBirthDateInputs(yearEl, monthEl, dayEl, { onEnter = null, onEscape = null } = {}) {
+  if (!yearEl || !monthEl || !dayEl) return;
+
+  const setupPart = (el, maxLen, { nextEl = null, prevEl = null, padTo2 = false } = {}) => {
+    el.addEventListener('input', () => {
+      const cleaned = sanitizeDatePartDigits(el.value, maxLen);
+      if (el.value !== cleaned) el.value = cleaned;
+      if (nextEl && cleaned.length >= maxLen) {
+        nextEl.focus();
+      }
+    });
+
+    if (padTo2) {
+      el.addEventListener('blur', () => {
+        const cleaned = sanitizeDatePartDigits(el.value, 2);
+        if (cleaned.length === 1 && Number(cleaned) >= 1) {
+          el.value = cleaned.padStart(2, '0');
+        }
+      });
+    }
+
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && el.value === '' && prevEl) {
+        prevEl.focus();
+        return;
+      }
+      if (e.key === 'Enter' && typeof onEnter === 'function') {
+        e.preventDefault();
+        e.stopPropagation();
+        onEnter();
+      } else if (e.key === 'Escape' && typeof onEscape === 'function') {
+        e.preventDefault();
+        e.stopPropagation();
+        onEscape();
+      }
+    });
+  };
+
+  setupPart(yearEl, 4, { nextEl: monthEl });
+  setupPart(monthEl, 2, { nextEl: dayEl, prevEl: yearEl, padTo2: true });
+  setupPart(dayEl, 2, { prevEl: monthEl, padTo2: true });
+}
+
+function setBirthDateGroupValue(prefix, isoDate) {
+  const yearEl = document.getElementById(`${prefix}-birth-year`);
+  const monthEl = document.getElementById(`${prefix}-birth-month`);
+  const dayEl = document.getElementById(`${prefix}-birth-day`);
+  if (!yearEl || !monthEl || !dayEl) return;
+
+  const iso = String(isoDate || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-');
+    yearEl.value = y;
+    monthEl.value = m;
+    dayEl.value = d;
+  } else {
+    yearEl.value = '';
+    monthEl.value = '';
+    dayEl.value = '';
+  }
+}
+
+function readBirthDateGroup(prefix) {
+  const yearEl = document.getElementById(`${prefix}-birth-year`);
+  const monthEl = document.getElementById(`${prefix}-birth-month`);
+  const dayEl = document.getElementById(`${prefix}-birth-day`);
+  return parseBirthDateParts(yearEl?.value ?? '', monthEl?.value ?? '', dayEl?.value ?? '');
+}
+
+function createBirthDateInlineControl(initialIso, { onEnter, onEscape } = {}) {
+  const grid = createEl('div', 'grid grid-cols-[1.45fr_1fr_1fr] gap-2');
+  const buildBox = (maxLen, placeholderKey, unitKey, ariaKey, padRightCls) => {
+    const box = createEl('div', 'relative');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.maxLength = maxLen;
+    input.autocomplete = 'off';
+    input.placeholder = t(placeholderKey);
+    input.setAttribute('aria-label', t(ariaKey));
+    input.className = `w-full border border-sage-500/50 rounded-xl pl-2 ${padRightCls} py-2 text-sm text-center bg-linen text-ink tabular-nums`;
+    const unit = createEl(
+      'span',
+      'pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-400',
+      t(unitKey)
+    );
+    box.append(input, unit);
+    return { box, input };
+  };
+
+  const yPart = buildBox(4, 'birthInput.yearPlaceholder', 'birthInput.yearUnit', 'birthInput.yearAria', 'pr-6');
+  const mPart = buildBox(2, 'birthInput.monthPlaceholder', 'birthInput.monthUnit', 'birthInput.monthAria', 'pr-6');
+  const dPart = buildBox(2, 'birthInput.dayPlaceholder', 'birthInput.dayUnit', 'birthInput.dayAria', 'pr-6');
+
+  const iso = String(initialIso || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-');
+    yPart.input.value = y;
+    mPart.input.value = m;
+    dPart.input.value = d;
+  }
+
+  wireBirthDateInputs(yPart.input, mPart.input, dPart.input, { onEnter, onEscape });
+  grid.append(yPart.box, mPart.box, dPart.box);
+
+  return {
+    el: grid,
+    yearInput: yPart.input,
+    readParsed: () => parseBirthDateParts(yPart.input.value, mPart.input.value, dPart.input.value)
+  };
 }
 
 // 請求解鎖受隱私保護的成員（無 PIN 直接暫時顯示；有 PIN 則彈出 4 位數驗證視窗）
@@ -810,7 +925,6 @@ export function openMemberModal(member = null) {
   const typeSelect = document.getElementById('mem-type');
   const breedWrap = document.getElementById('mem-breed-wrap');
   const breedInput = document.getElementById('mem-breed');
-  const birthDateInput = document.getElementById('mem-birth-date');
   const heightWrap = document.getElementById('mem-height-wrap');
   const heightInput = document.getElementById('mem-height');
   const bcsWrap = document.getElementById('mem-bcs-wrap');
@@ -818,7 +932,6 @@ export function openMemberModal(member = null) {
   const targetInput = document.getElementById('mem-target');
 
   form.reset();
-  birthDateInput.max = getLocalTodayDate();
 
   if (member) {
     const isPet = isPetType(member.type);
@@ -835,7 +948,7 @@ export function openMemberModal(member = null) {
     typeSelect.disabled = true;
     breedWrap.classList.toggle('hidden', !isPet);
     breedInput.value = isPet ? (member.breed || '') : '';
-    birthDateInput.value = member.birth_date ? String(member.birth_date).slice(0, 10) : '';
+    setBirthDateGroupValue('mem', member.birth_date);
     heightWrap.classList.toggle('hidden', isPet);
     heightInput.value = isPet ? '' : (member.height_cm ?? '');
     bcsWrap.classList.toggle('hidden', !isPet);
@@ -859,7 +972,7 @@ export function openMemberModal(member = null) {
     typeSelect.disabled = false;
     breedWrap.classList.add('hidden');
     breedInput.value = '';
-    birthDateInput.value = '';
+    setBirthDateGroupValue('mem', null);
     heightWrap.classList.remove('hidden');
     bcsWrap.classList.add('hidden');
     bcsSelect.value = '';
@@ -1133,9 +1246,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
   const fillEditInputs = () => {
     document.getElementById('prof-name').value = m.name || '';
     document.getElementById('prof-breed').value = isPet ? (m.breed || '') : '';
-    const profBirthEl = document.getElementById('prof-birth-date');
-    profBirthEl.max = getLocalTodayDate();
-    profBirthEl.value = m.birth_date ? String(m.birth_date).slice(0, 10) : '';
+    setBirthDateGroupValue('prof', m.birth_date);
     document.getElementById('prof-height').value = isPet ? '' : (m.height_cm ?? '');
     document.getElementById('prof-bcs').value = isPet && m.bcs_score ? String(m.bcs_score) : '';
     document.getElementById('prof-target').value = isLockedWithPin ? '' : targetDisplay;
@@ -1187,7 +1298,7 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
       value: ageInfo ? ageInfo.displayText : t('common.unset'),
       isEmpty: !ageInfo,
       editable: true,
-      valueClass: 'font-medium text-right break-words min-w-0'
+      valueClass: 'font-medium text-right tabular-nums whitespace-nowrap'
     });
 
     if (!isPet) {
@@ -1282,7 +1393,9 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         payload = { breed: nextBreed || null };
         toastMsg = t('profile.breedUpdated');
       } else if (fieldKey === 'birth_date') {
-        const parsed = parseOptionalBirthDateInput(rawVal);
+        const parsed = rawVal && typeof rawVal === 'object' && ('value' in rawVal || 'error' in rawVal)
+          ? rawVal
+          : parseOptionalBirthDateInput(rawVal);
         if (parsed.error) {
           showToast(parsed.error, true);
           return false;
@@ -1346,7 +1459,17 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
         labelRow.appendChild(createEl('span', 'text-xs font-medium text-sage-700', field.label));
 
         let controlEl;
-        if (field.key === 'bcs_score') {
+        let birthDateInline = null;
+        if (field.key === 'birth_date') {
+          birthDateInline = createBirthDateInlineControl(m.birth_date, {
+            onEnter: () => commitInlineField('birth_date', birthDateInline.readParsed()),
+            onEscape: () => {
+              activeProfileInlineField = null;
+              renderProfileViewFields();
+            }
+          });
+          controlEl = birthDateInline.el;
+        } else if (field.key === 'bcs_score') {
           controlEl = document.createElement('select');
           controlEl.className = 'w-full border border-sage-500/50 rounded-xl px-2.5 py-2 text-sm bg-linen text-ink';
           getBcsOptions().forEach((optCfg) => {
@@ -1369,11 +1492,6 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
             controlEl.maxLength = 40;
             controlEl.placeholder = t('memberModal.breedPlaceholder');
             controlEl.value = m.breed || '';
-          } else if (field.key === 'birth_date') {
-            controlEl.type = 'date';
-            controlEl.min = '1900-01-01';
-            controlEl.max = getLocalTodayDate();
-            controlEl.value = m.birth_date ? String(m.birth_date).slice(0, 10) : '';
           } else if (field.key === 'height_cm') {
             controlEl.type = 'number';
             controlEl.min = '20';
@@ -1393,18 +1511,20 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           }
         }
 
-        controlEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            e.stopPropagation();
-            commitInlineField(field.key, controlEl.value);
-          } else if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            activeProfileInlineField = null;
-            renderProfileViewFields();
-          }
-        });
+        if (!birthDateInline) {
+          controlEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              e.stopPropagation();
+              commitInlineField(field.key, controlEl.value);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              activeProfileInlineField = null;
+              renderProfileViewFields();
+            }
+          });
+        }
 
         const btnRow = createEl('div', 'flex items-center justify-end gap-1.5');
         if (field.key === 'birth_date' && m.birth_date) {
@@ -1435,12 +1555,15 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
           t('common.save')
         );
         saveBtn.type = 'button';
-        saveBtn.onclick = () => commitInlineField(field.key, controlEl.value);
+        saveBtn.onclick = () =>
+          commitInlineField(field.key, birthDateInline ? birthDateInline.readParsed() : controlEl.value);
 
         btnRow.append(cancelBtn, saveBtn);
         editRow.append(labelRow, controlEl, btnRow);
 
-        if (field.key !== 'birth_date' && field.key !== 'bcs_score') {
+        if (field.key === 'birth_date' && birthDateInline?.yearInput) {
+          queueMicrotask(() => birthDateInline.yearInput.focus());
+        } else if (field.key !== 'bcs_score') {
           queueMicrotask(() => {
             if (typeof controlEl.focus === 'function') {
               controlEl.focus();
@@ -1984,6 +2107,16 @@ export function initModals() {
   attachWeightInputGuard(recWeightInput);
   attachWeightInputGuard(document.getElementById('mem-target'));
   attachWeightInputGuard(document.getElementById('prof-target'));
+  wireBirthDateInputs(
+    document.getElementById('mem-birth-year'),
+    document.getElementById('mem-birth-month'),
+    document.getElementById('mem-birth-day')
+  );
+  wireBirthDateInputs(
+    document.getElementById('prof-birth-year'),
+    document.getElementById('prof-birth-month'),
+    document.getElementById('prof-birth-day')
+  );
 
   // 切換成員類型時自動切換家人（身高）與毛孩（品種、BCS）欄位，並在未手動挑頭像時貼心帶入對應風格頭像
   document.getElementById('mem-type').onchange = (e) => {
@@ -2139,7 +2272,7 @@ export function initModals() {
     const isPet = isPetType(type);
     const rawBreed = isPet ? document.getElementById('mem-breed').value.trim() : '';
     const breed = isPet ? (rawBreed || null) : null;
-    const birthParsed = parseOptionalBirthDateInput(document.getElementById('mem-birth-date').value);
+    const birthParsed = readBirthDateGroup('mem');
     const bcsParsed = isPet ? parseOptionalBcsInput(document.getElementById('mem-bcs').value) : { value: null };
     const heightParsed = isPet
       ? { value: null }
@@ -2238,7 +2371,7 @@ export function initModals() {
     const avatar = isValidAvatarId(rawAvatar) ? rawAvatar : resolveMemberAvatar(member);
     const rawBreed = isPet ? document.getElementById('prof-breed').value.trim() : '';
     const breed = isPet ? (rawBreed || null) : null;
-    const birthParsed = parseOptionalBirthDateInput(document.getElementById('prof-birth-date').value);
+    const birthParsed = readBirthDateGroup('prof');
     const bcsParsed = isPet ? parseOptionalBcsInput(document.getElementById('prof-bcs').value) : { value: null };
     const heightParsed = isPet
       ? { value: null }
