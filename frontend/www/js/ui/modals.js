@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { FamilyAPI } from '../services/api.js';
+import { DataService } from '../services/dataService.js';
 import {
   optimisticAddMember,
   optimisticUpdateMember,
@@ -2060,7 +2060,7 @@ export function openPrivacySettingsModal(memberId) {
   openModal('modal-privacy');
 }
 
-const MODAL_BACK_STACK = ['modal-pin', 'modal-privacy', 'modal-record', 'modal-member', 'modal-profile'];
+const MODAL_BACK_STACK = ['modal-legal', 'modal-pin', 'modal-privacy', 'modal-record', 'modal-member', 'modal-profile'];
 
 function clearProfileModalState() {
   activeProfileContext = null;
@@ -2116,8 +2116,9 @@ export function initModals() {
   });
 
   // 點擊彈窗外部（深色背景）即可平滑關閉
-  ['modal-record', 'modal-member', 'modal-profile', 'modal-privacy', 'modal-pin'].forEach((id) => {
+  ['modal-record', 'modal-member', 'modal-profile', 'modal-privacy', 'modal-pin', 'modal-legal'].forEach((id) => {
     const modal = document.getElementById(id);
+    if (!modal) return;
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         closeModal(modal);
@@ -2167,7 +2168,7 @@ export function initModals() {
       if (isTempId(member.id)) {
         verified = await verifyLocalPin(member.id, pin);
       } else {
-        const res = await FamilyAPI.verifyMemberPin(state.familyCode, member.id, pin);
+        const res = await DataService.verifyMemberPin(state.familyCode, member.id, pin);
         if (res?.has_privacy_pin === false) {
           // 若資料庫尚未執行 003 遷移，改以本機雜湊驗證
           verified = await verifyLocalPin(member.id, pin);

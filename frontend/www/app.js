@@ -1,5 +1,7 @@
 import { state } from './js/state.js';
-import { FamilyAPI } from './js/services/api.js';
+import { DataService } from './js/services/dataService.js';
+import { isCloudSyncActive, subscribeEntitlementChange } from './js/services/entitlement.js';
+import { initAdBanner } from './js/services/adBanner.js';
 import { initSyncQueue, flushQueue, getPendingCount, optimisticReorderMembers } from './js/services/syncQueue.js';
 import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.js';
 import { renderOverview, isOverviewReordering } from './js/ui/overview.js';
@@ -14,7 +16,7 @@ import {
   handleModalBackAction,
   syncModalDynamicLabels
 } from './js/ui/modals.js';
-import { initSettings, renderSettingsMembers, renderRegionSettings } from './js/ui/settings.js';
+import { initSettings, renderSettingsMembers, renderRegionSettings, renderEditionSettings } from './js/ui/settings.js';
 import { initPrivacyLifecycle, isMemberWeightHidden, lockMember } from './js/utils/privacy.js';
 import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 import { initSwipeBackGesture } from './js/utils/swipeBack.js';
@@ -182,11 +184,31 @@ function formatCompactFamilyCode(code) {
   return `${str.slice(0, 7)}…${str.slice(-4)}`;
 }
 
-function renderAll() {
+function syncHeaderModeUI() {
+  const cloudActive = isCloudSyncActive();
   const headerCodeEl = document.getElementById('header-family-code');
-  headerCodeEl.textContent = t('header.syncCode', { code: formatCompactFamilyCode(state.familyCode) });
-  headerCodeEl.title = t('header.syncCode', { code: state.familyCode });
-  document.getElementById('input-family-code').value = state.familyCode;
+  const refreshBtn = document.getElementById('btn-refresh');
+
+  if (headerCodeEl) {
+    if (cloudActive) {
+      headerCodeEl.textContent = t('header.syncCode', { code: formatCompactFamilyCode(state.familyCode) });
+      headerCodeEl.title = t('header.syncCode', { code: state.familyCode });
+    } else {
+      headerCodeEl.textContent = t('header.offlineMode');
+      headerCodeEl.title = t('header.offlineMode');
+    }
+  }
+  if (refreshBtn) {
+    refreshBtn.classList.toggle('hidden', !cloudActive);
+  }
+}
+
+function renderAll() {
+  syncHeaderModeUI();
+  const familyInput = document.getElementById('input-family-code');
+  if (familyInput && isCloudSyncActive()) {
+    familyInput.value = state.familyCode;
+  }
 
   renderOverview({
     onSelectMember: (memberId) =>
@@ -211,74 +233,79 @@ function renderAll() {
   });
   renderCharts();
   renderRegionSettings();
+  renderEditionSettings();
   renderSettingsMembers({
     onEditMember: (member) => openMemberModal(member)
   });
   refreshOpenProfileModalIfAny();
 }
 
-function hydrateFromCache() {
-  const cached = loadFamilyCache(state.familyCode);
-  if (!cached) return false;
+function applyLoadedDataset(data, orderScopeKey) {
   state.appData = {
-    members: applyMemberOrder(cached.members, state.familyCode),
-    records: cached.records,
-    heightRecords: Array.isArray(cached.heightRecords) ? cached.heightRecords : [],
-    targetHistory: cached.targetHistory
+    members: applyMemberOrder(data.members || [], orderScopeKey),
+    records: data.records || [],
+    heightRecords: data.heightRecords || [],
+    targetHistory: data.targetHistory || []
   };
+
   if (!state.selectedMemberId && state.appData.members.length > 0) {
     state.selectedMemberId = state.appData.members[0].id;
     state.historyPage = 1;
+  } else if (
+    state.selectedMemberId &&
+    !state.appData.members.some((m) => m.id === state.selectedMemberId)
+  ) {
+    state.selectedMemberId = state.appData.members[0]?.id ?? null;
+    state.historyPage = 1;
   }
+}
+
+function hydrateFromCache() {
+  if (!isCloudSyncActive()) return false;
+  const cached = loadFamilyCache(state.familyCode);
+  if (!cached) return false;
+  applyLoadedDataset(cached, state.familyCode);
   return true;
 }
 
 async function syncData() {
   const reqId = ++syncRequestSeq;
-  const targetFamilyCode = state.familyCode;
+  const cloudActive = isCloudSyncActive();
+  const targetFamilyCode = cloudActive ? state.familyCode : 'local';
   isFetching = true;
-  refreshSyncIndicator();
+  if (cloudActive) refreshSyncIndicator();
 
   try {
-    // 若仍有背景寫入排隊中，先等待送出完成再拉取最新雲端資料，避免舊資料覆蓋樂觀更新
+    // 若仍有背景寫入排隊中，先等待送出完成再拉取最新資料，避免舊資料覆蓋樂觀更新
     await flushQueue();
-    if (reqId !== syncRequestSeq || state.familyCode !== targetFamilyCode) return;
+    if (reqId !== syncRequestSeq || (cloudActive && state.familyCode !== targetFamilyCode)) return;
 
-    const data = await FamilyAPI.getAllData(targetFamilyCode);
-    if (reqId !== syncRequestSeq || state.familyCode !== targetFamilyCode) return;
+    const data = await DataService.getAllData(targetFamilyCode);
+    if (reqId !== syncRequestSeq || (cloudActive && state.familyCode !== targetFamilyCode)) return;
 
     // 若拉取期間使用者又新增了新的背景寫入，避免直接覆蓋導致畫面閃回舊狀態
     if (getPendingCount() > 0) return;
 
-    state.appData = {
-      members: applyMemberOrder(data.members || [], targetFamilyCode),
-      records: data.records || [],
-      heightRecords: data.heightRecords || [],
-      targetHistory: data.targetHistory || []
-    };
-    saveFamilyCache(targetFamilyCode, state.appData);
-
-    if (!state.selectedMemberId && state.appData.members.length > 0) {
-      state.selectedMemberId = state.appData.members[0].id;
-      state.historyPage = 1;
-    } else if (
-      state.selectedMemberId &&
-      !state.appData.members.some((m) => m.id === state.selectedMemberId)
-    ) {
-      state.selectedMemberId = state.appData.members[0]?.id ?? null;
-      state.historyPage = 1;
+    applyLoadedDataset(data, targetFamilyCode);
+    if (cloudActive) {
+      saveFamilyCache(targetFamilyCode, state.appData);
     }
+
     renderAll();
     return true;
   } catch (err) {
     renderAll();
-    const hasCachedData = state.appData.members.length > 0;
-    showToast(hasCachedData ? t('api.offlineCache', { msg: err.message }) : err.message, true);
+    if (cloudActive) {
+      const hasCachedData = state.appData.members.length > 0;
+      showToast(hasCachedData ? t('api.offlineCache', { msg: err.message }) : err.message, true);
+    } else {
+      showToast(err.message || t('local.loadFailed'), true);
+    }
     return false;
   } finally {
     if (reqId === syncRequestSeq) {
       isFetching = false;
-      refreshSyncIndicator();
+      if (isCloudSyncActive()) refreshSyncIndicator();
     }
   }
 }
@@ -352,15 +379,23 @@ syncModalDynamicLabels();
 // 初始化隱私自動上鎖生命週期（逾時 5 分鐘或切換畫面時自動重新遮蔽體重）
 initPrivacyLifecycle({ onLockChange: renderAll });
 
-// 初始化樂觀更新與背景序列寫入佇列（所有背景寫入完成後同步更新本機快取）
+// 初始化樂觀更新與背景序列寫入佇列（雲端模式於寫入完成後更新本機快取）
 initSyncQueue({
   onRender: renderAll,
   onPendingChange: (pendingCount) => {
-    refreshSyncIndicator();
-    if (pendingCount === 0) {
-      saveFamilyCache(state.familyCode, state.appData);
+    if (isCloudSyncActive()) {
+      refreshSyncIndicator();
+      if (pendingCount === 0) {
+        saveFamilyCache(state.familyCode, state.appData);
+      }
     }
   }
+});
+
+// 未來付費解鎖 Pro 雲端同步或去廣告時即時切換介面與資料來源
+subscribeEntitlementChange(() => {
+  renderAll();
+  syncData();
 });
 
 // 底部導覽列分頁切換
@@ -368,7 +403,12 @@ document.querySelectorAll('.nav-btn').forEach((btn) => {
   btn.onclick = () => switchTab(btn.dataset.tab);
 });
 
-document.getElementById('btn-refresh').onclick = syncData;
+const refreshBtnEl = document.getElementById('btn-refresh');
+if (refreshBtnEl) {
+  refreshBtnEl.onclick = () => {
+    if (isCloudSyncActive()) syncData();
+  };
+}
 
 initTapFeedback();
 initSwipeBackGesture({
@@ -376,7 +416,7 @@ initSwipeBackGesture({
   onBack: handleAppBack
 });
 initOverviewPullToRefresh({
-  canPull: () => currentTab === 'overview' && !hasOpenModal() && !isOverviewReordering(),
+  canPull: () => isCloudSyncActive() && currentTab === 'overview' && !hasOpenModal() && !isOverviewReordering(),
   isSyncing: () => isFetching,
   onRefresh: async () => {
     const ok = await syncData();
@@ -387,27 +427,44 @@ initChartRangeControls({ onRangeChange: () => renderCharts() });
 initModals();
 initSettings({
   onSync: syncData,
+  onLocalDataReplaced: (nextData) => {
+    state.selectedMemberId = null;
+    state.historyPage = 1;
+    applyLoadedDataset(nextData, 'local');
+    renderAll();
+  },
   onPreferencesChange: () => {
     applyI18nToDOM();
     syncModalDynamicLabels();
-    refreshSyncIndicator();
+    if (isCloudSyncActive()) refreshSyncIndicator();
     renderAll();
   }
 });
 
+// 免費上架版初始化固定式橫幅廣告與底部安全區避讓（自用版與 Pro 版自動不顯示）
+initAdBanner();
+
 const splash = createSplashController();
 
-// Stale-While-Revalidate：先立即載入本機快取秒開畫面，同時背景向雲端拉取最新資料
-const hasCache = hydrateFromCache();
-refreshSyncIndicator();
-renderAll();
-
-if (hasCache) {
-  splash.markReady({ hasCache: true });
-  syncData();
-} else {
-  // 首次無快取時，等待首波雲端同步完成（最長 1.2 秒保底自動退場）再淡出扉頁
+if (!isCloudSyncActive()) {
+  // 純單機離線版：直接從本機 IndexedDB 秒速載入，不發起任何網路同步請求
+  syncHeaderModeUI();
   syncData().finally(() => {
-    splash.markReady({ hasCache: false });
+    splash.markReady({ hasCache: true });
   });
+} else {
+  // 雲端同步版（Stale-While-Revalidate）：先載入本機快取秒開畫面，同時背景向雲端拉取最新資料
+  const hasCache = hydrateFromCache();
+  refreshSyncIndicator();
+  renderAll();
+
+  if (hasCache) {
+    splash.markReady({ hasCache: true });
+    syncData();
+  } else {
+    // 首次無快取時，等待首波雲端同步完成（最長 1.2 秒保底自動退場）再淡出扉頁
+    syncData().finally(() => {
+      splash.markReady({ hasCache: false });
+    });
+  }
 }

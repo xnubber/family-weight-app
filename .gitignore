@@ -3,3 +3,4 @@ node_modules/
 backend/logs/
 frontend/android/
 frontend/www/config.js
+frontend/.config.selfhost.js

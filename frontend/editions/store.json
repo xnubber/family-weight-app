@@ -1,0 +1,14 @@
+{
+  "edition": "store",
+  "appId": "com.xnubber.kinpaws",
+  "appName": "家與毛孩成長誌",
+  "defaultStorageMode": "local",
+  "cloudSyncBuiltIn": false,
+  "cloudProPlanned": true,
+  "adsEnabled": true,
+  "admob": {
+    "androidBannerId": "ca-app-pub-3940256099942544/6300978111",
+    "testing": true
+  },
+  "privacyPolicyUrl": "https://xnubber.github.io/family-weight-app/privacy-policy.html"
+}

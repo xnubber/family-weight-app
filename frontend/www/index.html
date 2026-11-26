@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <!-- 嚴格內容安全政策（正式上線時可將 connect-src 中的 https: 進一步鎖定為您的正式 API 網域） -->
   <meta
     http-equiv="Content-Security-Policy"
@@ -18,6 +18,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./styles.css" />
   <script src="./vendor/chart.umd.min.js" defer></script>
+  <script src="./edition.js" defer></script>
   <script src="./config.js" defer></script>
   <script type="module" src="./app.js"></script>
 </head>
@@ -41,7 +42,7 @@
   </div>
 
   <!-- 頂部導覽列 -->
-  <header class="sticky top-0 z-20 bg-paper/90 backdrop-blur border-b border-oat-200 px-4 py-3 flex justify-between items-center gap-3">
+  <header class="app-header sticky top-0 z-20 bg-paper/90 backdrop-blur border-b border-oat-200 px-4 pb-3 flex justify-between items-center gap-3">
     <div class="flex items-center gap-2.5 min-w-0">
       <img
         src="./icons/app-icon.svg"
@@ -163,7 +164,8 @@
 
     <!-- 分頁 3：設定與成員管理 -->
     <section id="view-settings" class="page-view hidden space-y-4">
-      <div class="journal-card p-4 rounded-2xl space-y-3.5">
+      <!-- 雲端同步設定（僅於自用雲端版或已解鎖 Pro 雲端同步時顯示） -->
+      <div id="settings-cloud-sync-card" class="journal-card p-4 rounded-2xl space-y-3.5">
         <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
           <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M6.5 18h11a4 4 0 0 0 .8-7.92A5.5 5.5 0 0 0 7.6 8.3 3.8 3.8 0 0 0 6.5 18Z" />
@@ -189,6 +191,7 @@
         <button id="btn-save-settings" type="button" data-i18n="settings.saveSync" class="w-full py-2.5 bg-ink text-linen rounded-xl text-sm font-medium tracking-wide">儲存並同步</button>
       </div>
 
+      <!-- 成員管理 -->
       <div class="journal-card p-4 rounded-2xl space-y-3">
         <div class="flex justify-between items-center">
           <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
@@ -208,6 +211,48 @@
           </button>
         </div>
         <ul id="settings-member-list" class="divide-y divide-oat-100 text-sm"></ul>
+      </div>
+
+      <!-- 本機資料備份與還原（單機版核心備份與換機方案，亦預留未來一鍵匯入雲端） -->
+      <div id="settings-backup-card" class="hidden journal-card p-4 rounded-2xl space-y-3">
+        <div class="flex items-start justify-between gap-2">
+          <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
+            <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3v12" />
+              <path d="M7.5 10.5L12 15l4.5-4.5" />
+              <path d="M4.5 17.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" />
+            </svg>
+            <span data-i18n="backup.title">資料備份與還原</span>
+          </h2>
+          <span data-i18n="backup.localBadge" class="text-[11px] px-2 py-0.5 rounded-lg bg-sage-50 border border-sage-200/80 text-sage-700 font-medium whitespace-nowrap">僅存於本機</span>
+        </div>
+        <p data-i18n="backup.desc" class="text-xs text-ink-500 leading-relaxed">所有紀錄安全儲存於您的裝置內。換機前可匯出 JSON 備份檔，或於新手機一鍵匯入還原。</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="btn-backup-export" type="button" data-i18n="backup.exportBtn" class="py-2.5 px-3 rounded-xl bg-sage-600 hover:bg-sage-700 text-linen text-xs font-medium">匯出備份檔</button>
+          <button id="btn-backup-import" type="button" data-i18n="backup.importBtn" class="py-2.5 px-3 rounded-xl bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 text-xs font-medium">匯入備份檔</button>
+        </div>
+        <input id="input-backup-file" type="file" accept="application/json,.json" class="hidden" />
+        <div class="pt-1 border-t border-oat-100 flex justify-end">
+          <button id="btn-local-clear-all" type="button" data-i18n="backup.clearAllBtn" class="text-xs text-rosewood-600 hover:text-rosewood-700 font-medium py-1">清除全部本機資料</button>
+        </div>
+      </div>
+
+      <!-- 未來 Pro 雲端家庭同步預告（僅於單機上架版且尚未解鎖 Pro 時顯示） -->
+      <div id="settings-pro-cloud-card" class="hidden journal-card p-4 rounded-2xl space-y-2.5 border-sage-200/80 bg-sage-50/40">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
+            <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6.5 18h11a4 4 0 0 0 .8-7.92A5.5 5.5 0 0 0 7.6 8.3 3.8 3.8 0 0 0 6.5 18Z" />
+            </svg>
+            <span data-i18n="pro.title">雲端家庭同步 · Pro</span>
+          </h2>
+          <span data-i18n="pro.comingSoonBadge" class="text-[11px] px-2 py-0.5 rounded-lg bg-linen border border-sage-200 text-sage-700 font-medium whitespace-nowrap">即將推出</span>
+        </div>
+        <p data-i18n="pro.desc" class="text-xs text-ink-500 leading-relaxed">未來將推出選配付費方案，解鎖「多裝置即時家庭同步」與「移除橫幅廣告」，既有本機紀錄可一鍵無痛遷移至雲端。</p>
+        <div class="flex items-center gap-2 pt-0.5">
+          <button id="btn-pro-cloud-info" type="button" data-i18n="pro.learnMoreBtn" class="flex-1 py-2 px-3 rounded-xl bg-linen border border-sage-200 text-sage-700 text-xs font-medium">了解更多</button>
+          <button id="btn-pro-restore" type="button" data-i18n="pro.restoreBtn" class="py-2 px-3 rounded-xl bg-oat-100 border border-oat-200 text-ink-600 text-xs font-medium whitespace-nowrap">回復購買</button>
+        </div>
       </div>
 
       <!-- 語言、單位與時區設定（預設收合並顯示精簡摘要，點擊再展開編輯） -->
@@ -254,6 +299,25 @@
           </div>
         </div>
       </div>
+
+      <!-- 關於、健康免責聲明與隱私權政策（Google Play 上架合規必備） -->
+      <div id="settings-about-card" class="journal-card p-4 rounded-2xl space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
+            <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3l7 3v5.5c0 4.6-3 7.8-7 9.5-4-1.7-7-4.9-7-9.5V6l7-3Z" />
+              <path d="M12 11v4M12 8.2h.01" />
+            </svg>
+            <span data-i18n="about.title">關於與隱私聲明</span>
+          </h2>
+          <span id="settings-version-badge" class="text-[11px] font-mono text-ink-400">v2.16.0</span>
+        </div>
+        <p data-i18n="about.healthDisclaimer" class="text-xs text-ink-500 leading-relaxed">本應用程式提供之 BMI、健康體重區間、身高趨勢與毛孩熱量建議僅供日常健康紀錄與參考，不構成醫療診斷、治療或獸醫處方建議。</p>
+        <div class="flex items-center justify-between gap-2 pt-1 border-t border-oat-100">
+          <span id="settings-storage-badge" class="text-[11px] text-ink-400"></span>
+          <button id="btn-open-legal-modal" type="button" data-i18n="about.privacyBtn" class="text-xs font-medium text-sage-700 hover:text-sage-800 whitespace-nowrap">隱私權與完整聲明</button>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -269,8 +333,8 @@
     </div>
   </div>
 
-  <!-- 底部導覽列（精簡 3 分頁，細線文青圖示） -->
-  <nav class="fixed bottom-0 inset-x-0 h-16 bg-linen/95 backdrop-blur border-t border-oat-200 flex items-center justify-around text-[13px] text-ink-400 z-30">
+  <!-- 底部導覽列（精簡 3 分頁，隨固定式廣告橫幅高度與系統安全區自動上移） -->
+  <nav class="app-bottom-nav fixed inset-x-0 h-16 bg-linen/95 backdrop-blur border-t border-oat-200 flex items-center justify-around text-[13px] text-ink-400 z-30">
     <button type="button" data-tab="overview" class="nav-btn tab-active flex flex-col items-center gap-0.5">
       <span class="nav-icon-wrap w-9 h-6 rounded-full flex items-center justify-center transition-colors">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -305,6 +369,9 @@
       <span data-i18n="nav.settings">設定</span>
     </button>
   </nav>
+
+  <!-- 預留給底部固定式原生廣告橫幅的分隔底座（無廣告時自動隱藏） -->
+  <div id="ad-banner-spacer" class="ad-banner-spacer hidden" aria-hidden="true"></div>
 
   <!-- 彈窗：新增紀錄（支援批量與單筆切換，含體重與小孩身高成長紀錄） -->
   <div id="modal-record" class="modal-overlay hidden fixed inset-0 bg-ink/35 backdrop-blur-[2px] z-50 flex items-end sm:items-center justify-center p-4">
@@ -777,6 +844,40 @@
         <button type="submit" id="btn-pin-submit" data-i18n="pinModal.submit" class="flex-1 py-2.5 bg-sage-600 text-linen rounded-xl text-sm font-medium">解鎖檢視</button>
       </div>
     </form>
+  </div>
+
+  <!-- 彈窗：隱私權政策與健康免責聲明（離線可讀，並附外部隱私權網頁連結） -->
+  <div id="modal-legal" class="modal-overlay hidden fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-[55] flex items-end sm:items-center justify-center p-4">
+    <div class="modal-sheet bg-linen border border-oat-200 w-full max-w-md max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
+      <div class="flex justify-between items-center gap-2">
+        <h3 data-i18n="legal.modalTitle" class="font-semibold text-base text-ink tracking-wide">隱私權政策與免責聲明</h3>
+        <button type="button" data-i18n-aria-label="common.close" aria-label="關閉" class="btn-close-modal w-8 h-8 rounded-full bg-oat-100 hover:bg-oat-200 text-ink-600 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs text-ink-600 leading-relaxed">
+        <div class="p-3 rounded-2xl bg-oat-50 border border-oat-200/80 space-y-1">
+          <h4 data-i18n="legal.dataTitle" class="font-semibold text-ink text-xs">1. 資料儲存與隱私保護</h4>
+          <p id="legal-data-desc" data-i18n="legal.dataLocalDesc">於免費單機版本中，您建立的成員資料、體重、身高與備註僅儲存於您的本機裝置，不會上傳至開發者伺服器；您可隨時匯出備份或於設定頁一鍵清除全部本機資料。</p>
+        </div>
+        <div class="p-3 rounded-2xl bg-oat-50 border border-oat-200/80 space-y-1">
+          <h4 data-i18n="legal.adsTitle" class="font-semibold text-ink text-xs">2. 廣告與第三方服務</h4>
+          <p data-i18n="legal.adsDesc">免費上架版本可能顯示 Google AdMob 橫幅廣告；AdMob 可能依您的同意設定收集裝置廣告識別碼、粗略位置與互動診斷資訊，以提供與量測廣告。未來若您選配升級 Pro 方案並開啟雲端同步，資料將經 HTTPS 加密傳輸至雲端資料庫。</p>
+        </div>
+        <div class="p-3 rounded-2xl bg-oat-50 border border-oat-200/80 space-y-1">
+          <h4 data-i18n="legal.healthTitle" class="font-semibold text-ink text-xs">3. 健康資訊免責聲明</h4>
+          <p data-i18n="legal.healthDesc">本應用程式為供家長與飼主記錄全家及毛孩日常成長之工具。所有 BMI、理想體重區間、身高成長曲線及毛孩 RER／DER 熱量建議皆為一般參考公式，不構成醫療診斷、治療或專業獸醫建議；若有健康疑慮請諮詢醫師或獸醫師。</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 pt-1">
+        <a id="link-legal-external" href="#" target="_blank" rel="noopener noreferrer" data-i18n="legal.openWebBtn" class="hidden flex-1 text-center py-2.5 px-3 rounded-xl bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 text-xs font-medium">開啟完整線上隱私權政策</a>
+        <button type="button" data-i18n="common.close" class="btn-close-modal flex-1 py-2.5 px-3 rounded-xl bg-sage-600 text-linen text-xs font-medium">關閉</button>
+      </div>
+    </div>
   </div>
 </body>
 </html>

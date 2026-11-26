@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { FamilyAPI } from './api.js';
+import { DataService } from './dataService.js';
 import { showToast } from '../utils/dom.js';
 import { getLocalTodayDate } from '../utils/metrics.js';
 import { isTempId } from '../utils/validation.js';
@@ -210,7 +210,7 @@ export function optimisticAddMember(payload) {
     familyCode: targetFamilyCode,
     errorPrefix: t('sync.addMemberFailed'),
     run: async () => {
-      const created = await FamilyAPI.addMember(targetFamilyCode, payload);
+      const created = await DataService.addMember(targetFamilyCode, payload);
       if (state.familyCode === targetFamilyCode) {
         replaceMemberTempId(tempId, created, payload.privacy_pin || null);
         onRenderCallback();
@@ -309,7 +309,7 @@ export function optimisticUpdateMember(rawMemberId, payload) {
       if (isTempId(realId)) {
         throw new Error(t('sync.memberPending'));
       }
-      const updated = await FamilyAPI.updateMember(targetFamilyCode, realId, payload);
+      const updated = await DataService.updateMember(targetFamilyCode, realId, payload);
       if (state.familyCode === targetFamilyCode) {
         const idx = state.appData.members.findIndex((m) => m.id === realId);
         if (idx !== -1) {
@@ -390,7 +390,7 @@ export function optimisticDeleteMember(rawMemberId) {
       const realId = resolveId(rawMemberId);
       // 若為尚未建立成功的暫時成員，直接結束無需呼叫後端
       if (isTempId(realId)) return;
-      await FamilyAPI.deleteMember(targetFamilyCode, realId);
+      await DataService.deleteMember(targetFamilyCode, realId);
     },
     rollback: () => {
       if (removedMember.avatar) saveLocalAvatar(removedMember.id, removedMember.avatar);
@@ -436,7 +436,7 @@ export function optimisticAddRecord(payload) {
       if (isTempId(realMemberId)) {
         throw new Error(t('sync.ownerPending'));
       }
-      const created = await FamilyAPI.addRecord(targetFamilyCode, {
+      const created = await DataService.addRecord(targetFamilyCode, {
         ...payload,
         member_id: realMemberId
       });
@@ -480,7 +480,7 @@ export function optimisticDeleteRecord(rawRecordId) {
     run: async () => {
       const realId = resolveId(rawRecordId);
       if (isTempId(realId)) return;
-      await FamilyAPI.deleteRecord(targetFamilyCode, realId);
+      await DataService.deleteRecord(targetFamilyCode, realId);
     },
     rollback: () => {
       if (state.familyCode !== targetFamilyCode) return;
@@ -524,7 +524,7 @@ export function optimisticAddHeightRecord(payload) {
       if (isTempId(realMemberId)) {
         throw new Error(t('sync.ownerPending'));
       }
-      const created = await FamilyAPI.addHeightRecord(targetFamilyCode, {
+      const created = await DataService.addHeightRecord(targetFamilyCode, {
         ...payload,
         member_id: realMemberId
       });
@@ -573,7 +573,7 @@ export function optimisticDeleteHeightRecord(rawRecordId) {
     run: async () => {
       const realId = resolveId(rawRecordId);
       if (isTempId(realId)) return;
-      await FamilyAPI.deleteHeightRecord(targetFamilyCode, realId);
+      await DataService.deleteHeightRecord(targetFamilyCode, realId);
     },
     rollback: () => {
       if (state.familyCode !== targetFamilyCode) return;
@@ -628,7 +628,7 @@ export function optimisticReorderMembers(orderedIds) {
         .map((id) => resolveId(id))
         .filter((id) => !isTempId(id));
       if (resolvedIds.length === 0) return;
-      await FamilyAPI.reorderMembers(targetFamilyCode, resolvedIds);
+      await DataService.reorderMembers(targetFamilyCode, resolvedIds);
     },
     rollback: () => {
       saveLocalMemberOrder(targetFamilyCode, prevOrderIds);

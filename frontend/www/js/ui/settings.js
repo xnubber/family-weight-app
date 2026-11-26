@@ -1,6 +1,14 @@
 import { state } from '../state.js';
 import { hasInjectedApiKey } from '../services/api.js';
-import { createEl, playSoftFade, showToast } from '../utils/dom.js';
+import { DataService } from '../services/dataService.js';
+import {
+  getEntitlementState,
+  isCloudSyncActive,
+  isStoreEdition,
+  requestProCloudUpgrade,
+  restoreProPurchases
+} from '../services/entitlement.js';
+import { createEl, openModal, playSoftFade, showToast } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { isMemberPrivacyEnabled, lockAllMembers, memberHasPrivacyPin } from '../utils/privacy.js';
@@ -205,8 +213,91 @@ export function renderSettingsMembers({ onEditMember }) {
   list.replaceChildren(...items);
 }
 
-export function initSettings({ onSync, onPreferencesChange = () => {} }) {
+function downloadJsonBlob(filename, jsonString) {
+  const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+async function triggerBackupExport() {
+  const snapshot = await DataService.exportBackup(state.appData);
+  const todayStr = getTodayInTimeZone(getActiveTimeZone()).replace(/-/g, '');
+  const filename = `kin-paws-backup-${todayStr}.json`;
+  const jsonText = JSON.stringify(snapshot, null, 2);
+
+  // 優先嘗試行動裝置系統分享（可存至檔案管理員／Google Drive／雲端），不支援時自動降級為瀏覽器下載
+  try {
+    if (typeof File === 'function' && typeof navigator?.share === 'function' && typeof navigator?.canShare === 'function') {
+      const file = new File([jsonText], filename, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: t('backup.shareTitle'),
+          files: [file]
+        });
+        showToast(t('backup.exportSuccess'));
+        return;
+      }
+    }
+  } catch (err) {
+    if (err?.name === 'AbortError') return;
+    // 分享失敗時改以檔案下載保底
+  }
+
+  downloadJsonBlob(filename, jsonText);
+  showToast(t('backup.exportSuccess'));
+}
+
+export function renderEditionSettings() {
+  const ent = getEntitlementState();
+  const cloudActive = isCloudSyncActive();
+  const storeMode = isStoreEdition();
+
+  const cloudCard = document.getElementById('settings-cloud-sync-card');
+  const backupCard = document.getElementById('settings-backup-card');
+  const proCard = document.getElementById('settings-pro-cloud-card');
+  const versionBadge = document.getElementById('settings-version-badge');
+  const storageBadge = document.getElementById('settings-storage-badge');
+  const legalDataDesc = document.getElementById('legal-data-desc');
+  const legalExternalLink = document.getElementById('link-legal-external');
+
+  if (cloudCard) cloudCard.classList.toggle('hidden', !cloudActive);
+  // 單機模式顯示完整本機備份與還原卡片（含匯入與清除）
+  if (backupCard) backupCard.classList.toggle('hidden', cloudActive);
+  // 僅於 Google Play 單機上架版且尚未解鎖 Pro 時顯示未來雲端同步預告
+  if (proCard) proCard.classList.toggle('hidden', !(storeMode && !ent.cloudSyncUnlocked && ent.cloudProPlanned));
+
+  if (versionBadge) {
+    versionBadge.textContent = `v${ent.appVersion}`;
+  }
+  if (storageBadge) {
+    storageBadge.textContent = cloudActive
+      ? t('about.storageCloud')
+      : t('about.storageLocal');
+  }
+  if (legalDataDesc) {
+    legalDataDesc.textContent = cloudActive
+      ? t('legal.dataCloudDesc')
+      : t('legal.dataLocalDesc');
+  }
+  if (legalExternalLink) {
+    if (ent.privacyPolicyUrl && ent.privacyPolicyUrl.startsWith('https://')) {
+      legalExternalLink.href = ent.privacyPolicyUrl;
+      legalExternalLink.classList.remove('hidden');
+    } else {
+      legalExternalLink.classList.add('hidden');
+    }
+  }
+}
+
+export function initSettings({ onSync, onLocalDataReplaced = () => {}, onPreferencesChange = () => {} }) {
   renderRegionSettings();
+  renderEditionSettings();
 
   const toggleRegionBtn = document.getElementById('btn-toggle-region-settings');
   if (toggleRegionBtn) {
@@ -243,50 +334,158 @@ export function initSettings({ onSync, onPreferencesChange = () => {} }) {
       setTimezoneSetting(tzSelect.value);
       onPreferencesChange({ type: 'timezone' });
       showToast(t('settings.timezoneUpdated'));
-      onSync();
+      if (isCloudSyncActive()) {
+        onSync();
+      }
     };
   }
 
-  // 若未透過 config.js 注入 API Key，顯示設定頁的金鑰輸入欄位
+  // 若未透過 config.js 注入 API Key，於雲端模式顯示設定頁的金鑰輸入欄位
   const wrap = document.getElementById('api-key-setting-wrap');
   const input = document.getElementById('input-api-key');
-  if (!hasInjectedApiKey()) {
+  if (wrap && input && isCloudSyncActive() && !hasInjectedApiKey()) {
     wrap.classList.remove('hidden');
     input.value = localStorage.getItem('appApiKey') || '';
   }
 
   // 隨機產生新的高強度同步碼
-  document.getElementById('btn-generate-code').onclick = () => {
-    document.getElementById('input-family-code').value = generateFamilyCode();
-    showToast(t('settings.codeGenerated'));
-  };
+  const genBtn = document.getElementById('btn-generate-code');
+  if (genBtn) {
+    genBtn.onclick = () => {
+      document.getElementById('input-family-code').value = generateFamilyCode();
+      showToast(t('settings.codeGenerated'));
+    };
+  }
 
   // 儲存家庭同步碼（與本機 API 金鑰設定）
-  document.getElementById('btn-save-settings').onclick = () => {
-    const nextCode = document.getElementById('input-family-code').value.trim();
-    if (!isValidFamilyCode(nextCode)) {
-      showToast(t('settings.invalidFamilyCode'), true);
-      return;
-    }
-
-    if (!hasInjectedApiKey()) {
-      const apiKeyVal = document.getElementById('input-api-key').value.trim();
-      if (apiKeyVal) {
-        localStorage.setItem('appApiKey', apiKeyVal);
+  const saveBtn = document.getElementById('btn-save-settings');
+  if (saveBtn) {
+    saveBtn.onclick = () => {
+      const nextCode = document.getElementById('input-family-code').value.trim();
+      if (!isValidFamilyCode(nextCode)) {
+        showToast(t('settings.invalidFamilyCode'), true);
+        return;
       }
-    }
 
-    const familyChanged = nextCode !== state.familyCode;
-    lockAllMembers(false);
-    if (familyChanged) {
-      clearFamilyCache();
-      state.appData = { members: [], records: [], targetHistory: [] };
-    }
-    state.familyCode = nextCode;
-    state.selectedMemberId = null;
-    state.historyPage = 1;
-    localStorage.setItem('familySyncCode', state.familyCode);
-    showToast(t('settings.saved'));
-    onSync();
-  };
+      if (!hasInjectedApiKey()) {
+        const apiKeyVal = document.getElementById('input-api-key').value.trim();
+        if (apiKeyVal) {
+          localStorage.setItem('appApiKey', apiKeyVal);
+        }
+      }
+
+      const familyChanged = nextCode !== state.familyCode;
+      lockAllMembers(false);
+      if (familyChanged) {
+        clearFamilyCache();
+        state.appData = { members: [], records: [], heightRecords: [], targetHistory: [] };
+      }
+      state.familyCode = nextCode;
+      state.selectedMemberId = null;
+      state.historyPage = 1;
+      localStorage.setItem('familySyncCode', state.familyCode);
+      showToast(t('settings.saved'));
+      onSync();
+    };
+  }
+
+  // 本機 JSON 備份匯出
+  const exportBtn = document.getElementById('btn-backup-export');
+  if (exportBtn) {
+    exportBtn.onclick = async () => {
+      try {
+        await triggerBackupExport();
+      } catch (err) {
+        showToast(err?.message || t('backup.exportFailed'), true);
+      }
+    };
+  }
+
+  // 本機 JSON 備份匯入
+  const importBtn = document.getElementById('btn-backup-import');
+  const fileInput = document.getElementById('input-backup-file');
+  if (importBtn && fileInput) {
+    importBtn.onclick = () => {
+      fileInput.value = '';
+      fileInput.click();
+    };
+    fileInput.onchange = async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      if (!window.confirm(t('backup.importConfirm'))) {
+        fileInput.value = '';
+        return;
+      }
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const result = await DataService.importBackup(parsed);
+        lockAllMembers(false);
+        onLocalDataReplaced(result.data);
+        showToast(t('backup.importSuccess', {
+          members: result.summary.members,
+          records: result.summary.records + result.summary.heightRecords
+        }));
+      } catch (err) {
+        showToast(err?.message || t('backup.invalidFile'), true);
+      } finally {
+        fileInput.value = '';
+      }
+    };
+  }
+
+  // 清除全部本機資料（二次確認）
+  const clearAllBtn = document.getElementById('btn-local-clear-all');
+  if (clearAllBtn) {
+    clearAllBtn.onclick = async () => {
+      if (!window.confirm(t('backup.clearAllConfirm'))) return;
+      try {
+        await DataService.clearAllLocalData();
+        clearFamilyCache();
+        lockAllMembers(false);
+        onLocalDataReplaced({ members: [], records: [], heightRecords: [], targetHistory: [] });
+        showToast(t('backup.clearAllSuccess'));
+      } catch (err) {
+        showToast(err?.message || t('backup.clearAllFailed'), true);
+      }
+    };
+  }
+
+  // 未來 Pro 雲端家庭同步按鈕（預留付費串接入口）
+  const proInfoBtn = document.getElementById('btn-pro-cloud-info');
+  if (proInfoBtn) {
+    proInfoBtn.onclick = async () => {
+      try {
+        const res = await requestProCloudUpgrade();
+        if (res?.status === 'coming_soon') {
+          showToast(t('pro.comingSoonToast'));
+        }
+      } catch (err) {
+        showToast(err?.message || t('pro.comingSoonToast'), true);
+      }
+    };
+  }
+
+  const proRestoreBtn = document.getElementById('btn-pro-restore');
+  if (proRestoreBtn) {
+    proRestoreBtn.onclick = async () => {
+      try {
+        const res = await restoreProPurchases();
+        if (res?.status === 'coming_soon') {
+          showToast(t('pro.restoreComingSoonToast'));
+        }
+      } catch (err) {
+        showToast(err?.message || t('pro.restoreComingSoonToast'), true);
+      }
+    };
+  }
+
+  // 開啟隱私權與健康免責聲明彈窗
+  const legalBtn = document.getElementById('btn-open-legal-modal');
+  if (legalBtn) {
+    legalBtn.onclick = () => {
+      renderEditionSettings();
+      openModal('modal-legal');
+    };
+  }
 }

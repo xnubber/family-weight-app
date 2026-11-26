@@ -14,11 +14,18 @@
 - **體重隱私遮罩＋選配個人 4 位數 PIN 鎖**：針對個別成員隱藏真實體重、精確 BMI 與圖表刻度，僅呈現變化趨勢與達標進度，驗證 PIN 後暫時檢視並於 5 分鐘或離開畫面時自動重新隱藏。
 - **批量紀錄與樂觀同步**：一鍵批量填寫全家今日體重與身高，採樂觀更新＋背景 FIFO 序列佇列同步，無阻斷式遮罩。
 
-## 專案目錄
-- `frontend/`：Capacitor + Tailwind CSS + 原生 ES Module 前端（嚴格 CSP、零外部 CDN）。
-  - 編譯前端與同步 Android 原生外掛（含 `@capacitor/app` 系統返回手勢接管）：`cd frontend && npm install && npm run build && npx cap sync android`。
+## 專案目錄與雙版本建置
+- `frontend/`：Capacitor + Tailwind CSS + 原生 ES Module 前端（嚴格 CSP、零外部 CDN），採**單一程式碼庫＋雙版本建置**：
+  - **自用雲端版（`selfhost`，保留 `com.familyweight.app`）**：`cd frontend && npm install && npm run build:selfhost && npx cap sync android`（完整保留家庭同步碼與雲端同步功能）。
+  - **Google Play 單機上架版（`store`，使用專屬 `com.xnubber.kinpaws`）**：`cd frontend && npm install && npm run build:store && npx cap sync android`
+    - 自動切為本機 **IndexedDB 離線資料庫**＋Web Crypto PBKDF2 本機 4 位數 PIN 驗證（含防暴力試探冷卻）。
+    - 自動暫存並清空 `www/config.js`，嚴防自用 `APP_API_KEY` 外洩進上架包（切回 `build:selfhost` 時自動還原）。
+    - 內建 JSON 備份匯出／還原、健康免責聲明與隱私權政策視窗、底部固定廣告橫幅安全區避讓（`--ad-banner-height` + Edge-to-Edge），並預留未來付費解鎖 **Pro 雲端同步與去廣告** 的 `entitlement.js`／`dataService.js` 介面。
+    - 兩版本使用不同 `appId`，可**同時安裝在同一支 Android 手機並存測試**。
+  - `frontend/editions/`：雙版本建置組態（`selfhost.json` 與 `store.json`）。
   - `frontend/www/icons/`：網頁 Favicon、Apple Touch Icon 與 PWA 圖示（SVG / 192px / 512px）。
   - `frontend/resources/`：Capacitor 原生 App 圖示母檔（`icon-only.png`、`icon-foreground.png`、`icon-background.png`，可透過 `npx @capacitor/assets generate` 一鍵產生 Android / iOS 圖示）。
+- `docs/privacy-policy.html`：可直接透過 GitHub Pages 發布的公開隱私權政策與健康免責聲明頁面（供 Google Play Console 填寫）。
 - `backend/`：Express + Supabase + Zod v4 嚴格驗證後端 API。
   - `backend/sql/`：Supabase 資料庫建表與遷移腳本（全新建置請先執行 `000_init_schema.sql` 與 `001_target_weight_history.sql`；舊庫升級請依序執行 `001` → `002` → `003` → `004` → `005` → `006` → `007`）。
 - [CHANGELOG.md](./CHANGELOG.md)：完整版本號與更新紀錄表。
