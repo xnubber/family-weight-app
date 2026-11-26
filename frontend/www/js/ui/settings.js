@@ -2,18 +2,31 @@ import { state } from '../state.js';
 import { hasInjectedApiKey } from '../services/api.js';
 import { DataService } from '../services/dataService.js';
 import {
+  getEditionConfig,
   getEntitlementState,
   isCloudSyncActive,
   isStoreEdition,
   requestProCloudUpgrade,
   restoreProPurchases
 } from '../services/entitlement.js';
+import {
+  getNotificationPermissionStatus,
+  getNotificationSettings,
+  sendTestNotification,
+  updateNotificationSettings
+} from '../services/notifications.js';
 import { createEl, openModal, playSoftFade, showToast } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { isMemberPrivacyEnabled, lockAllMembers, memberHasPrivacyPin } from '../utils/privacy.js';
 import { clearFamilyCache } from '../utils/cache.js';
 import { generateFamilyCode, isValidFamilyCode } from '../utils/validation.js';
+import {
+  getThemeConfig,
+  resolveActiveTheme,
+  setThemeFollowSystem,
+  setThemePreset
+} from '../utils/theme.js';
 import {
   LANGUAGE_DISPLAY_NAMES,
   detectDeviceLocale,
@@ -253,33 +266,136 @@ async function triggerBackupExport() {
   showToast(t('backup.exportSuccess'));
 }
 
+const THEME_NAME_KEY_MAP = {
+  sage: 'theme.presetSage',
+  clay: 'theme.presetClay',
+  mist: 'theme.presetMist',
+  night: 'theme.presetNight'
+};
+
+export function renderThemeSettings() {
+  const cfg = getThemeConfig();
+  const active = resolveActiveTheme(cfg);
+  const badge = document.getElementById('theme-active-badge');
+  const systemToggle = document.getElementById('toggle-theme-system');
+
+  if (badge) {
+    const activeName = t(THEME_NAME_KEY_MAP[active] || 'theme.presetSage');
+    badge.textContent = cfg.followSystem
+      ? t('theme.badgeSystem', { theme: activeName })
+      : activeName;
+  }
+  if (systemToggle) {
+    systemToggle.checked = Boolean(cfg.followSystem);
+  }
+  document.querySelectorAll('.theme-preset-btn').forEach((btn) => {
+    const preset = btn.dataset.themePreset;
+    const isSelected = preset === active;
+    btn.classList.toggle('is-selected', isSelected);
+    btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+  });
+}
+
+export async function renderNotificationSettings() {
+  const cfg = getNotificationSettings();
+  const dailyToggle = document.getElementById('toggle-daily-reminder');
+  const timeWrap = document.getElementById('notify-time-wrap');
+  const timeInput = document.getElementById('input-reminder-time');
+  const inactiveToggle = document.getElementById('toggle-inactive-reminder');
+  const permBadge = document.getElementById('notify-permission-badge');
+  const statusHint = document.getElementById('notify-status-hint');
+
+  if (dailyToggle) dailyToggle.checked = Boolean(cfg.dailyEnabled);
+  if (timeInput) timeInput.value = cfg.dailyTime || '08:00';
+  if (timeWrap) timeWrap.classList.toggle('hidden', !cfg.dailyEnabled);
+  if (inactiveToggle) inactiveToggle.checked = Boolean(cfg.inactiveReminderEnabled);
+
+  const perm = await getNotificationPermissionStatus();
+  if (permBadge) {
+    if (perm === 'granted') {
+      permBadge.textContent = t('notify.permGranted');
+      permBadge.className = 'text-[11px] px-2 py-0.5 rounded-lg bg-sage-50 border border-sage-200/80 text-sage-700 font-medium whitespace-nowrap';
+    } else if (perm === 'denied') {
+      permBadge.textContent = t('notify.permDenied');
+      permBadge.className = 'text-[11px] px-2 py-0.5 rounded-lg bg-rosewood-50 border border-rosewood-100 text-rosewood-600 font-medium whitespace-nowrap';
+    } else if (perm === 'unsupported') {
+      permBadge.textContent = t('notify.permInApp');
+      permBadge.className = 'text-[11px] px-2 py-0.5 rounded-lg bg-oat-50 border border-oat-200/80 text-ink-500 whitespace-nowrap';
+    } else {
+      permBadge.textContent = t('notify.permDefault');
+      permBadge.className = 'text-[11px] px-2 py-0.5 rounded-lg bg-oat-50 border border-oat-200/80 text-ink-500 whitespace-nowrap';
+    }
+  }
+  if (statusHint) {
+    if (perm === 'denied') {
+      statusHint.textContent = t('notify.hintDenied');
+    } else if (cfg.dailyEnabled) {
+      statusHint.textContent = t('notify.hintDailyScheduled', { time: cfg.dailyTime });
+    } else {
+      statusHint.textContent = t('notify.hintDefault');
+    }
+  }
+}
+
 export function renderEditionSettings() {
+  const cfg = getEditionConfig();
   const ent = getEntitlementState();
   const cloudActive = isCloudSyncActive();
   const storeMode = isStoreEdition();
 
   const cloudCard = document.getElementById('settings-cloud-sync-card');
-  const backupCard = document.getElementById('settings-backup-card');
   const proCard = document.getElementById('settings-pro-cloud-card');
+  const backupBadge = document.getElementById('backup-mode-badge');
+  const backupDesc = document.getElementById('backup-mode-desc');
+  const backupGrid = document.getElementById('backup-actions-grid');
+  const importBtn = document.getElementById('btn-backup-import');
+  const clearWrap = document.getElementById('backup-clear-wrap');
   const versionBadge = document.getElementById('settings-version-badge');
   const storageBadge = document.getElementById('settings-storage-badge');
   const legalDataDesc = document.getElementById('legal-data-desc');
   const legalExternalLink = document.getElementById('link-legal-external');
 
+  // 關於此 APP 彈窗欄位
+  const aboutVersion = document.getElementById('about-modal-version');
+  const aboutEdition = document.getElementById('about-modal-edition');
+  const aboutStorage = document.getElementById('about-modal-storage');
+  const aboutAppId = document.getElementById('about-modal-appid');
+
   if (cloudCard) cloudCard.classList.toggle('hidden', !cloudActive);
-  // 單機模式顯示完整本機備份與還原卡片（含匯入與清除）
-  if (backupCard) backupCard.classList.toggle('hidden', cloudActive);
   // 僅於 Google Play 單機上架版且尚未解鎖 Pro 時顯示未來雲端同步預告
   if (proCard) proCard.classList.toggle('hidden', !(storeMode && !ent.cloudSyncUnlocked && ent.cloudProPlanned));
 
-  if (versionBadge) {
-    versionBadge.textContent = `v${ent.appVersion}`;
+  // 資料備份卡在自用版與單機版皆顯示：雲端版提供 JSON 匯出留存；單機版提供完整匯出＋匯入還原＋一鍵清除
+  if (backupBadge) {
+    backupBadge.textContent = cloudActive ? t('backup.cloudBadge') : t('backup.localBadge');
   }
-  if (storageBadge) {
-    storageBadge.textContent = cloudActive
-      ? t('about.storageCloud')
-      : t('about.storageLocal');
+  if (backupDesc) {
+    backupDesc.textContent = cloudActive ? t('backup.cloudDesc') : t('backup.desc');
   }
+  if (importBtn) {
+    importBtn.classList.toggle('hidden', cloudActive);
+  }
+  if (backupGrid) {
+    backupGrid.classList.toggle('grid-cols-2', !cloudActive);
+    backupGrid.classList.toggle('grid-cols-1', cloudActive);
+  }
+  if (clearWrap) {
+    clearWrap.classList.toggle('hidden', cloudActive);
+  }
+
+  const versionText = `v${ent.appVersion}`;
+  const storageText = cloudActive ? t('about.storageCloud') : t('about.storageLocal');
+  const editionText = storeMode
+    ? (ent.cloudSyncUnlocked ? t('aboutModal.editionStorePro') : t('aboutModal.editionStoreFree'))
+    : t('aboutModal.editionSelfhost');
+
+  if (versionBadge) versionBadge.textContent = versionText;
+  if (storageBadge) storageBadge.textContent = `${editionText} · ${storageText}`;
+  if (aboutVersion) aboutVersion.textContent = versionText;
+  if (aboutEdition) aboutEdition.textContent = editionText;
+  if (aboutStorage) aboutStorage.textContent = storageText;
+  if (aboutAppId) aboutAppId.textContent = cfg.appId;
+
   if (legalDataDesc) {
     legalDataDesc.textContent = cloudActive
       ? t('legal.dataCloudDesc')
@@ -295,9 +411,97 @@ export function renderEditionSettings() {
   }
 }
 
-export function initSettings({ onSync, onLocalDataReplaced = () => {}, onPreferencesChange = () => {} }) {
+export function initSettings({
+  onSync,
+  onLocalDataReplaced = () => {},
+  onThemeChange = () => {},
+  onPreferencesChange = () => {}
+}) {
+  renderThemeSettings();
+  renderNotificationSettings();
   renderRegionSettings();
   renderEditionSettings();
+
+  // APP 主題風格切換
+  document.querySelectorAll('.theme-preset-btn').forEach((btn) => {
+    btn.onclick = () => {
+      const preset = btn.dataset.themePreset;
+      if (!preset) return;
+      const active = setThemePreset(preset);
+      renderThemeSettings();
+      onThemeChange(active);
+      showToast(t('theme.updatedToast', { theme: t(THEME_NAME_KEY_MAP[active] || 'theme.presetSage') }));
+    };
+  });
+
+  const themeSystemToggle = document.getElementById('toggle-theme-system');
+  if (themeSystemToggle) {
+    themeSystemToggle.onchange = () => {
+      const active = setThemeFollowSystem(themeSystemToggle.checked);
+      renderThemeSettings();
+      onThemeChange(active);
+      showToast(
+        themeSystemToggle.checked
+          ? t('theme.followSystemOnToast')
+          : t('theme.followSystemOffToast')
+      );
+    };
+  }
+
+  // 通知提醒開關與時間設定
+  const dailyToggle = document.getElementById('toggle-daily-reminder');
+  const timeInput = document.getElementById('input-reminder-time');
+  const inactiveToggle = document.getElementById('toggle-inactive-reminder');
+  const testNotifyBtn = document.getElementById('btn-notify-test');
+
+  if (dailyToggle) {
+    dailyToggle.onchange = async () => {
+      const { settings, permission } = await updateNotificationSettings({
+        dailyEnabled: dailyToggle.checked
+      });
+      await renderNotificationSettings();
+      if (settings.dailyEnabled && permission === 'denied') {
+        showToast(t('notify.permDeniedToast'), true);
+      } else if (settings.dailyEnabled) {
+        showToast(t('notify.dailyEnabledToast', { time: settings.dailyTime }));
+      } else {
+        showToast(t('notify.dailyDisabledToast'));
+      }
+    };
+  }
+
+  if (timeInput) {
+    timeInput.onchange = async () => {
+      const nextTime = timeInput.value || '08:00';
+      const { settings } = await updateNotificationSettings({ dailyTime: nextTime });
+      await renderNotificationSettings();
+      if (settings.dailyEnabled) {
+        showToast(t('notify.timeUpdatedToast', { time: settings.dailyTime }));
+      }
+    };
+  }
+
+  if (inactiveToggle) {
+    inactiveToggle.onchange = async () => {
+      await updateNotificationSettings({ inactiveReminderEnabled: inactiveToggle.checked });
+      await renderNotificationSettings();
+      showToast(inactiveToggle.checked ? t('notify.inactiveOnToast') : t('notify.inactiveOffToast'));
+    };
+  }
+
+  if (testNotifyBtn) {
+    testNotifyBtn.onclick = async () => {
+      const res = await sendTestNotification();
+      await renderNotificationSettings();
+      if (!res.sent) {
+        showToast(t('notify.permDeniedToast'), true);
+      } else if (res.mode === 'in-app' && res.previewText) {
+        showToast(res.previewText);
+      } else {
+        showToast(t('notify.testSentToast'));
+      }
+    };
+  }
 
   const toggleRegionBtn = document.getElementById('btn-toggle-region-settings');
   if (toggleRegionBtn) {
@@ -389,7 +593,7 @@ export function initSettings({ onSync, onLocalDataReplaced = () => {}, onPrefere
     };
   }
 
-  // 本機 JSON 備份匯出
+  // JSON 備份匯出（自用版與單機上架版皆支援）
   const exportBtn = document.getElementById('btn-backup-export');
   if (exportBtn) {
     exportBtn.onclick = async () => {
@@ -401,7 +605,7 @@ export function initSettings({ onSync, onLocalDataReplaced = () => {}, onPrefere
     };
   }
 
-  // 本機 JSON 備份匯入
+  // 本機 JSON 備份匯入（單機模式）
   const importBtn = document.getElementById('btn-backup-import');
   const fileInput = document.getElementById('input-backup-file');
   if (importBtn && fileInput) {
@@ -434,7 +638,7 @@ export function initSettings({ onSync, onLocalDataReplaced = () => {}, onPrefere
     };
   }
 
-  // 清除全部本機資料（二次確認）
+  // 清除全部本機資料（單機模式，二次確認）
   const clearAllBtn = document.getElementById('btn-local-clear-all');
   if (clearAllBtn) {
     clearAllBtn.onclick = async () => {
@@ -486,6 +690,15 @@ export function initSettings({ onSync, onLocalDataReplaced = () => {}, onPrefere
     legalBtn.onclick = () => {
       renderEditionSettings();
       openModal('modal-legal');
+    };
+  }
+
+  // 開啟關於此 APP 彈窗
+  const aboutBtn = document.getElementById('btn-open-about-modal');
+  if (aboutBtn) {
+    aboutBtn.onclick = () => {
+      renderEditionSettings();
+      openModal('modal-about');
     };
   }
 }

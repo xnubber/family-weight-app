@@ -36,6 +36,7 @@ import {
   getWeightUnitLabel,
   kgToDisplay
 } from '../utils/units.js';
+import { getChartThemePalette } from '../utils/theme.js';
 
 const HISTORY_PAGE_SIZE = 10;
 const LONG_PRESS_MS = 260;
@@ -56,10 +57,11 @@ const inspectState = {
 };
 
 function getMemberTheme(type) {
+  const palette = getChartThemePalette();
   if (type === 'cat') {
     return {
-      lineColor: '#C07A57',
-      fillColor: 'rgba(192, 122, 87, 0.16)',
+      lineColor: palette.catLine,
+      fillColor: palette.catFill,
       progressClass: 'goal-progress-cat',
       accentText: 'text-clay-700',
       inspectBarClass: 'bg-clay-50 border-clay-200 text-clay-700',
@@ -68,8 +70,8 @@ function getMemberTheme(type) {
   }
   if (type === 'dog') {
     return {
-      lineColor: '#B68A4C',
-      fillColor: 'rgba(182, 138, 76, 0.16)',
+      lineColor: palette.dogLine,
+      fillColor: palette.dogFill,
       progressClass: 'goal-progress-dog',
       accentText: 'text-ochre-700',
       inspectBarClass: 'bg-ochre-50 border-ochre-200 text-ochre-700',
@@ -77,8 +79,8 @@ function getMemberTheme(type) {
     };
   }
   return {
-    lineColor: '#587864',
-    fillColor: 'rgba(88, 120, 100, 0.16)',
+    lineColor: palette.humanLine,
+    fillColor: palette.humanFill,
     progressClass: '',
     accentText: 'text-sage-700',
     inspectBarClass: 'bg-sage-50 border-sage-200 text-sage-700',
@@ -1422,9 +1424,10 @@ export function renderCharts() {
     ? aggregateHeightRecords(heightRecs, state.selectedRange)
     : aggregateRecords(recs, state.selectedRange);
   const isHidden = useHeight ? false : isMemberWeightHidden(member);
+  const chartPalette = getChartThemePalette();
   const baseTheme = getMemberTheme(member?.type);
   const theme = useHeight
-    ? { ...baseTheme, lineColor: '#4B7A72', fillColor: 'rgba(75, 122, 114, 0.16)' }
+    ? { ...baseTheme, lineColor: chartPalette.heightLine, fillColor: chartPalette.heightFill }
     : baseTheme;
 
   if (useHeight) {
@@ -1506,7 +1509,7 @@ export function renderCharts() {
     borderWidth: 2.2,
     pointRadius,
     pointHoverRadius: 5,
-    pointBackgroundColor: '#FCFBF8',
+    pointBackgroundColor: chartPalette.pointBg,
     pointBorderColor: theme.lineColor,
     pointBorderWidth: 1.8,
     fill: true,
@@ -1522,8 +1525,8 @@ export function renderCharts() {
     datasets.push({
       label: targetLabel,
       data: displayTargetValues,
-      borderColor: '#A8A295',
-      backgroundColor: '#A8A295',
+      borderColor: chartPalette.targetLine,
+      backgroundColor: chartPalette.targetLine,
       borderWidth: 1.6,
       borderDash: [5, 5],
       stepped: 'before',
@@ -1552,7 +1555,7 @@ export function renderCharts() {
         legend: {
           display: true,
           labels: {
-            color: '#494C45',
+            color: chartPalette.legendColor,
             boxWidth: 10,
             boxHeight: 10,
             padding: 12,
@@ -1562,9 +1565,9 @@ export function renderCharts() {
         },
         tooltip: {
           filter: () => !inspectState.isInspecting,
-          backgroundColor: 'rgba(47, 52, 47, 0.92)',
-          titleColor: '#FCFBF8',
-          bodyColor: '#F6F4EE',
+          backgroundColor: chartPalette.tooltipBg,
+          titleColor: chartPalette.tooltipTitle,
+          bodyColor: chartPalette.tooltipBody,
           cornerRadius: 10,
           padding: 10,
           displayColors: true,
@@ -1604,7 +1607,7 @@ export function renderCharts() {
           border: { display: false },
           grid: { display: false },
           ticks: {
-            color: '#727068',
+            color: chartPalette.tickColor,
             font: { size: 11.5 },
             maxRotation: 0,
             minRotation: 0,
@@ -1619,7 +1622,7 @@ export function renderCharts() {
           border: { display: false },
           ticks: {
             display: !isHidden,
-            color: '#727068',
+            color: chartPalette.tickColor,
             font: { size: 11.5 },
             maxTicksLimit: 5,
             padding: 6,
@@ -1629,7 +1632,7 @@ export function renderCharts() {
               return Number.isInteger(num) ? String(num) : String(Number(num.toFixed(1)));
             }
           },
-          grid: { color: '#EFECE4' }
+          grid: { color: chartPalette.gridColor }
         }
       }
     }

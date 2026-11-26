@@ -16,7 +16,14 @@ import {
   handleModalBackAction,
   syncModalDynamicLabels
 } from './js/ui/modals.js';
-import { initSettings, renderSettingsMembers, renderRegionSettings, renderEditionSettings } from './js/ui/settings.js';
+import {
+  initSettings,
+  renderSettingsMembers,
+  renderRegionSettings,
+  renderEditionSettings,
+  renderThemeSettings,
+  renderNotificationSettings
+} from './js/ui/settings.js';
 import { initPrivacyLifecycle, isMemberWeightHidden, lockMember } from './js/utils/privacy.js';
 import { loadFamilyCache, saveFamilyCache } from './js/utils/cache.js';
 import { initSwipeBackGesture } from './js/utils/swipeBack.js';
@@ -24,8 +31,11 @@ import { initOverviewPullToRefresh } from './js/utils/pullToRefresh.js';
 import { applyMemberOrder } from './js/utils/memberOrder.js';
 import { createSplashController } from './js/utils/splash.js';
 import { applyI18nToDOM, t } from './js/utils/i18n.js';
+import { initTheme } from './js/utils/theme.js';
+import { getLocalTodayDate } from './js/utils/metrics.js';
+import { checkInAppInactiveReminder, syncNativeDailySchedule } from './js/services/notifications.js';
 
-const TAB_ORDER = ['overview', 'charts', 'settings'];
+const TAB_ORDER = ['overview', 'charts', 'family', 'settings'];
 const PAGE_ANIM_CLASSES = [
   'page-enter-from-right',
   'page-enter-from-left',
@@ -232,6 +242,8 @@ function renderAll() {
     }
   });
   renderCharts();
+  renderThemeSettings();
+  renderNotificationSettings();
   renderRegionSettings();
   renderEditionSettings();
   renderSettingsMembers({
@@ -372,7 +384,13 @@ if (!isCapacitorBackHandled) {
   });
 }
 
-// 啟動時立即套用多語系 DOM 與動態單位標籤（避免首屏閃爍）
+// 啟動時立即套用主題風格、多語系 DOM 與動態單位標籤（避免首屏閃爍）
+initTheme({
+  onChange: () => {
+    renderThemeSettings();
+    renderCharts();
+  }
+});
 applyI18nToDOM();
 syncModalDynamicLabels();
 
@@ -433,6 +451,9 @@ initSettings({
     applyLoadedDataset(nextData, 'local');
     renderAll();
   },
+  onThemeChange: () => {
+    renderCharts();
+  },
   onPreferencesChange: () => {
     applyI18nToDOM();
     syncModalDynamicLabels();
@@ -443,6 +464,19 @@ initSettings({
 
 // 免費上架版初始化固定式橫幅廣告與底部安全區避讓（自用版與 Pro 版自動不顯示）
 initAdBanner();
+// 同步原生本機每日提醒排程（不依賴雲端伺服器）
+syncNativeDailySchedule();
+
+function maybeShowInactiveReminderToast() {
+  const msg = checkInAppInactiveReminder({
+    members: state.appData.members,
+    records: state.appData.records,
+    todayYmd: getLocalTodayDate()
+  });
+  if (msg) {
+    setTimeout(() => showToast(msg), 700);
+  }
+}
 
 const splash = createSplashController();
 
@@ -451,6 +485,7 @@ if (!isCloudSyncActive()) {
   syncHeaderModeUI();
   syncData().finally(() => {
     splash.markReady({ hasCache: true });
+    maybeShowInactiveReminderToast();
   });
 } else {
   // 雲端同步版（Stale-While-Revalidate）：先載入本機快取秒開畫面，同時背景向雲端拉取最新資料
@@ -460,11 +495,12 @@ if (!isCloudSyncActive()) {
 
   if (hasCache) {
     splash.markReady({ hasCache: true });
-    syncData();
+    syncData().finally(() => maybeShowInactiveReminderToast());
   } else {
     // 首次無快取時，等待首波雲端同步完成（最長 1.2 秒保底自動退場）再淡出扉頁
     syncData().finally(() => {
       splash.markReady({ hasCache: false });
+      maybeShowInactiveReminderToast();
     });
   }
 }

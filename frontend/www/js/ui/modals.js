@@ -2060,7 +2060,7 @@ export function openPrivacySettingsModal(memberId) {
   openModal('modal-privacy');
 }
 
-const MODAL_BACK_STACK = ['modal-legal', 'modal-pin', 'modal-privacy', 'modal-record', 'modal-member', 'modal-profile'];
+const MODAL_BACK_STACK = ['modal-about', 'modal-legal', 'modal-pin', 'modal-privacy', 'modal-record', 'modal-member', 'modal-profile'];
 
 function clearProfileModalState() {
   activeProfileContext = null;
@@ -2116,7 +2116,7 @@ export function initModals() {
   });
 
   // 點擊彈窗外部（深色背景）即可平滑關閉
-  ['modal-record', 'modal-member', 'modal-profile', 'modal-privacy', 'modal-pin', 'modal-legal'].forEach((id) => {
+  ['modal-record', 'modal-member', 'modal-profile', 'modal-privacy', 'modal-pin', 'modal-legal', 'modal-about'].forEach((id) => {
     const modal = document.getElementById(id);
     if (!modal) return;
     modal.addEventListener('click', (e) => {

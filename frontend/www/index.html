@@ -162,8 +162,8 @@
       </div>
     </section>
 
-    <!-- 分頁 3：設定與成員管理 -->
-    <section id="view-settings" class="page-view hidden space-y-4">
+    <!-- 分頁 3：家庭（成員管理、雲端同步設定與 Pro 雲端預告） -->
+    <section id="view-family" class="page-view hidden space-y-4">
       <!-- 雲端同步設定（僅於自用雲端版或已解鎖 Pro 雲端同步時顯示） -->
       <div id="settings-cloud-sync-card" class="journal-card p-4 rounded-2xl space-y-3.5">
         <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
@@ -213,30 +213,6 @@
         <ul id="settings-member-list" class="divide-y divide-oat-100 text-sm"></ul>
       </div>
 
-      <!-- 本機資料備份與還原（單機版核心備份與換機方案，亦預留未來一鍵匯入雲端） -->
-      <div id="settings-backup-card" class="hidden journal-card p-4 rounded-2xl space-y-3">
-        <div class="flex items-start justify-between gap-2">
-          <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
-            <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 3v12" />
-              <path d="M7.5 10.5L12 15l4.5-4.5" />
-              <path d="M4.5 17.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" />
-            </svg>
-            <span data-i18n="backup.title">資料備份與還原</span>
-          </h2>
-          <span data-i18n="backup.localBadge" class="text-[11px] px-2 py-0.5 rounded-lg bg-sage-50 border border-sage-200/80 text-sage-700 font-medium whitespace-nowrap">僅存於本機</span>
-        </div>
-        <p data-i18n="backup.desc" class="text-xs text-ink-500 leading-relaxed">所有紀錄安全儲存於您的裝置內。換機前可匯出 JSON 備份檔，或於新手機一鍵匯入還原。</p>
-        <div class="grid grid-cols-2 gap-2">
-          <button id="btn-backup-export" type="button" data-i18n="backup.exportBtn" class="py-2.5 px-3 rounded-xl bg-sage-600 hover:bg-sage-700 text-linen text-xs font-medium">匯出備份檔</button>
-          <button id="btn-backup-import" type="button" data-i18n="backup.importBtn" class="py-2.5 px-3 rounded-xl bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 text-xs font-medium">匯入備份檔</button>
-        </div>
-        <input id="input-backup-file" type="file" accept="application/json,.json" class="hidden" />
-        <div class="pt-1 border-t border-oat-100 flex justify-end">
-          <button id="btn-local-clear-all" type="button" data-i18n="backup.clearAllBtn" class="text-xs text-rosewood-600 hover:text-rosewood-700 font-medium py-1">清除全部本機資料</button>
-        </div>
-      </div>
-
       <!-- 未來 Pro 雲端家庭同步預告（僅於單機上架版且尚未解鎖 Pro 時顯示） -->
       <div id="settings-pro-cloud-card" class="hidden journal-card p-4 rounded-2xl space-y-2.5 border-sage-200/80 bg-sage-50/40">
         <div class="flex items-center justify-between gap-2">
@@ -254,8 +230,123 @@
           <button id="btn-pro-restore" type="button" data-i18n="pro.restoreBtn" class="py-2 px-3 rounded-xl bg-oat-100 border border-oat-200 text-ink-600 text-xs font-medium whitespace-nowrap">回復購買</button>
         </div>
       </div>
+    </section>
 
-      <!-- 語言、單位與時區設定（預設收合並顯示精簡摘要，點擊再展開編輯） -->
+    <!-- 分頁 4：APP 設定專頁（主題風格、通知提醒、語言單位、資料匯出／還原、隱私政策、版本與關於） -->
+    <section id="view-settings" class="page-view hidden space-y-4">
+      <!-- 1. APP 主題風格 -->
+      <div id="app-theme-card" class="journal-card p-4 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
+            <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3a9 9 0 1 0 0 18 2.2 2.2 0 0 0 2.2-2.2c0-.55-.22-1.08-.58-1.48-.36-.4-.58-.93-.58-1.48A2.2 2.2 0 0 1 15.24 13.6H17a4 4 0 0 0 4-4C21 5.9 16.97 3 12 3Z" />
+              <circle cx="8" cy="10" r="1" />
+              <circle cx="11.5" cy="7.5" r="1" />
+              <circle cx="15.5" cy="9" r="1" />
+            </svg>
+            <span data-i18n="theme.title">APP 主題風格</span>
+          </h2>
+          <span id="theme-active-badge" class="text-[11px] px-2 py-0.5 rounded-lg bg-sage-50 border border-sage-200/80 text-sage-700 font-medium whitespace-nowrap"></span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" data-theme-preset="sage" class="theme-preset-btn theme-swatch-card rounded-2xl p-2.5 text-left flex items-center gap-2.5">
+            <span class="inline-flex items-center -space-x-1.5 shrink-0" aria-hidden="true">
+              <span class="theme-swatch-dot theme-swatch-sage-bg"></span>
+              <span class="theme-swatch-dot theme-swatch-sage-accent"></span>
+            </span>
+            <span class="min-w-0">
+              <span data-i18n="theme.presetSage" class="block text-xs font-medium text-ink truncate">晨露鼠尾草</span>
+              <span data-i18n="theme.presetSageSub" class="block text-[11px] text-ink-400 truncate">預設紙感</span>
+            </span>
+          </button>
+
+          <button type="button" data-theme-preset="clay" class="theme-preset-btn theme-swatch-card rounded-2xl p-2.5 text-left flex items-center gap-2.5">
+            <span class="inline-flex items-center -space-x-1.5 shrink-0" aria-hidden="true">
+              <span class="theme-swatch-dot theme-swatch-clay-bg"></span>
+              <span class="theme-swatch-dot theme-swatch-clay-accent"></span>
+            </span>
+            <span class="min-w-0">
+              <span data-i18n="theme.presetClay" class="block text-xs font-medium text-ink truncate">暖陶微光</span>
+              <span data-i18n="theme.presetClaySub" class="block text-[11px] text-ink-400 truncate">暖橘大地</span>
+            </span>
+          </button>
+
+          <button type="button" data-theme-preset="mist" class="theme-preset-btn theme-swatch-card rounded-2xl p-2.5 text-left flex items-center gap-2.5">
+            <span class="inline-flex items-center -space-x-1.5 shrink-0" aria-hidden="true">
+              <span class="theme-swatch-dot theme-swatch-mist-bg"></span>
+              <span class="theme-swatch-dot theme-swatch-mist-accent"></span>
+            </span>
+            <span class="min-w-0">
+              <span data-i18n="theme.presetMist" class="block text-xs font-medium text-ink truncate">霧海松青</span>
+              <span data-i18n="theme.presetMistSub" class="block text-[11px] text-ink-400 truncate">清新藍綠</span>
+            </span>
+          </button>
+
+          <button type="button" data-theme-preset="night" class="theme-preset-btn theme-swatch-card rounded-2xl p-2.5 text-left flex items-center gap-2.5">
+            <span class="inline-flex items-center -space-x-1.5 shrink-0" aria-hidden="true">
+              <span class="theme-swatch-dot theme-swatch-night-bg"></span>
+              <span class="theme-swatch-dot theme-swatch-night-accent"></span>
+            </span>
+            <span class="min-w-0">
+              <span data-i18n="theme.presetNight" class="block text-xs font-medium text-ink truncate">靜夜墨林</span>
+              <span data-i18n="theme.presetNightSub" class="block text-[11px] text-ink-400 truncate">護眼深色</span>
+            </span>
+          </button>
+        </div>
+
+        <label class="flex items-start justify-between gap-3 pt-2 border-t border-oat-100 cursor-pointer select-none">
+          <span class="min-w-0">
+            <span data-i18n="theme.followSystemTitle" class="block text-xs font-medium text-ink">跟隨系統深淺色</span>
+            <span data-i18n="theme.followSystemDesc" class="block text-[11px] text-ink-400 leading-snug mt-0.5">裝置切換為深色模式時，自動切換為「靜夜墨林」</span>
+          </span>
+          <input id="toggle-theme-system" type="checkbox" class="mt-0.5 rounded border-oat-300 shrink-0" />
+        </label>
+      </div>
+
+      <!-- 2. 通知提醒 -->
+      <div id="app-notify-card" class="journal-card p-4 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
+            <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 8a6 6 0 1 0-12 0c0 7-3 8.5-3 8.5h18s-3-1.5-3-8.5Z" />
+              <path d="M10.3 20a2 2 0 0 0 3.4 0" />
+            </svg>
+            <span data-i18n="notify.title">通知提醒</span>
+          </h2>
+          <span id="notify-permission-badge" class="text-[11px] px-2 py-0.5 rounded-lg bg-oat-50 border border-oat-200/80 text-ink-500 whitespace-nowrap"></span>
+        </div>
+
+        <div class="space-y-3">
+          <label class="flex items-start justify-between gap-3 cursor-pointer select-none">
+            <span class="min-w-0">
+              <span data-i18n="notify.dailyTitle" class="block text-xs font-medium text-ink">每日量測提醒</span>
+              <span data-i18n="notify.dailyDesc" class="block text-[11px] text-ink-400 leading-snug mt-0.5">固定於每日指定時間提醒記錄體重與身高（本機排程、免推播伺服器）</span>
+            </span>
+            <input id="toggle-daily-reminder" type="checkbox" class="mt-0.5 rounded border-oat-300 shrink-0" />
+          </label>
+
+          <div id="notify-time-wrap" class="flex items-center justify-between gap-3 pl-3 border-l-2 border-sage-200">
+            <label for="input-reminder-time" data-i18n="notify.timeLabel" class="text-xs text-ink-500">提醒時間</label>
+            <input id="input-reminder-time" type="time" value="08:00" class="border rounded-xl px-2.5 py-1.5 text-xs font-mono tabular-nums" />
+          </div>
+
+          <label class="flex items-start justify-between gap-3 pt-2 border-t border-oat-100 cursor-pointer select-none">
+            <span class="min-w-0">
+              <span data-i18n="notify.inactiveTitle" class="block text-xs font-medium text-ink">逾 7 天未記錄提醒</span>
+              <span data-i18n="notify.inactiveDesc" class="block text-[11px] text-ink-400 leading-snug mt-0.5">開啟 APP 時，若成員超過 7 天未記錄會主動溫馨提示</span>
+            </span>
+            <input id="toggle-inactive-reminder" type="checkbox" checked class="mt-0.5 rounded border-oat-300 shrink-0" />
+          </label>
+        </div>
+
+        <div class="pt-1 border-t border-oat-100 flex items-center justify-between gap-2">
+          <span id="notify-status-hint" class="text-[11px] text-ink-400 leading-snug"></span>
+          <button id="btn-notify-test" type="button" data-i18n="notify.testBtn" class="shrink-0 text-xs font-medium px-2.5 py-1 rounded-xl bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 whitespace-nowrap">發送測試通知</button>
+        </div>
+      </div>
+
+      <!-- 3. 語言、單位與時區設定（預設收合並顯示精簡摘要，點擊再展開編輯） -->
       <div id="region-settings-card" class="journal-card p-4 rounded-2xl">
         <button id="btn-toggle-region-settings" type="button" aria-expanded="false" aria-controls="region-settings-panel" class="w-full text-left flex items-start justify-between gap-3 group">
           <div class="min-w-0 flex-1">
@@ -300,22 +391,48 @@
         </div>
       </div>
 
-      <!-- 關於、健康免責聲明與隱私權政策（Google Play 上架合規必備） -->
-      <div id="settings-about-card" class="journal-card p-4 rounded-2xl space-y-2.5">
-        <div class="flex items-center justify-between gap-2">
+      <!-- 4. 資料匯出與還原（自用版與單機上架版皆可使用；雲端版提供匯出留存，單機版提供完整匯出／還原／清除） -->
+      <div id="settings-backup-card" class="journal-card p-4 rounded-2xl space-y-3">
+        <div class="flex items-start justify-between gap-2">
           <h2 class="font-semibold text-ink text-sm tracking-wide flex items-center gap-2">
             <svg class="w-4 h-4 text-sage-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 3l7 3v5.5c0 4.6-3 7.8-7 9.5-4-1.7-7-4.9-7-9.5V6l7-3Z" />
-              <path d="M12 11v4M12 8.2h.01" />
+              <path d="M12 3v12" />
+              <path d="M7.5 10.5L12 15l4.5-4.5" />
+              <path d="M4.5 17.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" />
             </svg>
-            <span data-i18n="about.title">關於與隱私聲明</span>
+            <span data-i18n="backup.title">資料匯出與還原</span>
           </h2>
-          <span id="settings-version-badge" class="text-[11px] font-mono text-ink-400">v2.17.0</span>
+          <span id="backup-mode-badge" data-i18n="backup.localBadge" class="text-[11px] px-2 py-0.5 rounded-lg bg-sage-50 border border-sage-200/80 text-sage-700 font-medium whitespace-nowrap">僅存於本機</span>
+        </div>
+        <p id="backup-mode-desc" data-i18n="backup.desc" class="text-xs text-ink-500 leading-relaxed">所有紀錄安全儲存於您的裝置內。換機前可匯出 JSON 備份檔，或於新手機一鍵匯入還原。</p>
+        <div id="backup-actions-grid" class="grid grid-cols-2 gap-2">
+          <button id="btn-backup-export" type="button" data-i18n="backup.exportBtn" class="py-2.5 px-3 rounded-xl bg-sage-600 hover:bg-sage-700 text-linen text-xs font-medium">匯出備份檔</button>
+          <button id="btn-backup-import" type="button" data-i18n="backup.importBtn" class="py-2.5 px-3 rounded-xl bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 text-xs font-medium">匯入備份檔</button>
+        </div>
+        <input id="input-backup-file" type="file" accept="application/json,.json" class="hidden" />
+        <div id="backup-clear-wrap" class="pt-1 border-t border-oat-100 flex justify-end">
+          <button id="btn-local-clear-all" type="button" data-i18n="backup.clearAllBtn" class="text-xs text-rosewood-600 hover:text-rosewood-700 font-medium py-1">清除全部本機資料</button>
+        </div>
+      </div>
+
+      <!-- 5. 隱私政策、版本與關於此 APP -->
+      <div id="settings-about-card" class="journal-card p-4 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <img src="./icons/app-icon.svg" alt="Kin &amp; Paws" class="w-10 h-10 rounded-xl border border-oat-200 shrink-0" />
+            <div class="min-w-0">
+              <div class="flex items-baseline gap-1.5 flex-wrap">
+                <h2 data-i18n="app.brand" class="font-semibold text-ink text-sm tracking-wide">家與毛孩成長誌</h2>
+                <span id="settings-version-badge" class="text-[11px] font-mono text-ink-400">v2.17.0</span>
+              </div>
+              <p id="settings-storage-badge" class="text-[11px] text-ink-400 mt-0.5 truncate"></p>
+            </div>
+          </div>
         </div>
         <p data-i18n="about.healthDisclaimer" class="text-xs text-ink-500 leading-relaxed">本應用程式提供之 BMI、健康體重區間、身高趨勢與毛孩熱量建議僅供日常健康紀錄與參考，不構成醫療診斷、治療或獸醫處方建議。</p>
-        <div class="flex items-center justify-between gap-2 pt-1 border-t border-oat-100">
-          <span id="settings-storage-badge" class="text-[11px] text-ink-400"></span>
-          <button id="btn-open-legal-modal" type="button" data-i18n="about.privacyBtn" class="text-xs font-medium text-sage-700 hover:text-sage-800 whitespace-nowrap">隱私權與完整聲明</button>
+        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-oat-100">
+          <button id="btn-open-legal-modal" type="button" data-i18n="about.privacyBtn" class="py-2 px-3 rounded-xl bg-oat-50 hover:bg-oat-100 border border-oat-200 text-ink-700 text-xs font-medium">隱私權政策</button>
+          <button id="btn-open-about-modal" type="button" data-i18n="about.aboutAppBtn" class="py-2 px-3 rounded-xl bg-sage-50 hover:bg-sage-100 border border-sage-200/80 text-sage-700 text-xs font-medium">關於此 APP</button>
         </div>
       </div>
     </section>
@@ -333,9 +450,9 @@
     </div>
   </div>
 
-  <!-- 底部導覽列（精簡 3 分頁，隨固定式廣告橫幅高度與系統安全區自動上移） -->
-  <nav class="app-bottom-nav fixed inset-x-0 h-16 bg-linen/95 backdrop-blur border-t border-oat-200 flex items-center justify-around text-[13px] text-ink-400 z-30">
-    <button type="button" data-tab="overview" class="nav-btn tab-active flex flex-col items-center gap-0.5">
+  <!-- 底部導覽列（4 分頁：總覽／統計／家庭／設定，隨固定式廣告橫幅高度與系統安全區自動上移） -->
+  <nav class="app-bottom-nav fixed inset-x-0 h-16 bg-linen/95 backdrop-blur border-t border-oat-200 flex items-center justify-around text-[12px] text-ink-400 z-30">
+    <button type="button" data-tab="overview" class="nav-btn tab-active flex flex-col items-center gap-0.5 min-w-[4rem]">
       <span class="nav-icon-wrap w-9 h-6 rounded-full flex items-center justify-center transition-colors">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 11.2L12 4.5l8 6.7" />
@@ -345,7 +462,7 @@
       </span>
       <span data-i18n="nav.overview">總覽</span>
     </button>
-    <button type="button" data-tab="charts" class="nav-btn flex flex-col items-center gap-0.5">
+    <button type="button" data-tab="charts" class="nav-btn flex flex-col items-center gap-0.5 min-w-[4rem]">
       <span class="nav-icon-wrap w-9 h-6 rounded-full flex items-center justify-center transition-colors">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 19h16" />
@@ -355,7 +472,18 @@
       </span>
       <span data-i18n="nav.charts">統計</span>
     </button>
-    <button type="button" data-tab="settings" class="nav-btn flex flex-col items-center gap-0.5">
+    <button type="button" data-tab="family" class="nav-btn flex flex-col items-center gap-0.5 min-w-[4rem]">
+      <span class="nav-icon-wrap w-9 h-6 rounded-full flex items-center justify-center transition-colors">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="9" cy="8.5" r="3" />
+          <path d="M3.5 18.5c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5" />
+          <circle cx="16.5" cy="9.5" r="2.2" />
+          <path d="M16.5 14.5c1.8 0 3.4 1 4 3.2" />
+        </svg>
+      </span>
+      <span data-i18n="nav.family">家庭</span>
+    </button>
+    <button type="button" data-tab="settings" class="nav-btn flex flex-col items-center gap-0.5 min-w-[4rem]">
       <span class="nav-icon-wrap w-9 h-6 rounded-full flex items-center justify-center transition-colors">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 7h10M18 7h2" />
@@ -875,6 +1003,63 @@
 
       <div class="flex items-center gap-2 pt-1">
         <a id="link-legal-external" href="#" target="_blank" rel="noopener noreferrer" data-i18n="legal.openWebBtn" class="hidden flex-1 text-center py-2.5 px-3 rounded-xl bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 text-xs font-medium">開啟完整線上隱私權政策</a>
+        <button type="button" data-i18n="common.close" class="btn-close-modal flex-1 py-2.5 px-3 rounded-xl bg-sage-600 text-linen text-xs font-medium">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 彈窗：關於此 APP -->
+  <div id="modal-about" class="modal-overlay hidden fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-[55] flex items-end sm:items-center justify-center p-4">
+    <div class="modal-sheet bg-linen border border-oat-200 w-full max-w-md max-h-[85vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
+      <div class="flex justify-between items-center gap-2">
+        <h3 data-i18n="aboutModal.title" class="font-semibold text-base text-ink tracking-wide">關於此 APP</h3>
+        <button type="button" data-i18n-aria-label="common.close" aria-label="關閉" class="btn-close-modal w-8 h-8 rounded-full bg-oat-100 hover:bg-oat-200 text-ink-600 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex flex-col items-center text-center space-y-2 py-1">
+        <img src="./icons/app-icon.svg" alt="Kin &amp; Paws" class="w-16 h-16 rounded-2xl border border-oat-200 shadow-soft" />
+        <div>
+          <p data-i18n="app.brand" class="font-semibold text-base text-ink tracking-wider">家與毛孩成長誌</p>
+          <p data-i18n="app.brandSub" class="text-xs text-sage-700 font-medium tracking-widest">Kin &amp; Paws</p>
+        </div>
+        <p data-i18n="aboutModal.tagline" class="text-xs text-ink-500 leading-relaxed max-w-xs">為家人與毛孩打造的溫潤日常成長手記，陪您安心記錄體重變化、小孩身高成長與健康趨勢。</p>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-oat-50 border border-oat-200/80 divide-y divide-oat-200/70 text-xs">
+        <div class="py-1.5 flex justify-between items-center gap-2">
+          <span data-i18n="aboutModal.versionLabel" class="text-ink-500">目前版本</span>
+          <span id="about-modal-version" class="font-mono font-medium text-ink">v2.17.0</span>
+        </div>
+        <div class="py-1.5 flex justify-between items-center gap-2">
+          <span data-i18n="aboutModal.editionLabel" class="text-ink-500">發行版本</span>
+          <span id="about-modal-edition" class="font-medium text-ink"></span>
+        </div>
+        <div class="py-1.5 flex justify-between items-center gap-2">
+          <span data-i18n="aboutModal.storageLabel" class="text-ink-500">資料儲存</span>
+          <span id="about-modal-storage" class="font-medium text-ink"></span>
+        </div>
+        <div class="py-1.5 flex justify-between items-center gap-2">
+          <span data-i18n="aboutModal.packageLabel" class="text-ink-500">套件識別碼</span>
+          <span id="about-modal-appid" class="font-mono text-[11px] text-ink-600 truncate"></span>
+        </div>
+      </div>
+
+      <div class="p-3.5 rounded-2xl bg-oat-50 border border-oat-200/80 space-y-1.5 text-xs text-ink-600">
+        <h4 data-i18n="aboutModal.highlightsTitle" class="font-semibold text-ink">核心特色</h4>
+        <ul class="list-disc pl-4 space-y-1 text-ink-500 leading-relaxed">
+          <li data-i18n="aboutModal.highlight1">支援家人 BMI、小孩身高成長曲線與貓狗熱量／體態紀錄</li>
+          <li data-i18n="aboutModal.highlight2">個別成員體重隱私遮罩與 4 位數 PIN 密碼保護</li>
+          <li data-i18n="aboutModal.highlight3">多款文青主題與護眼深色模式、支援繁中／英語／日語與 kg／lb</li>
+          <li data-i18n="aboutModal.highlight4">支援 JSON 完整備份匯出與還原，資料自主掌控</li>
+        </ul>
+      </div>
+
+      <div class="flex items-center gap-2 pt-1">
+        <a href="https://github.com/xnubber/family-weight-app/issues" target="_blank" rel="noopener noreferrer" data-i18n="aboutModal.feedbackBtn" class="flex-1 text-center py-2.5 px-3 rounded-xl bg-oat-100 hover:bg-oat-200 text-ink-700 border border-oat-200 text-xs font-medium">意見回饋</a>
         <button type="button" data-i18n="common.close" class="btn-close-modal flex-1 py-2.5 px-3 rounded-xl bg-sage-600 text-linen text-xs font-medium">關閉</button>
       </div>
     </div>

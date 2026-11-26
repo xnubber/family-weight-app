@@ -4,49 +4,49 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        paper: '#F6F4EE',
-        linen: '#FCFBF8',
+        paper: 'rgb(var(--c-paper) / <alpha-value>)',
+        linen: 'rgb(var(--c-linen) / <alpha-value>)',
         oat: {
-          50: '#F8F6F0',
-          100: '#F1EEE6',
-          200: '#E5E0D5',
-          300: '#D4CEC0'
+          50: 'rgb(var(--c-oat-50) / <alpha-value>)',
+          100: 'rgb(var(--c-oat-100) / <alpha-value>)',
+          200: 'rgb(var(--c-oat-200) / <alpha-value>)',
+          300: 'rgb(var(--c-oat-300) / <alpha-value>)'
         },
         ink: {
-          DEFAULT: '#2F342F',
-          700: '#494C45',
-          500: '#727068',
-          400: '#9A968C'
+          DEFAULT: 'rgb(var(--c-ink) / <alpha-value>)',
+          700: 'rgb(var(--c-ink-700) / <alpha-value>)',
+          500: 'rgb(var(--c-ink-500) / <alpha-value>)',
+          400: 'rgb(var(--c-ink-400) / <alpha-value>)'
         },
         sage: {
-          50: '#EEF3EF',
-          100: '#DFE9E2',
-          200: '#C7D8CD',
-          500: '#6D8D79',
-          600: '#587864',
-          700: '#456150'
+          50: 'rgb(var(--c-sage-50) / <alpha-value>)',
+          100: 'rgb(var(--c-sage-100) / <alpha-value>)',
+          200: 'rgb(var(--c-sage-200) / <alpha-value>)',
+          500: 'rgb(var(--c-sage-500) / <alpha-value>)',
+          600: 'rgb(var(--c-sage-600) / <alpha-value>)',
+          700: 'rgb(var(--c-sage-700) / <alpha-value>)'
         },
         clay: {
-          50: '#F8F0EA',
-          100: '#F0E0D5',
-          200: '#E2C8B6',
-          500: '#C6825F',
-          600: '#B06E4C',
-          700: '#8F563A'
+          50: 'rgb(var(--c-clay-50) / <alpha-value>)',
+          100: 'rgb(var(--c-clay-100) / <alpha-value>)',
+          200: 'rgb(var(--c-clay-200) / <alpha-value>)',
+          500: 'rgb(var(--c-clay-500) / <alpha-value>)',
+          600: 'rgb(var(--c-clay-600) / <alpha-value>)',
+          700: 'rgb(var(--c-clay-700) / <alpha-value>)'
         },
         ochre: {
-          50: '#F7F2E5',
-          100: '#EFE5CC',
-          200: '#DFCFA9',
-          500: '#B88D4E',
-          600: '#9E763C',
-          700: '#7D5C2D'
+          50: 'rgb(var(--c-ochre-50) / <alpha-value>)',
+          100: 'rgb(var(--c-ochre-100) / <alpha-value>)',
+          200: 'rgb(var(--c-ochre-200) / <alpha-value>)',
+          500: 'rgb(var(--c-ochre-500) / <alpha-value>)',
+          600: 'rgb(var(--c-ochre-600) / <alpha-value>)',
+          700: 'rgb(var(--c-ochre-700) / <alpha-value>)'
         },
         rosewood: {
-          50: '#F8EFEF',
-          100: '#F0DDDD',
-          500: '#BA6D63',
-          600: '#A3584E'
+          50: 'rgb(var(--c-rosewood-50) / <alpha-value>)',
+          100: 'rgb(var(--c-rosewood-100) / <alpha-value>)',
+          500: 'rgb(var(--c-rosewood-500) / <alpha-value>)',
+          600: 'rgb(var(--c-rosewood-600) / <alpha-value>)'
         }
       },
       fontSize: {
@@ -57,8 +57,8 @@ module.exports = {
         '2xl': ['1.65rem', { lineHeight: '2.05rem' }]
       },
       boxShadow: {
-        journal: '0 1px 2px rgba(47, 52, 47, 0.04), 0 6px 18px rgba(47, 52, 47, 0.035)',
-        soft: '0 2px 10px rgba(47, 52, 47, 0.06)'
+        journal: '0 1px 2px rgba(var(--c-shadow), 0.05), 0 6px 18px rgba(var(--c-shadow), 0.045)',
+        soft: '0 2px 10px rgba(var(--c-shadow), 0.09)'
       }
     }
   },
