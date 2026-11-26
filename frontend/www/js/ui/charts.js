@@ -618,6 +618,26 @@ function syncHistoryDateInputBounds() {
   }
 }
 
+function formatCompactHistoryRange(startYmd, endYmd, currentYear = getCurrentYearInTimeZone()) {
+  const start = String(startYmd || '').slice(0, 10);
+  const end = String(endYmd || '').slice(0, 10);
+  const ymdRe = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const sm = start.match(ymdRe);
+  const em = end.match(ymdRe);
+  if (!sm || !em) return `${start}~${end}`;
+
+  const sy = Number(sm[1]);
+  const ey = Number(em[1]);
+  const startMd = `${sm[2]}/${sm[3]}`;
+  const endMd = `${em[2]}/${em[3]}`;
+
+  if (sy === ey) {
+    if (sy === currentYear) return `${startMd}~${endMd}`;
+    return `${sm[1].slice(-2)}/${startMd}~${endMd}`;
+  }
+  return `${sm[1].slice(-2)}/${startMd}~${em[1].slice(-2)}/${endMd}`;
+}
+
 function syncHistoryFilterUI() {
   const toggleBtn = document.getElementById('btn-history-filter-toggle');
   const panel = document.getElementById('history-filter-panel');
@@ -644,16 +664,28 @@ function syncHistoryFilterUI() {
       activeBar.classList.remove('hidden');
       const pill = createEl(
         'div',
-        'inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-xl bg-sage-50 border border-sage-200 text-sage-700 text-xs'
+        'inline-flex items-center gap-1 max-w-full pl-2 pr-1 py-0.5 rounded-lg bg-sage-50 border border-sage-200 text-sage-700 text-[11px] leading-tight'
       );
+      const compactRange = formatCompactHistoryRange(filter.startDate, filter.endDate);
+      const rangeBtn = createEl(
+        'button',
+        'tabular-nums truncate font-medium text-left hover:underline',
+        compactRange
+      );
+      rangeBtn.type = 'button';
+      rangeBtn.setAttribute('title', `${filter.startDate} ~ ${filter.endDate}`);
+      rangeBtn.onclick = () => {
+        if (toggleBtn) toggleBtn.click();
+      };
+
       const clearBtn = createEl(
         'button',
-        'p-0.5 rounded-md hover:bg-sage-100 text-sage-700 shrink-0'
+        'p-0.5 rounded-md hover:bg-sage-100 text-sage-600 hover:text-sage-800 shrink-0'
       );
       clearBtn.type = 'button';
       clearBtn.setAttribute('aria-label', t('history.clearFilterAria'));
       clearBtn.setAttribute('title', t('history.clearFilterAria'));
-      clearBtn.appendChild(createIcon('close', 'w-3.5 h-3.5'));
+      clearBtn.appendChild(createIcon('close', 'w-3 h-3'));
       clearBtn.onclick = () => {
         state.historyFilter = { active: false, startDate: '', endDate: '' };
         state.historyPage = 1;
@@ -661,11 +693,7 @@ function syncHistoryFilterUI() {
         syncHistoryFilterUI();
         refreshCurrentMemberHistoryOnly(true);
       };
-      pill.append(
-        createIcon('calendar', 'w-3.5 h-3.5 shrink-0'),
-        createEl('span', 'tabular-nums truncate font-medium', `${filter.startDate} – ${filter.endDate}`),
-        clearBtn
-      );
+      pill.append(rangeBtn, clearBtn);
       activeBar.replaceChildren(pill);
     }
   }
