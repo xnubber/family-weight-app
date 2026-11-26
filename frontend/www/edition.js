@@ -3,7 +3,7 @@ window.__APP_EDITION__ = Object.freeze({
   "edition": "selfhost",
   "appId": "com.familyweight.app",
   "appName": "家與毛孩成長誌",
-  "appVersion": "2.16.0",
+  "appVersion": "2.17.0",
   "defaultStorageMode": "cloud",
   "cloudSyncBuiltIn": true,
   "cloudProPlanned": false,

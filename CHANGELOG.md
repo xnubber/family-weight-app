@@ -11,6 +11,7 @@
 
 | 日期 | 版本號 | 對應 Commit | 修改內容摘要 |
 | :--- | :--- | :--- | :--- |
+| 2026-11-26 | **v2.17.0** | `cd372db` | 新增單一程式碼庫雙版本建置架構（`build:selfhost` 自用雲端版 `com.familyweight.app`／`build:store` Google Play 單機上架版 `com.xnubber.kinpaws`，自動隔離 `config.js` 防金鑰外洩）；實作 IndexedDB 離線儲存與 PBKDF2 本機 PIN、JSON 備份還原、Pro 雲端付費解鎖介面、健康免責與隱私權政策（含 `docs/privacy-policy.html`），以及 AdMob 底部橫幅安全區動態避讓 |
 | 2026-11-26 | **v2.16.0** | `9eeb35c` | 新增「小孩身高成長追蹤」完整功能（`track_height` 開關、`height_records` 資料庫與 API、單筆／批量身高紀錄、總覽身高指標、統計頁體重／身高切換與 10 年成長趨勢圖，自動同步成員最新身高）；APP 顯示名稱更新為「家與毛孩成長誌 · Kin & Paws」（保留原 `appId` 支援原地升級） |
 | 2026-11-26 | **v2.15.4** | `2f66968` | 設定頁「成員管理」將刪除成員功能整合至編輯成員彈窗底部（防誤觸並僅於編輯模式顯示），成員列表右側簡化為單一鉛筆編輯圖標按鈕並補齊三語無障礙文案 |
 | 2026-11-26 | **v2.15.3** | `da4662d` | 重構歷史紀錄列表單筆列為獨立三欄排版：無備註時不再保留空白區塊並使目標膠囊自然上下置中；最右側「較前次變化」拆分為獨立區塊搭配細分隔線並全列上下置中 |
@@ -70,6 +71,14 @@
 ---
 
 ## 各版本詳細變更紀錄
+
+### v2.17.0（2026-11-26）
+- **對應 Commit**：`cd372db`
+- **修改內容**：
+  - **單一程式碼庫雙版本建置系統（`build-edition.mjs`、`editions/selfhost.json`、`editions/store.json`、`package.json`）**：新增 `npm run build:selfhost`（自用雲端版，維持 `com.familyweight.app`）與 `npm run build:store`（Google Play 單機上架版，使用專屬 `com.xnubber.kinpaws`，可同機並存測試）；建置 `store` 版時自動暫存並清空 `www/config.js`，徹底防止自用 `APP_API_KEY` 外洩，切回 `selfhost` 時自動還原。
+  - **純單機 IndexedDB 儲存庫與統一資料層（`localRepository.js`、`dataService.js`、`entitlement.js`、`syncQueue.js`、`app.js`、`modals.js`）**：抽象 `DataService` 依版本與授權狀態自動路由至雲端 `FamilyAPI` 或本機 `LocalRepository`；本機庫以 IndexedDB（含 `localStorage` 備援）完整實作 CRUD、小孩身高最新值同步、Web Crypto PBKDF2-SHA256 隨機鹽值 4 位數 PIN 驗證（含連續錯誤 5 次冷卻 60 秒鎖定），並預留未來付費解鎖 Pro 雲端同步、去廣告與一鍵上雲遷移封包（`buildCloudMigrationBundle`）介面。
+  - **單機上架版配套介面與合規文件（`index.html`、`settings.js`、`i18n.js`、`docs/privacy-policy.html`、`README.md`）**：單機模式下自動隱藏頂部同步按鈕與雲端設定卡，提供「資料備份與還原（JSON 匯出／系統分享／嚴格驗證匯入／一鍵清除）」、「雲端家庭同步 · Pro 預告」與「關於、健康免責聲明與離線可讀隱私權政策彈窗」，同步建立可供 GitHub Pages 發布的 `docs/privacy-policy.html` 並補齊三語系 531 組文案。
+  - **固定式廣告橫幅安全區避讓（`adBanner.js`、`input.css`）**：新增 `--safe-top`、`--safe-bottom`、`--ad-banner-height` 動態推升頂部導覽列、底部導覽列與總覽懸浮按鈕，支援 Android 15+ Edge-to-Edge 與 `@capacitor-community/admob`（含 Google UMP 同意流程與 Pro 解鎖自動隱藏廣告）。
 
 ### v2.16.0（2026-11-26）
 - **對應 Commit**：`9eeb35c`
