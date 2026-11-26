@@ -951,7 +951,6 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
   const items = pageRecords.map((r, idx) => {
     const li = createEl('li', 'history-swipe-row');
     const contentEl = createEl('div', 'history-swipe-content py-2.5 flex items-center gap-2');
-    const info = createEl('div', 'min-w-0 flex-1');
 
     const numericWeight = Number(r.weight_kg);
     const weightDisplay = isHidden
@@ -978,27 +977,32 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
       }
     }
 
-    // 第 1 行：左欄體重 ＋ 中間目標差距膠囊 ＋ 右側較前次變化（固定列高避免有無膠囊高低不一）
-    const topRow = createEl('div', 'flex items-center justify-between gap-1.5 min-h-[22px]');
-    const topLeft = createEl('div', 'flex items-center gap-1.5 min-w-0');
-    topLeft.appendChild(
-      createEl(
-        'span',
-        `w-[5.25rem] shrink-0 font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
-        weightDisplay
-      )
+    // 左欄：體重 ＋ 量測日期（含星期幾），固定欄寬與雙行結構確保各筆列高一致
+    const leftCol = createEl('div', 'w-[5.25rem] shrink-0 flex flex-col justify-center gap-1');
+    const weightEl = createEl(
+      'span',
+      `font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+      weightDisplay
     );
+    const dateCell = createEl(
+      'span',
+      'text-[12px] text-ink-400 tabular-nums leading-4 whitespace-nowrap',
+      formatHistoryDateWithWeekday(r.recorded_at, currentYear)
+    );
+    dateCell.setAttribute('title', String(r.recorded_at ?? ''));
+    leftCol.append(weightEl, dateCell);
 
-    const pillSlot = createEl('div', 'flex items-center min-w-0 min-h-[22px]');
+    // 中欄：目標差距膠囊與備註（僅在實際存在時渲染，無備註時不留空白並自然上下置中）
+    const midCol = createEl('div', 'min-w-0 flex-1 flex flex-col justify-center items-start gap-1');
     const activeTarget = recordTargetSeries.values[idx];
     const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
     if (targetGap) {
       if (isHidden) {
         if (targetGap.isAchieved) {
-          pillSlot.appendChild(
+          midCol.appendChild(
             createEl(
               'span',
-              'inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
+              'inline-block max-w-full truncate rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
               t('overview.achieved')
             )
           );
@@ -1009,34 +1013,16 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
           : targetGap.gap > 0
             ? 'bg-ochre-50 text-ochre-700 border border-ochre-200/80'
             : 'bg-sage-50 text-sage-700 border border-sage-200/80';
-        pillSlot.appendChild(
+        midCol.appendChild(
           createEl(
             'span',
-            `inline-flex items-center rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
+            `inline-block max-w-full truncate rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
             targetGap.compactLabel
           )
         );
       }
     }
-    topLeft.appendChild(pillSlot);
 
-    const deltaEl = createEl(
-      'span',
-      `shrink-0 text-xs font-medium leading-4 tabular-nums whitespace-nowrap ${deltaColor}`,
-      deltaText
-    );
-    topRow.append(topLeft, deltaEl);
-
-    // 第 2 行：量測日期（含星期幾）＋ 單行省略備註（同欄寬對齊且固定高度，確保每筆歷史紀錄版面完全一致）
-    const bottomRow = createEl('div', 'grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-x-1.5 h-4 mt-1');
-    const dateCell = createEl(
-      'span',
-      'text-[12px] text-ink-400 tabular-nums leading-4 whitespace-nowrap',
-      formatHistoryDateWithWeekday(r.recorded_at, currentYear)
-    );
-    dateCell.setAttribute('title', String(r.recorded_at ?? ''));
-
-    const noteSlot = createEl('div', 'min-w-0 flex items-center');
     const noteText = String(r.note ?? '').trim();
     if (noteText) {
       const noteBtn = createEl(
@@ -1056,12 +1042,22 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
         }
         showToast(t('history.noteToast', { date: r.recorded_at, note: noteText }), false, 4000);
       };
-      noteSlot.appendChild(noteBtn);
+      midCol.appendChild(noteBtn);
     }
-    bottomRow.append(dateCell, noteSlot);
 
-    info.append(topRow, bottomRow);
-    contentEl.appendChild(info);
+    // 最右側獨立區塊：較前次變化（獨立欄位搭配淡分隔線並上下置中對齊）
+    const rightCol = createEl(
+      'div',
+      'min-w-[4.75rem] shrink-0 self-stretch flex items-center justify-end pl-2 border-l border-oat-100'
+    );
+    const deltaEl = createEl(
+      'span',
+      `text-xs font-medium leading-4 tabular-nums whitespace-nowrap ${deltaColor}`,
+      deltaText
+    );
+    rightCol.appendChild(deltaEl);
+
+    contentEl.append(leftCol, midCol, rightCol);
 
     if (!isHidden) {
       li.dataset.swipeDeleteRow = 'true';
