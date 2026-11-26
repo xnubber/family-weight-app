@@ -49,8 +49,11 @@ function createMetricCell(labelText, valueText, valueClass = 'text-ink-700') {
   return cell;
 }
 
-const LONG_PRESS_REORDER_MS = 220;
-const MOVE_CANCEL_THRESHOLD_PX = 10;
+const LONG_PRESS_REORDER_MS = 520;
+const HANDLE_TOUCH_HOLD_MS = 260;
+const HANDLE_MOUSE_DRAG_PX = 4;
+const MOVE_CANCEL_THRESHOLD_PX = 6;
+const SCROLL_COOLDOWN_MS = 180;
 const SETTLE_DURATION_MS = 215;
 const SYNTHETIC_MOUSE_GUARD_MS = 700;
 
@@ -58,6 +61,7 @@ let dragState = null;
 let pendingSettle = null;
 let suppressCardClickUntil = 0;
 let lastTouchEventAt = 0;
+let lastWindowScrollAt = 0;
 let dragGlobalListenersBound = false;
 let activeReorderCallback = null;
 
@@ -234,8 +238,8 @@ function activateCardDrag() {
     ? Math.max(0, items[1].top - (items[0].top + items[0].height))
     : 12;
 
-  // 長按卡身啟動時以當前手指點為原點，避免按住期間 2-5px 微移導致抬起瞬間跳動
-  if (!dragState.fromHandle) {
+  // 長按或觸控把手按住啟動時以當前手指點為原點，避免按住期間 2-5px 微移導致抬起瞬間跳動
+  if (!dragState.fromHandle || dragState.inputKind === 'touch') {
     dragState.startClientX = dragState.lastClientX;
     dragState.startClientY = dragState.lastClientY;
   }
@@ -354,9 +358,14 @@ function handleDragMovePoint(clientX, clientY) {
   const dy = clientY - dragState.startClientY;
 
   if (!dragState.active) {
-    if (dragState.fromHandle && Math.hypot(dx, dy) >= 2) {
-      activateCardDrag();
-    } else if (!dragState.fromHandle && Math.hypot(dx, dy) > MOVE_CANCEL_THRESHOLD_PX) {
+    // 僅桌面滑鼠按住把手可立即啟動拖拉；手機觸控一律需穩定按住達門檻，移動超過 6px 立即放行上下捲動
+    if (dragState.fromHandle && dragState.inputKind === 'mouse') {
+      if (Math.hypot(dx, dy) >= HANDLE_MOUSE_DRAG_PX) {
+        activateCardDrag();
+      } else {
+        return;
+      }
+    } else if (Math.hypot(dx, dy) > MOVE_CANCEL_THRESHOLD_PX) {
       cancelCardDrag();
       return;
     } else {
@@ -373,7 +382,19 @@ function bindGlobalDragListeners() {
   }
   dragGlobalListenersBound = true;
 
-  // 手機觸控通道（使用原生 touch 事件避免 Android WebView 在長按後誤發 pointercancel）
+  // 偵測頁面捲動：只要頁面開始上下滑動，立即取消所有尚未啟動的長按拖曳，避免滑動誤觸
+  window.addEventListener(
+    'scroll',
+    () => {
+      lastWindowScrollAt = Date.now();
+      if (dragState && !dragState.active) {
+        cancelCardDrag();
+      }
+    },
+    { passive: true }
+  );
+
+  // 手機觸控通道（僅在拖拉正式啟動後才攔截 touchmove，未啟動前全程保留原生上下捲動手感）
   document.addEventListener(
     'touchmove',
     (e) => {
@@ -384,7 +405,7 @@ function bindGlobalDragListeners() {
       }
       const touch = e.touches[0];
       handleDragMovePoint(touch.clientX, touch.clientY);
-      if (dragState && (dragState.active || dragState.fromHandle) && e.cancelable) {
+      if (dragState && dragState.active && e.cancelable) {
         e.preventDefault();
       }
     },
@@ -490,7 +511,14 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
       const beginDragSession = (inputKind, clientX, clientY, target) => {
         if (pendingSettle) return;
         if (target?.closest?.('button, [data-card-action]')) return;
+        // 剛結束上下捲動（例如伸手按停慣性捲動）的瞬間不啟動長按排序，防止滑動停手誤觸
+        if (inputKind === 'touch' && Date.now() - lastWindowScrollAt < SCROLL_COOLDOWN_MS) return;
+
         const fromHandle = Boolean(target?.closest?.('[data-drag-handle]'));
+        const holdDelayMs = fromHandle
+          ? (inputKind === 'mouse' ? null : HANDLE_TOUCH_HOLD_MS)
+          : LONG_PRESS_REORDER_MS;
+
         cancelCardDrag();
         dragState = {
           inputKind,
@@ -510,9 +538,9 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
           gap: 12,
           dragSpan: 0,
           autoScrollRaf: 0,
-          timer: fromHandle
+          timer: holdDelayMs === null
             ? null
-            : setTimeout(() => activateCardDrag(), LONG_PRESS_REORDER_MS)
+            : setTimeout(() => activateCardDrag(), holdDelayMs)
         };
       };
 
