@@ -325,7 +325,7 @@
       <!-- 批量模式：一次填寫多位成員今日體重 -->
       <div id="rec-batch-fields" class="space-y-3">
         <div>
-          <label data-i18n="record.batchHint" class="text-xs text-ink-500">一次填入多位成員體重（留空略過），備註可選填</label>
+          <label data-i18n="record.batchHint" class="text-xs text-ink-500">一次填入多位成員體重（留空略過）</label>
           <input id="batch-date" type="date" min="2000-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
         <div id="batch-member-rows" class="max-h-64 overflow-y-auto divide-y divide-oat-100 border border-oat-200 bg-paper/60 rounded-2xl px-3"></div>
@@ -357,11 +357,11 @@
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label id="rec-pet-with-label" for="rec-pet-with-weight" class="block text-[11px] text-ink-500">抱毛孩總重 (kg)</label>
-                <input id="rec-pet-with-weight" type="text" inputmode="decimal" autocomplete="off" data-i18n-placeholder="record.petCalcWithPlaceholder" placeholder="例：72.5" class="w-full border rounded-xl px-2.5 py-2 text-sm tabular-nums mt-1 bg-linen" />
+                <input id="rec-pet-with-weight" type="text" inputmode="decimal" autocomplete="off" data-i18n-placeholder="record.petCalcWithPlaceholder" placeholder="輸入總重" class="w-full border rounded-xl px-2.5 py-2 text-sm tabular-nums mt-1 bg-linen" />
               </div>
               <div>
                 <label id="rec-pet-owner-label" for="rec-pet-owner-weight" class="block text-[11px] text-ink-500">主人體重 (kg)</label>
-                <input id="rec-pet-owner-weight" type="text" inputmode="decimal" autocomplete="off" data-i18n-placeholder="record.petCalcOwnerPlaceholder" placeholder="例：68.0" class="w-full border rounded-xl px-2.5 py-2 text-sm tabular-nums mt-1 bg-linen" />
+                <input id="rec-pet-owner-weight" type="text" inputmode="decimal" autocomplete="off" data-i18n-placeholder="record.petCalcOwnerPlaceholder" placeholder="輸入體重" class="w-full border rounded-xl px-2.5 py-2 text-sm tabular-nums mt-1 bg-linen" />
               </div>
             </div>
             <p id="rec-pet-calc-feedback" class="text-[11px] text-ink-400 leading-snug tabular-nums" aria-live="polite"></p>
@@ -427,7 +427,7 @@
       </div>
       <div id="mem-height-wrap">
         <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
-        <input id="mem-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="家人計算 BMI 用，毛孩可留空" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        <input id="mem-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="選填，例：172.5（用於計算 BMI）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
       </div>
       <div id="mem-bcs-wrap" class="hidden">
         <label data-i18n="memberModal.bcs" class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
@@ -461,7 +461,7 @@
             <input id="mem-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
             <span class="text-xs leading-relaxed">
               <span data-i18n="privacy.hideTitle" class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
-              <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽數值與精確 BMI，只顯示變化趨勢與達標進度</span>
+              <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽真實體重與精確健康數值，只顯示變化趨勢與達標進度</span>
             </span>
           </label>
           <div id="mem-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
@@ -576,7 +576,7 @@
 
         <div id="prof-height-wrap">
           <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
-          <input id="prof-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="例：172.5" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+          <input id="prof-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="選填，例：172.5（用於計算 BMI）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
 
         <div id="prof-bcs-wrap" class="hidden">
@@ -612,7 +612,7 @@
               <input id="prof-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
               <span class="text-xs leading-relaxed">
                 <span data-i18n="privacy.hideTitle" class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
-                <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽數值與精確 BMI，只顯示變化趨勢與達標進度</span>
+                <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽真實體重與精確健康數值，只顯示變化趨勢與達標進度</span>
               </span>
             </label>
             <div id="prof-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
@@ -681,7 +681,7 @@
             <input id="priv-hide-weight" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
             <span class="text-xs leading-relaxed">
               <span data-i18n="privacy.hideTitle" class="font-medium text-ink block">隱藏真實體重（隱私模式）</span>
-              <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽數值與精確 BMI，只顯示變化趨勢與達標進度</span>
+              <span data-i18n="privacy.hideDesc" class="text-ink-400">遮蔽真實體重與精確健康數值，只顯示變化趨勢與達標進度</span>
             </span>
           </label>
           <div id="priv-pin-wrap" class="hidden space-y-2 pt-1 border-t border-oat-200/80">
