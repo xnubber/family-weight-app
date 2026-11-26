@@ -6,6 +6,8 @@ import {
   calculateGoalProgress,
   calculateTargetGap,
   calculateWeeklyWeightChangePct,
+  formatHeightCm,
+  formatHeightDeltaCm,
   getBcsMeta
 } from '../utils/metrics.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
@@ -480,6 +482,25 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
     const targetGap = latest ? calculateTargetGap(latest.weight_kg, m.target_weight) : null;
     const goalProgress = calculateGoalProgress(recs, m.target_weight);
     const isHuman = m.type === 'human';
+    const isHeightTracked = isHuman && Boolean(m.track_height);
+    const heightRecs = isHeightTracked
+      ? (state.appData.heightRecords || []).filter((r) => r.member_id === m.id)
+      : [];
+    const latestHeightRec = heightRecs[heightRecs.length - 1] || null;
+    const prevHeightRec = heightRecs[heightRecs.length - 2] || null;
+    const latestHeightVal = latestHeightRec
+      ? Number(latestHeightRec.height_cm)
+      : (isHeightTracked && m.height_cm !== null && m.height_cm !== undefined ? Number(m.height_cm) : null);
+    const heightDiffNum = latestHeightRec && prevHeightRec
+      ? Number((Number(latestHeightRec.height_cm) - Number(prevHeightRec.height_cm)).toFixed(1))
+      : null;
+    const latestUpdatedDate = (() => {
+      const wDate = latest?.recorded_at || '';
+      const hDate = latestHeightRec?.recorded_at || '';
+      if (!wDate) return hDate;
+      if (!hDate) return wDate;
+      return hDate > wDate ? hDate : wDate;
+    })();
     const typeMeta = getMemberTypeMeta(m.type);
     const badgeLabel = !isHuman && m.breed ? String(m.breed).trim() : typeMeta.label;
     const bmiRes = isHuman && latest && m.height_cm ? calculateBmi(latest.weight_kg, m.height_cm) : null;
@@ -610,7 +631,7 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
       createEl(
         'p',
         'text-fluid-label text-ink-400 mt-1 tabular-nums whitespace-nowrap',
-        latest ? t('overview.updatedAt', { date: latest.recorded_at }) : t('overview.noRecords')
+        latestUpdatedDate ? t('overview.updatedAt', { date: latestUpdatedDate }) : t('overview.noRecords')
       )
     );
     identityWrap.append(avatarNode, textWrap);
@@ -633,7 +654,7 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
 
     topRow.append(identityWrap, weightRow);
 
-    // 下排：三欄等寬精簡指標列（較前次 / 距目標或進度 / 家人 BMI 或毛孩 BCS・一週變化）
+    // 下排：三欄等寬精簡指標列（較前次 / 距目標或身高變化 / 身高或 BMI・毛孩 BCS・一週變化）
     const diffColor = diffNum === null
       ? 'text-ink-400'
       : diffNum > 0
@@ -652,6 +673,15 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
         targetValue = '--';
         targetColor = 'text-ink-400';
       }
+    } else if (isHeightTracked && !targetGap) {
+      // 開啟身高成長追蹤且未設目標體重時（多數小孩情境），第 2 欄呈現較前次身高變化
+      targetLabel = t('overview.heightDiffPrev');
+      targetValue = heightDiffNum !== null ? formatHeightDeltaCm(heightDiffNum) : '--';
+      targetColor = heightDiffNum === null
+        ? 'text-ink-400'
+        : heightDiffNum > 0
+          ? 'text-sage-600'
+          : 'text-ink-700';
     } else {
       targetLabel = t('overview.toTarget');
       targetValue = targetGap
@@ -666,11 +696,19 @@ export function renderOverview({ onSelectMember, onReorderMembers = null, onTogg
             : 'text-sage-700';
     }
 
-    // 第 3 欄：家人顯示 BMI（隱私模式僅顯示正常／異常）；毛孩優先顯示 BCS 體態評分，未填則顯示一週體重變化幅度（%）
+    // 第 3 欄：開啟身高追蹤之家人顯示最新身高；一般家人顯示 BMI；毛孩優先顯示 BCS，未填則顯示一週變化（%）
     let thirdLabel;
     let thirdValue;
     let thirdColor;
-    if (isHuman) {
+    if (isHeightTracked) {
+      thirdLabel = t('overview.latestHeight');
+      thirdValue = latestHeightVal !== null && Number.isFinite(latestHeightVal)
+        ? formatHeightCm(latestHeightVal)
+        : '--';
+      thirdColor = latestHeightVal !== null && Number.isFinite(latestHeightVal)
+        ? 'text-sage-700'
+        : 'text-ink-400';
+    } else if (isHuman) {
       const isBmiNormal = bmiRes?.statusKey === 'normal';
       thirdLabel = t('overview.bmi');
       thirdValue = bmiRes

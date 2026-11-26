@@ -8,10 +8,10 @@
     http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:3000 http://127.0.0.1:3000; object-src 'none'; base-uri 'self'; form-action 'self';"
   />
-  <meta name="description" content="溫潤樸素的家庭與毛孩體重紀錄日誌（Kin &amp; Paws Weight），支援家人、貓咪與狗狗體重趨勢、健康指標、隱私密碼鎖與雲端同步。" />
+  <meta name="description" content="溫潤樸素的家庭與毛孩成長紀錄日誌（Kin &amp; Paws），支援家人與毛孩體重趨勢、小孩身高成長追蹤、健康指標、隱私密碼鎖與雲端同步。" />
   <meta name="theme-color" content="#F6F4EE" />
-  <meta name="apple-mobile-web-app-title" content="家與毛孩體重誌" />
-  <title>家與毛孩體重誌 · Kin &amp; Paws Weight</title>
+  <meta name="apple-mobile-web-app-title" content="家與毛孩成長誌" />
+  <title>家與毛孩成長誌 · Kin &amp; Paws</title>
   <link rel="icon" type="image/svg+xml" href="./icons/app-icon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
@@ -24,15 +24,15 @@
 <body class="bg-paper text-ink">
 
   <!-- 冷啟動「晨露扉頁」極速過場（點擊任意處可立即略過） -->
-  <div id="app-splash" class="app-splash" role="status" data-i18n-aria-label="app.splashAria" aria-label="載入家與毛孩體重誌">
+  <div id="app-splash" class="app-splash" role="status" data-i18n-aria-label="app.splashAria" aria-label="載入家與毛孩成長誌">
     <div class="app-splash-inner">
       <div class="app-splash-icon-wrap">
         <span class="app-splash-halo" aria-hidden="true"></span>
-        <img src="./icons/app-icon.svg" alt="Kin &amp; Paws Weight" class="app-splash-icon" />
+        <img src="./icons/app-icon.svg" alt="Kin &amp; Paws" class="app-splash-icon" />
       </div>
       <div class="app-splash-text space-y-1">
-        <p data-i18n="app.brand" class="text-lg font-semibold tracking-[0.14em] text-ink">家與毛孩體重誌</p>
-        <p data-i18n="app.brandSub" class="text-xs font-medium tracking-[0.18em] text-sage-700/80">Kin &amp; Paws Weight</p>
+        <p data-i18n="app.brand" class="text-lg font-semibold tracking-[0.14em] text-ink">家與毛孩成長誌</p>
+        <p data-i18n="app.brandSub" class="text-xs font-medium tracking-[0.18em] text-sage-700/80">Kin &amp; Paws</p>
       </div>
       <div class="app-splash-bar" aria-hidden="true">
         <span class="app-splash-bar-fill"></span>
@@ -45,13 +45,13 @@
     <div class="flex items-center gap-2.5 min-w-0">
       <img
         src="./icons/app-icon.svg"
-        alt="Kin &amp; Paws Weight"
+        alt="Kin &amp; Paws"
         class="w-10 h-10 rounded-xl border border-oat-200 shadow-sm shrink-0"
       />
       <div class="min-w-0">
         <div class="flex items-baseline gap-1.5 min-w-0">
-          <h1 data-i18n="app.brand" class="text-base font-semibold tracking-wider text-ink truncate">家與毛孩體重誌</h1>
-          <span data-i18n="app.brandSub" class="hidden sm:inline text-[13px] font-medium tracking-wide text-sage-700/80 shrink-0">Kin &amp; Paws Weight</span>
+          <h1 data-i18n="app.brand" class="text-base font-semibold tracking-wider text-ink truncate">家與毛孩成長誌</h1>
+          <span data-i18n="app.brandSub" class="hidden sm:inline text-[13px] font-medium tracking-wide text-sage-700/80 shrink-0">Kin &amp; Paws</span>
         </div>
         <p id="header-family-code" data-i18n="header.syncCodeLoading" class="text-fluid-label text-ink-400 font-mono truncate">同步碼：載入中...</p>
       </div>
@@ -86,6 +86,12 @@
     <section id="view-charts" class="page-view hidden space-y-4">
       <!-- 成員切換 -->
       <div id="chart-member-pills" class="flex gap-2 overflow-x-auto pb-1"></div>
+
+      <!-- 體重／身高指標切換（僅對開啟「追蹤身高成長」的家人顯示） -->
+      <div id="chart-metric-pills" class="hidden flex bg-oat-100 border border-oat-200 p-1 rounded-2xl text-xs font-medium">
+        <button type="button" data-metric="weight" data-i18n="charts.metricWeight" class="metric-btn flex-1 py-1.5 rounded-xl bg-linen text-sage-700 shadow-sm">體重</button>
+        <button type="button" data-metric="height" data-i18n="charts.metricHeight" class="metric-btn flex-1 py-1.5 rounded-xl text-ink-500">身高</button>
+      </div>
 
       <!-- 日/週/月/年 切換按鈕 -->
       <div id="chart-range-pills" class="flex bg-oat-100 border border-oat-200 p-1 rounded-2xl text-xs font-medium">
@@ -258,7 +264,7 @@
         <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14" />
         </svg>
-        <span data-i18n="overview.recordToday">記錄今日體重</span>
+        <span data-i18n="overview.recordToday">新增今日紀錄</span>
       </button>
     </div>
   </div>
@@ -300,11 +306,11 @@
     </button>
   </nav>
 
-  <!-- 彈窗：新增體重紀錄（支援批量紀錄與單筆詳細紀錄切換） -->
+  <!-- 彈窗：新增紀錄（支援批量與單筆切換，含體重與小孩身高成長紀錄） -->
   <div id="modal-record" class="modal-overlay hidden fixed inset-0 bg-ink/35 backdrop-blur-[2px] z-50 flex items-end sm:items-center justify-center p-4">
     <form id="form-record" novalidate class="modal-sheet bg-linen border border-oat-200 w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl p-5 space-y-4 shadow-soft">
       <div class="flex justify-between items-center">
-        <h3 data-i18n="record.title" class="font-semibold text-base text-ink tracking-wide">記錄體重</h3>
+        <h3 data-i18n="record.title" class="font-semibold text-base text-ink tracking-wide">新增紀錄</h3>
         <div class="flex bg-oat-100 border border-oat-200 p-1 rounded-xl text-xs font-medium">
           <button type="button" id="btn-rec-mode-batch" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-linen text-sage-700 shadow-sm">
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -322,21 +328,30 @@
         </div>
       </div>
 
-      <!-- 批量模式：一次填寫多位成員今日體重 -->
+      <!-- 批量模式：一次填寫多位成員今日體重（開啟身高追蹤者可同步記錄身高） -->
       <div id="rec-batch-fields" class="space-y-3">
         <div>
-          <label data-i18n="record.batchHint" class="text-xs text-ink-500">一次填入多位成員體重（留空略過）</label>
+          <label data-i18n="record.batchHint" class="text-xs text-ink-500">一次填入多位成員數值（留空略過）</label>
           <input id="batch-date" type="date" min="2000-01-01" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
         </div>
         <div id="batch-member-rows" class="max-h-64 overflow-y-auto divide-y divide-oat-100 border border-oat-200 bg-paper/60 rounded-2xl px-3"></div>
       </div>
 
-      <!-- 單筆模式：針對單一成員記錄體重與備註 -->
+      <!-- 單筆模式：針對單一成員記錄體重（與身高）及備註 -->
       <div id="rec-single-fields" class="hidden space-y-3">
         <select id="rec-member" class="w-full border rounded-xl p-2.5 text-sm"></select>
         <div class="relative">
           <input id="rec-weight" type="text" inputmode="decimal" autocomplete="off" placeholder="體重 (kg)" class="w-full border rounded-xl p-2.5 text-sm tabular-nums" />
           <button id="btn-rec-weight-visibility" type="button" class="hidden absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-ink-400 hover:text-ink-700 hover:bg-oat-100" data-i18n-aria-label="record.toggleShowWeight" aria-label="顯示輸入數值"></button>
+        </div>
+
+        <!-- 身高成長紀錄欄（僅選擇開啟「追蹤身高成長」的家人時顯示） -->
+        <div id="rec-height-wrap" class="hidden space-y-1.5">
+          <div class="relative">
+            <input id="rec-height" type="text" inputmode="decimal" autocomplete="off" data-i18n-placeholder="record.heightPlaceholder" placeholder="輸入身高 (cm)，選填" class="w-full border rounded-xl pl-2.5 pr-10 py-2.5 text-sm tabular-nums" />
+            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">cm</span>
+          </div>
+          <p data-i18n="record.singleEitherHint" class="text-[11px] text-ink-400 leading-snug">已開啟身高成長追蹤，可單獨記錄體重、身高，或一次同時記錄</p>
         </div>
 
         <!-- 毛孩專屬：抱著量自動相減輔助計算器（僅選擇貓咪／狗狗時顯示） -->
@@ -425,9 +440,18 @@
           </div>
         </div>
       </div>
-      <div id="mem-height-wrap">
-        <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
-        <input id="mem-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="選填，例：172.5（用於計算 BMI）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+      <div id="mem-height-wrap" class="space-y-2.5">
+        <div>
+          <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
+          <input id="mem-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="選填，例：172.5（用於計算 BMI）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        </div>
+        <label class="flex items-start gap-2.5 cursor-pointer select-none bg-oat-50 border border-oat-200 rounded-2xl p-3">
+          <input id="mem-track-height" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
+          <span class="text-xs leading-relaxed">
+            <span data-i18n="memberModal.trackHeightTitle" class="font-medium text-ink block">追蹤身高成長</span>
+            <span data-i18n="memberModal.trackHeightDesc" class="text-ink-400">開啟後可像體重一樣記錄歷史身高並檢視成長趨勢（適合發育中的小孩）</span>
+          </span>
+        </label>
       </div>
       <div id="mem-bcs-wrap" class="hidden">
         <label data-i18n="memberModal.bcs" class="text-xs text-ink-500">體態評分 BCS（1–9 分，選填）</label>
@@ -585,9 +609,18 @@
           </div>
         </div>
 
-        <div id="prof-height-wrap">
-          <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
-          <input id="prof-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="選填，例：172.5（用於計算 BMI）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+        <div id="prof-height-wrap" class="space-y-2.5">
+          <div>
+            <label data-i18n="memberModal.height" class="text-xs text-ink-500">身高 (cm)</label>
+            <input id="prof-height" type="number" min="20" max="300" step="0.1" data-i18n-placeholder="memberModal.heightPlaceholder" placeholder="選填，例：172.5（用於計算 BMI）" class="w-full border rounded-xl p-2.5 text-sm mt-1" />
+          </div>
+          <label class="flex items-start gap-2.5 cursor-pointer select-none bg-oat-50 border border-oat-200 rounded-2xl p-3">
+            <input id="prof-track-height" type="checkbox" class="mt-0.5 rounded border-oat-300 accent-sage-600" />
+            <span class="text-xs leading-relaxed">
+              <span data-i18n="memberModal.trackHeightTitle" class="font-medium text-ink block">追蹤身高成長</span>
+              <span data-i18n="memberModal.trackHeightDesc" class="text-ink-400">開啟後可像體重一樣記錄歷史身高並檢視成長趨勢（適合發育中的小孩）</span>
+            </span>
+          </label>
         </div>
 
         <div id="prof-bcs-wrap" class="hidden">

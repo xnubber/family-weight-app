@@ -11,10 +11,12 @@ function sanitizeMemberForCache(member) {
 function hasAnyTempRecord(appData) {
   const members = Array.isArray(appData?.members) ? appData.members : [];
   const records = Array.isArray(appData?.records) ? appData.records : [];
+  const heightRecords = Array.isArray(appData?.heightRecords) ? appData.heightRecords : [];
   const history = Array.isArray(appData?.targetHistory) ? appData.targetHistory : [];
   return (
     members.some((m) => isTempId(m?.id)) ||
     records.some((r) => isTempId(r?.id) || isTempId(r?.member_id)) ||
+    heightRecords.some((r) => isTempId(r?.id) || isTempId(r?.member_id)) ||
     history.some((h) => isTempId(h?.id) || isTempId(h?.member_id))
   );
 }
@@ -37,6 +39,7 @@ export function loadFamilyCache(familyCode) {
     return {
       members: parsed.members.map(sanitizeMemberForCache).filter(Boolean),
       records: parsed.records,
+      heightRecords: Array.isArray(parsed.heightRecords) ? parsed.heightRecords : [],
       targetHistory: parsed.targetHistory,
       cachedAt: typeof parsed.cachedAt === 'number' ? parsed.cachedAt : null
     };
@@ -55,6 +58,7 @@ export function saveFamilyCache(familyCode, appData) {
       familyCode,
       members: (appData.members || []).map(sanitizeMemberForCache).filter(Boolean),
       records: Array.isArray(appData.records) ? appData.records : [],
+      heightRecords: Array.isArray(appData.heightRecords) ? appData.heightRecords : [],
       targetHistory: Array.isArray(appData.targetHistory) ? appData.targetHistory : [],
       cachedAt: Date.now()
     };

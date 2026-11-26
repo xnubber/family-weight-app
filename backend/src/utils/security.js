@@ -55,6 +55,7 @@ export function sanitizeMember(row) {
   return {
     ...rest,
     hide_weight: Boolean(row.hide_weight),
+    track_height: Boolean(row.track_height),
     has_privacy_pin: Boolean(privacy_pin_hash)
   };
 }

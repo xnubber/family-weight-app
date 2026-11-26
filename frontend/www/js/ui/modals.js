@@ -4,7 +4,8 @@ import {
   optimisticAddMember,
   optimisticUpdateMember,
   optimisticDeleteMember,
-  optimisticAddRecord
+  optimisticAddRecord,
+  optimisticAddHeightRecord
 } from '../services/syncQueue.js';
 import { createEl, openModal, closeModal, isModalOpen, playSoftFade, showToast } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
@@ -36,6 +37,7 @@ import {
   calculateHealthyWeightRange,
   calculatePetCalories,
   calculateWeeklyWeightChangePct,
+  formatHeightCm,
   getBcsMeta,
   getLocalTodayDate
 } from '../utils/metrics.js';
@@ -48,9 +50,11 @@ import {
   isValidRecordedDate,
   isValidResourceId,
   parseBirthDateParts,
+  parseHeightValue,
   parseStrictNumber,
   parseWeightValue,
   sanitizeDatePartDigits,
+  sanitizeHeightInputValue,
   sanitizeWeightInputValue
 } from '../utils/validation.js';
 import { t } from '../utils/i18n.js';
@@ -383,6 +387,34 @@ function attachWeightInputGuard(input) {
   });
 }
 
+function attachHeightInputGuard(input) {
+  if (!input || input.dataset?.heightGuardBound === 'true') return;
+  if (input.dataset) input.dataset.heightGuardBound = 'true';
+
+  input.addEventListener('input', () => {
+    const cleaned = sanitizeHeightInputValue(input.value);
+    if (input.value !== cleaned) {
+      input.value = cleaned;
+    }
+    if (cleaned === '') {
+      setWeightInputErrorState(input, false);
+      return;
+    }
+    const num = Number(cleaned);
+    setWeightInputErrorState(input, Number.isFinite(num) && num > 300);
+  });
+
+  input.addEventListener('blur', () => {
+    const raw = input.value.trim();
+    if (raw === '') {
+      setWeightInputErrorState(input, false);
+      return;
+    }
+    const parsed = parseHeightValue(raw, { required: false });
+    setWeightInputErrorState(input, Boolean(parsed.error));
+  });
+}
+
 function syncWeightVisibilityButton(btn, revealed) {
   if (!btn) return;
   const label = revealed ? t('record.toggleHideWeight') : t('record.toggleShowWeight');
@@ -580,6 +612,29 @@ function updateSingleWeightInputMask({ resetReveal = false } = {}) {
   }
 }
 
+function syncSingleHeightInputUI({ reset = false } = {}) {
+  const select = document.getElementById('rec-member');
+  const wrap = document.getElementById('rec-height-wrap');
+  const input = document.getElementById('rec-height');
+  if (!select || !wrap || !input) return;
+
+  const member = state.appData.members.find((m) => m.id === select.value);
+  const showHeight = Boolean(member && member.type === 'human' && member.track_height);
+  wrap.classList.toggle('hidden', !showHeight);
+
+  if (reset || !showHeight) {
+    input.value = '';
+    setWeightInputErrorState(input, false);
+  }
+  if (showHeight) {
+    const hRecs = (state.appData.heightRecords || []).filter((r) => r.member_id === member.id);
+    const latestH = hRecs[hRecs.length - 1]?.height_cm ?? member.height_cm;
+    input.placeholder = latestH !== null && latestH !== undefined && Number.isFinite(Number(latestH))
+      ? `${Number(Number(latestH).toFixed(1))} cm`
+      : t('record.heightPlaceholder');
+  }
+}
+
 function setRecordModalMode(mode, animate = false) {
   recordModalMode = mode === 'single' ? 'single' : 'batch';
   const isBatch = recordModalMode === 'batch';
@@ -606,6 +661,7 @@ function setRecordModalMode(mode, animate = false) {
     : t('record.saveSingle');
   if (!isBatch) {
     updateSingleWeightInputMask({ resetReveal: true });
+    syncSingleHeightInputUI({ reset: false });
     syncSinglePetCalcUI({ reset: false });
   }
 }
@@ -618,6 +674,7 @@ function renderBatchMemberRows() {
     const latest = recs[recs.length - 1];
     const isHidden = isMemberWeightHidden(m);
     const isPet = isPetType(m.type);
+    const isHeightTracked = !isPet && Boolean(m.track_height);
 
     const rowWrap = createEl('div', 'py-2.5');
     const row = createEl('div', 'flex items-center justify-between gap-2.5');
@@ -674,6 +731,35 @@ function renderBatchMemberRows() {
 
     row.append(leftGroup, inputWrap);
     rowWrap.append(row);
+
+    // 開啟「追蹤身高成長」的家人：於同成員下方顯示精簡身高輸入列，可與體重同步或單獨記錄
+    if (isHeightTracked) {
+      const hRecs = (state.appData.heightRecords || []).filter((r) => r.member_id === m.id);
+      const latestHeightVal = hRecs[hRecs.length - 1]?.height_cm ?? m.height_cm;
+      const heightRow = createEl('div', 'flex items-center justify-between gap-2.5 mt-2 pl-10');
+      const heightHintText = latestHeightVal !== null && latestHeightVal !== undefined && Number.isFinite(Number(latestHeightVal))
+        ? `${t('overview.latestHeight')} ${formatHeightCm(latestHeightVal)}`
+        : t('record.batchHeightPlaceholder');
+      heightRow.append(
+        createEl('span', 'text-fluid-label text-sage-700/80 tabular-nums truncate', heightHintText)
+      );
+
+      const hWrap = createEl('div', 'flex items-center gap-1.5 shrink-0');
+      const hInput = document.createElement('input');
+      hInput.type = 'text';
+      hInput.inputMode = 'decimal';
+      hInput.autocomplete = 'off';
+      hInput.placeholder = latestHeightVal !== null && latestHeightVal !== undefined && Number.isFinite(Number(latestHeightVal))
+        ? String(Number(Number(latestHeightVal).toFixed(1)))
+        : t('record.batchHeightPlaceholder');
+      hInput.dataset.memberId = String(m.id);
+      hInput.dataset.memberName = String(m.name ?? '');
+      hInput.className = 'batch-height-input w-24 border rounded-xl px-2.5 py-1.5 text-sm text-right tabular-nums';
+      attachHeightInputGuard(hInput);
+      hWrap.append(hInput, createEl('span', 'text-xs text-ink-400', 'cm'));
+      heightRow.append(hWrap);
+      rowWrap.append(heightRow);
+    }
 
     // 毛孩專屬：批量模式內嵌「抱著量」自動相減小面板（並支援一鍵帶入上方剛輸入或最新的主人體重）
     if (isPet) {
@@ -800,6 +886,7 @@ export function openRecordModal(preselectedMemberId = null, mode = 'batch') {
   singleWeightInput.value = '';
   setWeightInputErrorState(singleWeightInput, false);
   singleWeightRevealed = false;
+  syncSingleHeightInputUI({ reset: true });
   syncSinglePetCalcUI({ reset: true });
   document.getElementById('rec-note').value = '';
   document.getElementById('rec-date').value = today;
@@ -958,6 +1045,7 @@ export function openMemberModal(member = null) {
   const breedInput = document.getElementById('mem-breed');
   const heightWrap = document.getElementById('mem-height-wrap');
   const heightInput = document.getElementById('mem-height');
+  const trackHeightCheckbox = document.getElementById('mem-track-height');
   const bcsWrap = document.getElementById('mem-bcs-wrap');
   const bcsSelect = document.getElementById('mem-bcs');
   const targetInput = document.getElementById('mem-target');
@@ -984,6 +1072,7 @@ export function openMemberModal(member = null) {
     setBirthDateGroupValue('mem', member.birth_date);
     heightWrap.classList.toggle('hidden', isPet);
     heightInput.value = isPet ? '' : (member.height_cm ?? '');
+    if (trackHeightCheckbox) trackHeightCheckbox.checked = !isPet && Boolean(member.track_height);
     bcsWrap.classList.toggle('hidden', !isPet);
     bcsSelect.value = isPet && member.bcs_score ? String(member.bcs_score) : '';
     targetInput.value = isLockedWithPin ? '' : targetDisplay;
@@ -1017,6 +1106,7 @@ export function openMemberModal(member = null) {
     breedInput.value = '';
     setBirthDateGroupValue('mem', null);
     heightWrap.classList.remove('hidden');
+    if (trackHeightCheckbox) trackHeightCheckbox.checked = false;
     bcsWrap.classList.add('hidden');
     bcsSelect.value = '';
     setMemberModalAvatar(getDefaultAvatarForType('human'));
@@ -1302,6 +1392,8 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     document.getElementById('prof-breed').value = isPet ? (m.breed || '') : '';
     setBirthDateGroupValue('prof', m.birth_date);
     document.getElementById('prof-height').value = isPet ? '' : (m.height_cm ?? '');
+    const profTrackHeightEl = document.getElementById('prof-track-height');
+    if (profTrackHeightEl) profTrackHeightEl.checked = !isPet && Boolean(m.track_height);
     document.getElementById('prof-bcs').value = isPet && m.bcs_score ? String(m.bcs_score) : '';
     const profTargetEl = document.getElementById('prof-target');
     profTargetEl.value = isLockedWithPin ? '' : targetDisplay;
@@ -1363,14 +1455,24 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
     });
 
     if (!isPet) {
-      fieldDefs.push({
-        key: 'height_cm',
-        label: t('profile.fieldHeight'),
-        value: m.height_cm ? `${m.height_cm} cm` : t('common.unset'),
-        isEmpty: !m.height_cm,
-        editable: true,
-        valueClass: 'font-medium text-right tabular-nums whitespace-nowrap'
-      });
+      fieldDefs.push(
+        {
+          key: 'height_cm',
+          label: t('profile.fieldHeight'),
+          value: m.height_cm ? `${m.height_cm} cm` : t('common.unset'),
+          isEmpty: !m.height_cm,
+          editable: true,
+          valueClass: 'font-medium text-right tabular-nums whitespace-nowrap'
+        },
+        {
+          key: 'track_height',
+          label: t('profile.fieldTrackHeight'),
+          value: m.track_height ? t('profile.trackHeightOn') : t('profile.trackHeightOff'),
+          isEmpty: !m.track_height,
+          editable: true,
+          valueClass: `font-medium text-right whitespace-nowrap ${m.track_height ? 'text-sage-700' : ''}`.trim()
+        }
+      );
     }
 
     if (isPet) {
@@ -1408,6 +1510,15 @@ export function openProfileModal(memberId, { onNavigateToChart, initialInlineFie
 
     const startInlineEdit = (fieldKey) => {
       setInlineAvatarDrawer(false);
+      if (fieldKey === 'track_height' && !isPet) {
+        if (activeProfileInlineField) {
+          activeProfileInlineField = null;
+        }
+        const nextVal = !Boolean(m.track_height);
+        optimisticUpdateMember(m.id, { track_height: nextVal });
+        showToast(t(nextVal ? 'profile.trackHeightEnabledToast' : 'profile.trackHeightDisabledToast'));
+        return;
+      }
       if (fieldKey === 'privacy') {
         if (activeProfileInlineField) {
           activeProfileInlineField = null;
@@ -2145,6 +2256,7 @@ export function initModals() {
   document.getElementById('btn-rec-mode-single').onclick = () => setRecordModalMode('single', true);
   document.getElementById('rec-member').onchange = () => {
     updateSingleWeightInputMask({ resetReveal: true });
+    syncSingleHeightInputUI({ reset: true });
     syncSinglePetCalcUI({ reset: true });
   };
   const singleVisBtn = document.getElementById('btn-rec-weight-visibility');
@@ -2179,6 +2291,7 @@ export function initModals() {
     recPetOwnerInput.addEventListener('input', recalcSinglePet);
   }
   attachWeightInputGuard(recWeightInput);
+  attachHeightInputGuard(document.getElementById('rec-height'));
   attachWeightInputGuard(document.getElementById('mem-target'));
   attachWeightInputGuard(document.getElementById('prof-target'));
   wireBirthDateInputs(
@@ -2192,7 +2305,7 @@ export function initModals() {
     document.getElementById('prof-birth-day')
   );
 
-  // 切換成員類型時自動切換家人（身高）與毛孩（品種、BCS）欄位，並在未手動挑頭像時貼心帶入對應風格頭像
+  // 切換成員類型時自動切換家人（身高與追蹤開關）與毛孩（品種、BCS）欄位，並在未手動挑頭像時貼心帶入對應風格頭像
   document.getElementById('mem-type').onchange = (e) => {
     const nextType = e.target.value;
     const isPet = isPetType(nextType);
@@ -2201,6 +2314,8 @@ export function initModals() {
     document.getElementById('mem-bcs-wrap').classList.toggle('hidden', !isPet);
     if (isPet) {
       document.getElementById('mem-height').value = '';
+      const trackEl = document.getElementById('mem-track-height');
+      if (trackEl) trackEl.checked = false;
     } else {
       document.getElementById('mem-breed').value = '';
       document.getElementById('mem-bcs').value = '';
@@ -2225,7 +2340,7 @@ export function initModals() {
     return recs.length > 0 ? recs[recs.length - 1].weight_kg : null;
   };
 
-  // 表單送出：支援批量與單筆樂觀新增體重（含前端格式／範圍防呆與異常值確認）
+  // 表單送出：支援批量與單筆樂觀新增體重與身高紀錄（含前端格式／範圍防呆與異常值確認）
   document.getElementById('form-record').onsubmit = (e) => {
     e.preventDefault();
     const unitLabel = getWeightUnitLabel();
@@ -2234,10 +2349,12 @@ export function initModals() {
       const batchDate = document.getElementById('batch-date').value.trim();
       if (!isValidRecordedDate(batchDate)) return showToast(t('record.errInvalidDate'), true);
 
-      const inputs = Array.from(document.querySelectorAll('#batch-member-rows .batch-weight-input'));
-      const toSubmit = [];
+      const weightInputs = Array.from(document.querySelectorAll('#batch-member-rows .batch-weight-input'));
+      const heightInputs = Array.from(document.querySelectorAll('#batch-member-rows .batch-height-input'));
+      const weightsToSubmit = [];
+      const heightsToSubmit = [];
 
-      for (const input of inputs) {
+      for (const input of weightInputs) {
         const raw = input.value.trim();
         if (raw === '') {
           setWeightInputErrorState(input, false);
@@ -2270,7 +2387,7 @@ export function initModals() {
           return;
         }
 
-        toSubmit.push({
+        weightsToSubmit.push({
           member_id: memberId,
           weight_kg: parsed.value,
           recorded_at: batchDate,
@@ -2278,59 +2395,145 @@ export function initModals() {
         });
       }
 
-      if (toSubmit.length === 0) {
+      for (const hInput of heightInputs) {
+        const raw = hInput.value.trim();
+        if (raw === '') {
+          setWeightInputErrorState(hInput, false);
+          continue;
+        }
+        const memberId = hInput.dataset.memberId || '';
+        const memberName = hInput.dataset.memberName || t('memberType.human');
+        if (!isValidResourceId(memberId)) return showToast(t('val.invalidMemberId'), true);
+
+        const parsed = parseHeightValue(raw, {
+          required: true,
+          label: `${memberName} ${t('record.heightLabel')}`
+        });
+        if (parsed.error) {
+          setWeightInputErrorState(hInput, true);
+          hInput.focus();
+          return showToast(parsed.error, true);
+        }
+        setWeightInputErrorState(hInput, false);
+
+        heightsToSubmit.push({
+          member_id: memberId,
+          height_cm: parsed.value,
+          recorded_at: batchDate,
+          note: ''
+        });
+      }
+
+      const totalCount = weightsToSubmit.length + heightsToSubmit.length;
+      if (totalCount === 0) {
         return showToast(t('record.errNoBatchEntries'), true);
       }
 
       closeModal('modal-record');
       e.target.reset();
-      toSubmit.forEach((payload) => optimisticAddRecord(payload));
-      showToast(t('record.savedBatch', { count: toSubmit.length }));
+      weightsToSubmit.forEach((payload) => optimisticAddRecord(payload));
+      heightsToSubmit.forEach((payload) => optimisticAddHeightRecord(payload));
+      showToast(
+        heightsToSubmit.length > 0
+          ? t('record.savedBatchMixed', { count: totalCount })
+          : t('record.savedBatch', { count: totalCount })
+      );
       return;
     }
 
-    // 單筆模式
+    // 單筆模式（開啟身高追蹤者可只記體重、只記身高，或一次同時記錄）
     const memberId = document.getElementById('rec-member').value.trim();
     const weightInput = document.getElementById('rec-weight');
-    const weightParsed = parseWeightValue(weightInput.value, {
-      required: true,
-      label: t('record.weightLabel', { unit: unitLabel })
-    });
+    const heightInput = document.getElementById('rec-height');
     const recordedAt = document.getElementById('rec-date').value.trim();
     const note = document.getElementById('rec-note').value.trim();
 
     if (!isValidResourceId(memberId)) return showToast(t('record.errMember'), true);
-    if (weightParsed.error) {
-      setWeightInputErrorState(weightInput, true);
-      weightInput.focus();
-      return showToast(weightParsed.error, true);
-    }
-    setWeightInputErrorState(weightInput, false);
     if (!isValidRecordedDate(recordedAt)) return showToast(t('record.errInvalidDate'), true);
     if (note.length > 200) return showToast(t('record.errNoteLength'), true);
 
     const member = state.appData.members.find((m) => m.id === memberId);
-    const warning = checkWeightAnomaly({
-      member,
-      weightKg: weightParsed.value,
-      latestWeightKg: getLatestWeightForMember(memberId),
-      isHidden: isMemberWeightHidden(member)
-    });
-    if (warning && !confirm(warning)) {
-      weightInput.focus();
-      return;
+    const isHeightTracked = Boolean(member && member.type === 'human' && member.track_height);
+    const weightRaw = weightInput.value.trim();
+    const heightRaw = isHeightTracked && heightInput ? heightInput.value.trim() : '';
+
+    if (isHeightTracked && !weightRaw && !heightRaw) {
+      return showToast(t('record.errNoSingleEntry'), true);
+    }
+
+    let weightValue = null;
+    if (!isHeightTracked || weightRaw !== '') {
+      const weightParsed = parseWeightValue(weightRaw, {
+        required: true,
+        label: t('record.weightLabel', { unit: unitLabel })
+      });
+      if (weightParsed.error) {
+        setWeightInputErrorState(weightInput, true);
+        weightInput.focus();
+        return showToast(weightParsed.error, true);
+      }
+      setWeightInputErrorState(weightInput, false);
+
+      const warning = checkWeightAnomaly({
+        member,
+        weightKg: weightParsed.value,
+        latestWeightKg: getLatestWeightForMember(memberId),
+        isHidden: isMemberWeightHidden(member)
+      });
+      if (warning && !confirm(warning)) {
+        weightInput.focus();
+        return;
+      }
+      weightValue = weightParsed.value;
+    } else {
+      setWeightInputErrorState(weightInput, false);
+    }
+
+    let heightValue = null;
+    if (isHeightTracked && heightRaw !== '') {
+      const heightParsed = parseHeightValue(heightRaw, {
+        required: true,
+        label: t('record.heightLabel')
+      });
+      if (heightParsed.error) {
+        setWeightInputErrorState(heightInput, true);
+        heightInput.focus();
+        return showToast(heightParsed.error, true);
+      }
+      setWeightInputErrorState(heightInput, false);
+      heightValue = heightParsed.value;
+    } else if (heightInput) {
+      setWeightInputErrorState(heightInput, false);
     }
 
     singleWeightRevealed = false;
     closeModal('modal-record');
     e.target.reset();
-    optimisticAddRecord({
-      member_id: memberId,
-      weight_kg: weightParsed.value,
-      recorded_at: recordedAt,
-      note
-    });
-    showToast(t('record.savedSingle'));
+
+    if (weightValue !== null) {
+      optimisticAddRecord({
+        member_id: memberId,
+        weight_kg: weightValue,
+        recorded_at: recordedAt,
+        note
+      });
+    }
+    if (heightValue !== null) {
+      optimisticAddHeightRecord({
+        member_id: memberId,
+        height_cm: heightValue,
+        recorded_at: recordedAt,
+        note
+      });
+    }
+
+    if (weightValue !== null && heightValue !== null) {
+      showToast(t('record.savedSingleBoth'));
+    } else if (heightValue !== null) {
+      showToast(t('record.savedSingleHeight'));
+    } else {
+      showToast(t('record.savedSingle'));
+    }
   };
 
   // 表單送出：樂觀新增或編輯成員（含自訂頭像、品種、生日、BCS 與隱私設定）
@@ -2395,6 +2598,8 @@ export function initModals() {
       if (isPet) {
         updatePayload.breed = breed;
         updatePayload.bcs_score = bcsParsed.value;
+      } else {
+        updatePayload.track_height = Boolean(document.getElementById('mem-track-height')?.checked);
       }
       if (!privacyData.locked) {
         updatePayload.target_weight = targetParsed.value;
@@ -2423,6 +2628,8 @@ export function initModals() {
         addPayload.breed = breed;
         addPayload.bcs_score = bcsParsed.value;
         addPayload.pet_activity_factor = getDefaultPetFactorNumber(type);
+      } else {
+        addPayload.track_height = Boolean(document.getElementById('mem-track-height')?.checked);
       }
       if (privacyData.privacy_pin) addPayload.privacy_pin = privacyData.privacy_pin;
 
@@ -2433,7 +2640,7 @@ export function initModals() {
     }
   };
 
-  // 表單送出：樂觀更新個人資訊（含名稱、頭像、品種、生日、BCS、隱私設定、身高、目標體重）
+  // 表單送出：樂觀更新個人資訊（含名稱、頭像、品種、生日、BCS、隱私設定、身高、身高追蹤、目標體重）
   document.getElementById('form-profile').onsubmit = (e) => {
     e.preventDefault();
     const unitLabel = getWeightUnitLabel();
@@ -2492,6 +2699,8 @@ export function initModals() {
     if (isPet) {
       updatePayload.breed = breed;
       updatePayload.bcs_score = bcsParsed.value;
+    } else {
+      updatePayload.track_height = Boolean(document.getElementById('prof-track-height')?.checked);
     }
     if (!privacyData.locked) {
       updatePayload.target_weight = targetParsed.value;

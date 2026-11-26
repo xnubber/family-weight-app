@@ -51,6 +51,27 @@ function sortRecordsInPlace() {
   });
 }
 
+function sortHeightRecordsInPlace() {
+  if (!Array.isArray(state.appData.heightRecords)) state.appData.heightRecords = [];
+  state.appData.heightRecords.sort((a, b) => {
+    const dateCmp = String(a.recorded_at || '').localeCompare(String(b.recorded_at || ''));
+    if (dateCmp !== 0) return dateCmp;
+    return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  });
+}
+
+function syncMemberHeightFromRecords(memberId) {
+  const member = state.appData.members.find((m) => m.id === memberId);
+  if (!member || member.type !== 'human') return;
+  const recs = (state.appData.heightRecords || []).filter((r) => r.member_id === memberId);
+  if (recs.length === 0) return;
+  const latest = recs[recs.length - 1];
+  const val = Number(latest.height_cm);
+  if (Number.isFinite(val)) {
+    member.height_cm = Number(val.toFixed(1));
+  }
+}
+
 function normalizeTargetWeight(val) {
   if (val === null || val === undefined) return null;
   const num = Number(val);
@@ -121,6 +142,9 @@ function replaceMemberTempId(tempId, realMember, knownPin = null) {
   state.appData.records.forEach((r) => {
     if (r.member_id === tempId) r.member_id = realMember.id;
   });
+  (state.appData.heightRecords || []).forEach((r) => {
+    if (r.member_id === tempId) r.member_id = realMember.id;
+  });
   state.appData.targetHistory.forEach((h) => {
     if (h.member_id === tempId) h.member_id = realMember.id;
   });
@@ -137,6 +161,7 @@ export function optimisticAddMember(payload) {
   const effectiveDate = payload.target_effective_date || getLocalTodayDate();
   const hideWeight = Boolean(payload.hide_weight);
   const hasPrivacyPin = Boolean(hideWeight && payload.privacy_pin);
+  const trackHeight = payload.type === 'human' && Boolean(payload.track_height);
 
   const optimisticMember = {
     id: tempId,
@@ -149,6 +174,7 @@ export function optimisticAddMember(payload) {
     bcs_score: payload.bcs_score ?? null,
     pet_activity_factor: payload.pet_activity_factor ?? null,
     hide_weight: hideWeight,
+    track_height: trackHeight,
     has_privacy_pin: hasPrivacyPin,
     height_cm: payload.height_cm ?? null,
     target_weight: payload.target_weight ?? null,
@@ -200,6 +226,7 @@ export function optimisticAddMember(payload) {
       if (state.familyCode !== targetFamilyCode) return;
       state.appData.members = state.appData.members.filter((m) => m.id !== tempId);
       state.appData.records = state.appData.records.filter((r) => r.member_id !== tempId);
+      state.appData.heightRecords = (state.appData.heightRecords || []).filter((r) => r.member_id !== tempId);
       state.appData.targetHistory = state.appData.targetHistory.filter(
         (h) => h.member_id !== tempId && h.id !== tempHistoryId
       );
@@ -210,7 +237,7 @@ export function optimisticAddMember(payload) {
   });
 }
 
-// 2. 樂觀更新成員（名稱、頭像、品種、生日、BCS、活動係數、隱私設定、身高、目標體重）
+// 2. 樂觀更新成員（名稱、頭像、品種、生日、BCS、活動係數、隱私設定、身高、身高追蹤、目標體重）
 export function optimisticUpdateMember(rawMemberId, payload) {
   const targetFamilyCode = state.familyCode;
   const currentId = resolveId(rawMemberId);
@@ -233,6 +260,9 @@ export function optimisticUpdateMember(rawMemberId, payload) {
   if (payload.bcs_score !== undefined) member.bcs_score = payload.bcs_score;
   if (payload.pet_activity_factor !== undefined) member.pet_activity_factor = payload.pet_activity_factor;
   if (payload.height_cm !== undefined) member.height_cm = payload.height_cm;
+  if (payload.track_height !== undefined && member.type === 'human') {
+    member.track_height = Boolean(payload.track_height);
+  }
   if (payload.target_weight !== undefined) member.target_weight = payload.target_weight;
 
   if (payload.hide_weight !== undefined || payload.privacy_pin !== undefined) {
@@ -329,6 +359,9 @@ export function optimisticDeleteMember(rawMemberId) {
   const removedRecords = state.appData.records.filter(
     (r) => r.member_id === member.id || r.member_id === rawMemberId
   );
+  const removedHeightRecords = (state.appData.heightRecords || []).filter(
+    (r) => r.member_id === member.id || r.member_id === rawMemberId
+  );
   const removedHistory = state.appData.targetHistory.filter(
     (h) => h.member_id === member.id || h.member_id === rawMemberId
   );
@@ -338,6 +371,9 @@ export function optimisticDeleteMember(rawMemberId) {
   removeLocalPrivacy(member.id);
   state.appData.members = state.appData.members.filter((m) => m.id !== member.id && m.id !== rawMemberId);
   state.appData.records = state.appData.records.filter((r) => r.member_id !== member.id && r.member_id !== rawMemberId);
+  state.appData.heightRecords = (state.appData.heightRecords || []).filter(
+    (r) => r.member_id !== member.id && r.member_id !== rawMemberId
+  );
   state.appData.targetHistory = state.appData.targetHistory.filter(
     (h) => h.member_id !== member.id && h.member_id !== rawMemberId
   );
@@ -362,8 +398,11 @@ export function optimisticDeleteMember(rawMemberId) {
       const restoredId = resolveId(rawMemberId);
       state.appData.members.push({ ...removedMember, id: restoredId });
       state.appData.records.push(...removedRecords.map((r) => ({ ...r, member_id: restoredId })));
+      if (!Array.isArray(state.appData.heightRecords)) state.appData.heightRecords = [];
+      state.appData.heightRecords.push(...removedHeightRecords.map((r) => ({ ...r, member_id: restoredId })));
       state.appData.targetHistory.push(...removedHistory.map((h) => ({ ...h, member_id: restoredId })));
       sortRecordsInPlace();
+      sortHeightRecordsInPlace();
       state.selectedMemberId = prevSelectedId === rawMemberId ? restoredId : prevSelectedId;
     }
   });
@@ -448,6 +487,105 @@ export function optimisticDeleteRecord(rawRecordId) {
       const restoredId = resolveId(rawRecordId);
       state.appData.records.push({ ...removedRecord, id: restoredId });
       sortRecordsInPlace();
+    }
+  });
+  return true;
+}
+
+// 5.5 樂觀新增身高紀錄（同步更新成員最新身高 height_cm）
+export function optimisticAddHeightRecord(payload) {
+  const targetFamilyCode = state.familyCode;
+  const tempId = createTempId('hrec');
+  const resolvedMemberId = resolveId(payload.member_id);
+  const owner = state.appData.members.find((m) => m.id === resolvedMemberId);
+  const prevHeightCm = owner ? owner.height_cm : null;
+
+  const optimisticRecord = {
+    id: tempId,
+    family_code: targetFamilyCode,
+    member_id: resolvedMemberId,
+    height_cm: Number(Number(payload.height_cm).toFixed(1)),
+    recorded_at: payload.recorded_at,
+    note: payload.note ?? '',
+    created_at: new Date().toISOString()
+  };
+
+  if (!Array.isArray(state.appData.heightRecords)) state.appData.heightRecords = [];
+  state.appData.heightRecords.push(optimisticRecord);
+  sortHeightRecordsInPlace();
+  syncMemberHeightFromRecords(resolvedMemberId);
+  onRenderCallback();
+
+  enqueue({
+    familyCode: targetFamilyCode,
+    errorPrefix: t('sync.addHeightRecordFailed'),
+    run: async () => {
+      const realMemberId = resolveId(payload.member_id);
+      if (isTempId(realMemberId)) {
+        throw new Error(t('sync.ownerPending'));
+      }
+      const created = await FamilyAPI.addHeightRecord(targetFamilyCode, {
+        ...payload,
+        member_id: realMemberId
+      });
+      idMap.set(tempId, created.id);
+      if (state.familyCode === targetFamilyCode) {
+        const idx = (state.appData.heightRecords || []).findIndex((r) => r.id === tempId);
+        if (idx !== -1) {
+          state.appData.heightRecords[idx] = created;
+          sortHeightRecordsInPlace();
+          syncMemberHeightFromRecords(realMemberId);
+          onRenderCallback();
+        }
+      }
+    },
+    rollback: () => {
+      if (state.familyCode !== targetFamilyCode) return;
+      state.appData.heightRecords = (state.appData.heightRecords || []).filter((r) => r.id !== tempId);
+      const currentOwner = state.appData.members.find((m) => m.id === resolveId(payload.member_id));
+      if (currentOwner) {
+        currentOwner.height_cm = prevHeightCm;
+        syncMemberHeightFromRecords(currentOwner.id);
+      }
+    }
+  });
+}
+
+// 5.6 樂觀刪除單筆身高紀錄（刪除後重新同步成員最新身高 height_cm）
+export function optimisticDeleteHeightRecord(rawRecordId) {
+  const targetFamilyCode = state.familyCode;
+  const currentId = resolveId(rawRecordId);
+  const list = state.appData.heightRecords || [];
+  const record = list.find((r) => r.id === currentId || r.id === rawRecordId);
+  if (!record) return false;
+
+  const owner = state.appData.members.find((m) => m.id === record.member_id);
+  const prevHeightCm = owner ? owner.height_cm : null;
+  const removedRecord = { ...record };
+
+  state.appData.heightRecords = list.filter((r) => r.id !== record.id && r.id !== rawRecordId);
+  syncMemberHeightFromRecords(record.member_id);
+  onRenderCallback();
+
+  enqueue({
+    familyCode: targetFamilyCode,
+    errorPrefix: t('sync.deleteHeightRecordFailed'),
+    run: async () => {
+      const realId = resolveId(rawRecordId);
+      if (isTempId(realId)) return;
+      await FamilyAPI.deleteHeightRecord(targetFamilyCode, realId);
+    },
+    rollback: () => {
+      if (state.familyCode !== targetFamilyCode) return;
+      const restoredId = resolveId(rawRecordId);
+      if (!Array.isArray(state.appData.heightRecords)) state.appData.heightRecords = [];
+      state.appData.heightRecords.push({ ...removedRecord, id: restoredId });
+      sortHeightRecordsInPlace();
+      const currentOwner = state.appData.members.find((m) => m.id === removedRecord.member_id);
+      if (currentOwner) {
+        currentOwner.height_cm = prevHeightCm;
+        syncMemberHeightFromRecords(currentOwner.id);
+      }
     }
   });
   return true;

@@ -242,6 +242,224 @@ export function aggregateRecords(
   };
 }
 
+// 格式化身高數值與成長差值（統一至多 1 位小數，單位 cm）
+export function formatHeightCm(val, { trimTrailingZeros = true } = {}) {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return '--';
+  const str = trimTrailingZeros ? Number(num.toFixed(1)).toString() : num.toFixed(1);
+  return `${str} cm`;
+}
+
+export function formatHeightDeltaCm(diffCm, { withUnit = true } = {}) {
+  const num = Number(diffCm);
+  if (!Number.isFinite(num)) return '--';
+  const rounded = Number(num.toFixed(1));
+  const absStr = Number(Math.abs(rounded).toFixed(1)).toString();
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
+  return withUnit ? `${sign}${absStr} cm` : `${sign}${absStr}`;
+}
+
+// 依據 日/週/月/年 彙整身高成長紀錄（年區間可檢視近 10 年以呈現長期發育趨勢）
+export function aggregateHeightRecords(
+  recs,
+  range,
+  { locale = getActiveLocale(), timeZone = getActiveTimeZone(), nowDate = new Date() } = {}
+) {
+  const todayStr = getTodayInTimeZone(timeZone, nowDate);
+  const { y: ty, m: tm, d: td } = parseYmdParts(todayStr);
+  const cutoff = new Date(Date.UTC(ty, tm - 1, td));
+
+  if (range === 'day') cutoff.setUTCDate(cutoff.getUTCDate() - 30);
+  else if (range === 'week') cutoff.setUTCDate(cutoff.getUTCDate() - 84);
+  else if (range === 'month') cutoff.setUTCMonth(cutoff.getUTCMonth() - 12);
+  else if (range === 'year') cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 10);
+
+  const cutoffStr = formatUtcDateStr(cutoff);
+  const filtered = (recs || [])
+    .filter((r) => String(r?.recorded_at || '').slice(0, 10) >= cutoffStr)
+    .slice()
+    .sort((a, b) => {
+      const dCmp = String(a.recorded_at || '').localeCompare(String(b.recorded_at || ''));
+      if (dCmp !== 0) return dCmp;
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    });
+
+  const rangeSummary = range === 'year'
+    ? t('charts.summaryHeightYear', {}, locale)
+    : getRangeSummary(range, locale);
+
+  if (range === 'day') {
+    const years = new Set(filtered.map((r) => parseYmdParts(r.recorded_at).y));
+    const spansYears = years.size > 1;
+    let prevYear = null;
+    const labels = [];
+    const tagLabels = [];
+    const detailLabels = [];
+
+    filtered.forEach((r) => {
+      const { y, m, d } = parseYmdParts(r.recorded_at);
+      const showYear = spansYears && y !== prevYear;
+      prevYear = y;
+      const shortMd = `${m}/${d}`;
+      labels.push(showYear ? `${String(y).slice(-2)}/${shortMd}` : shortMd);
+      tagLabels.push(shortMd);
+      detailLabels.push(`${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}`);
+    });
+
+    return {
+      labels,
+      tagLabels,
+      detailLabels,
+      bucketCounts: filtered.map(() => 1),
+      values: filtered.map((r) => Number(Number(r.height_cm).toFixed(1))),
+      pointDates: filtered.map((r) => r.recorded_at),
+      filteredRecords: filtered,
+      rangeSummary
+    };
+  }
+
+  const groupMap = new Map();
+  filtered.forEach((r) => {
+    const { y, m, d } = parseYmdParts(r.recorded_at);
+    let bucketKey;
+    let meta;
+
+    if (range === 'week') {
+      const utcDate = new Date(Date.UTC(y, m - 1, d));
+      const dayOfWeek = utcDate.getUTCDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(Date.UTC(y, m - 1, d + mondayOffset));
+      const sunday = new Date(Date.UTC(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate() + 6));
+      bucketKey = formatUtcDateStr(monday);
+      meta = {
+        startYear: monday.getUTCFullYear(),
+        startMonth: monday.getUTCMonth() + 1,
+        startDay: monday.getUTCDate(),
+        endYear: sunday.getUTCFullYear(),
+        endMonth: sunday.getUTCMonth() + 1,
+        endDay: sunday.getUTCDate()
+      };
+    } else if (range === 'month') {
+      bucketKey = `${y}-${String(m).padStart(2, '0')}`;
+      meta = { year: y, month: m };
+    } else {
+      const quarter = Math.floor((m - 1) / 3) + 1;
+      bucketKey = `${y}-Q${quarter}`;
+      meta = { year: y, quarter };
+    }
+
+    if (!groupMap.has(bucketKey)) {
+      groupMap.set(bucketKey, { values: [], maxDate: r.recorded_at, meta });
+    }
+    const bucket = groupMap.get(bucketKey);
+    bucket.values.push(Number(r.height_cm));
+    if (r.recorded_at > bucket.maxDate) {
+      bucket.maxDate = r.recorded_at;
+    }
+  });
+
+  const orderedEntries = Array.from(groupMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const distinctYears = new Set(
+    orderedEntries.map(([, b]) => (range === 'week' ? b.meta.startYear : b.meta.year))
+  );
+  const spansYears = distinctYears.size > 1;
+
+  let prevYear = null;
+  const labels = [];
+  const tagLabels = [];
+  const detailLabels = [];
+  const bucketCounts = [];
+  const values = [];
+  const pointDates = [];
+
+  orderedEntries.forEach(([, bucket]) => {
+    const arr = bucket.values;
+    // 身高同區間取最新一筆（或最高值代表成長進度），取最後一筆已按時間排序的值最貼近真實測量
+    const latestInBucket = arr[arr.length - 1];
+    values.push(Number(latestInBucket.toFixed(1)));
+    pointDates.push(bucket.maxDate);
+    bucketCounts.push(arr.length);
+
+    if (range === 'week') {
+      const { startYear, startMonth, startDay, endYear, endMonth, endDay } = bucket.meta;
+      const showYear = spansYears && startYear !== prevYear;
+      prevYear = startYear;
+      const startShort = `${startMonth}/${startDay}`;
+      const endShort = `${endMonth}/${endDay}`;
+      labels.push(showYear ? `${String(startYear).slice(-2)}/${startShort}~` : `${startShort}~`);
+      tagLabels.push(locale === 'en' ? `Wk ${startShort}` : `${startShort}週`);
+      const rangeStr = startYear !== endYear
+        ? `${String(startYear).slice(-2)}/${startShort}–${String(endYear).slice(-2)}/${endShort}`
+        : `${startShort}–${endShort}`;
+      detailLabels.push(t('charts.weekHeight', { range: rangeStr }, locale));
+    } else if (range === 'month') {
+      const { year, month } = bucket.meta;
+      const showYear = spansYears && year !== prevYear;
+      prevYear = year;
+      const yy = String(year).slice(-2);
+      if (locale === 'en') {
+        const mShort = MONTH_SHORT_EN[month - 1] || String(month);
+        labels.push(showYear ? `${mShort} '${yy}` : mShort);
+        tagLabels.push(`${mShort} '${yy}`);
+        detailLabels.push(t('charts.monthHeight', { monthName: mShort, year, month }, locale));
+      } else {
+        labels.push(showYear ? `${yy}年${month}月` : `${month}月`);
+        tagLabels.push(`${yy}年${month}月`);
+        detailLabels.push(t('charts.monthHeight', { year, month }, locale));
+      }
+    } else {
+      const { year, quarter } = bucket.meta;
+      const showYear = year !== prevYear;
+      prevYear = year;
+      const yy = String(year).slice(-2);
+      if (locale === 'en') {
+        labels.push(showYear ? `'${yy} Q${quarter}` : `Q${quarter}`);
+        tagLabels.push(`'${yy} Q${quarter}`);
+      } else {
+        labels.push(showYear ? `${yy}年Q${quarter}` : `Q${quarter}`);
+        tagLabels.push(`${yy}年Q${quarter}`);
+      }
+      detailLabels.push(
+        t('charts.quarterHeight', { year, q: quarter, range: getQuarterRangeText(quarter, locale) }, locale)
+      );
+    }
+  });
+
+  return {
+    labels,
+    tagLabels,
+    detailLabels,
+    bucketCounts,
+    values,
+    pointDates,
+    filteredRecords: filtered,
+    rangeSummary
+  };
+}
+
+// 計算選定區間的身高成長摘要（最新身高、區間成長量、最高／最低、紀錄次數）
+export function calculateHeightPeriodStats(filteredRecords) {
+  const heights = (filteredRecords || [])
+    .map((r) => Number(r.height_cm))
+    .filter((n) => Number.isFinite(n));
+  if (heights.length === 0) return null;
+
+  const first = heights[0];
+  const latest = heights[heights.length - 1];
+  const min = Math.min(...heights);
+  const max = Math.max(...heights);
+  const delta = heights.length >= 2 ? Number((latest - first).toFixed(1)) : null;
+
+  return {
+    count: heights.length,
+    first: Number(first.toFixed(1)),
+    latest: Number(latest.toFixed(1)),
+    min: Number(min.toFixed(1)),
+    max: Number(max.toFixed(1)),
+    delta
+  };
+}
+
 /**
  * 依據目標體重歷史紀錄計算每個圖表日期點當下生效的目標體重（底層單位皆為 kg）
  */

@@ -223,6 +223,7 @@ function hydrateFromCache() {
   state.appData = {
     members: applyMemberOrder(cached.members, state.familyCode),
     records: cached.records,
+    heightRecords: Array.isArray(cached.heightRecords) ? cached.heightRecords : [],
     targetHistory: cached.targetHistory
   };
   if (!state.selectedMemberId && state.appData.members.length > 0) {
@@ -252,6 +253,7 @@ async function syncData() {
     state.appData = {
       members: applyMemberOrder(data.members || [], targetFamilyCode),
       records: data.records || [],
+      heightRecords: data.heightRecords || [],
       targetHistory: data.targetHistory || []
     };
     saveFamilyCache(targetFamilyCode, state.appData);

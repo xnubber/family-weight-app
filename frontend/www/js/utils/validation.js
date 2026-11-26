@@ -180,6 +180,51 @@ export function parseWeightValue(raw, { required = false, unit = getWeightUnit()
   return { value: kgValue, displayValue };
 }
 
+// 即時清理身高輸入（3 位整數、最多小數 1 位、全形數字轉半形）
+export function sanitizeHeightInputValue(raw) {
+  const normalized = normalizeDecimalSymbols(raw).replace(/[^0-9.]/g, '');
+  if (normalized === '') return '';
+
+  const firstDot = normalized.indexOf('.');
+  let intPart = firstDot === -1 ? normalized : normalized.slice(0, firstDot);
+  let fracPart = firstDot === -1 ? '' : normalized.slice(firstDot + 1).replace(/\./g, '');
+
+  if (firstDot === 0) {
+    intPart = '0';
+  } else if (intPart.length > 1) {
+    intPart = intPart.replace(/^0+/, '') || '0';
+  }
+
+  intPart = intPart.slice(0, 3);
+  fracPart = fracPart.slice(0, 1);
+
+  if (firstDot !== -1) {
+    return `${intPart}.${fracPart}`;
+  }
+  return intPart;
+}
+
+// 身高欄位送出前嚴格防呆驗證（20–300 cm，最多小數 1 位）
+export function parseHeightValue(raw, { required = false, min = 20, max = 300, label } = {}) {
+  const effLabel = label || t('memberModal.height');
+  const trimmed = normalizeDecimalSymbols(raw).trim();
+  if (trimmed === '') {
+    if (required) return { error: t('val.required', { label: effLabel }) };
+    return { value: null };
+  }
+  if (!/^\d{1,3}(\.\d)?$/.test(trimmed)) {
+    return { error: t('val.heightFormat', { label: effLabel }) };
+  }
+  const num = Number(trimmed);
+  if (!Number.isFinite(num)) {
+    return { error: t('val.invalidNumber', { label: effLabel }) };
+  }
+  if (num < min || num > max) {
+    return { error: t('val.range', { label: effLabel, min, max }) };
+  }
+  return { value: Number(num.toFixed(1)) };
+}
+
 // 目標體重微調：以整數分位（×100）增減目前顯示單位數值，避免浮點誤差並自動限制於合理範圍（空欄時可由參考體重起算）
 export function adjustWeightInputValue(raw, delta, { fallbackDisplayValue = null, unit = getWeightUnit() } = {}) {
   const bounds = getWeightInputBounds(unit);

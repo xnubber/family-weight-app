@@ -48,7 +48,8 @@ const OPTIONAL_MEMBER_COLUMNS = [
   'birth_date',
   'bcs_score',
   'pet_activity_factor',
-  'sort_order'
+  'sort_order',
+  'track_height'
 ];
 
 function detectMissingOptionalColumn(error) {
@@ -122,6 +123,7 @@ router.post('/', asyncHandler(async (req, res) => {
     bcs_score,
     pet_activity_factor,
     hide_weight,
+    track_height,
     privacy_pin,
     height_cm,
     target_weight,
@@ -148,6 +150,8 @@ router.post('/', asyncHandler(async (req, res) => {
     if (breed !== undefined) insertPayload.breed = breed;
     if (bcs_score !== undefined) insertPayload.bcs_score = bcs_score;
     if (pet_activity_factor !== undefined) insertPayload.pet_activity_factor = pet_activity_factor;
+  } else if (track_height !== undefined) {
+    insertPayload.track_height = Boolean(track_height);
   }
   if (hide_weight !== undefined) insertPayload.hide_weight = Boolean(hide_weight);
   if (hide_weight && privacy_pin) {
@@ -303,8 +307,9 @@ router.put('/:id', asyncHandler(async (req, res) => {
     if (bodyParsed.data.pet_activity_factor !== undefined) {
       updatePayload.pet_activity_factor = bodyParsed.data.pet_activity_factor;
     }
-  } else if (bodyParsed.data.height_cm !== undefined) {
-    updatePayload.height_cm = bodyParsed.data.height_cm;
+  } else {
+    if (bodyParsed.data.height_cm !== undefined) updatePayload.height_cm = bodyParsed.data.height_cm;
+    if (bodyParsed.data.track_height !== undefined) updatePayload.track_height = Boolean(bodyParsed.data.track_height);
   }
   if (bodyParsed.data.target_weight !== undefined) updatePayload.target_weight = bodyParsed.data.target_weight;
   if (bodyParsed.data.hide_weight !== undefined) {

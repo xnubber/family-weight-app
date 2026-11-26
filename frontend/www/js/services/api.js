@@ -88,5 +88,9 @@ export const FamilyAPI = {
   addRecord: (familyCode, payload) =>
     request('/records', familyCode, { method: 'POST', body: JSON.stringify({ ...payload, family_code: familyCode }) }),
   deleteRecord: (familyCode, id) =>
-    request(`/records/${encodeURIComponent(id)}`, familyCode, { method: 'DELETE' })
+    request(`/records/${encodeURIComponent(id)}`, familyCode, { method: 'DELETE' }),
+  addHeightRecord: (familyCode, payload) =>
+    request('/height-records', familyCode, { method: 'POST', body: JSON.stringify({ ...payload, family_code: familyCode }) }),
+  deleteHeightRecord: (familyCode, id) =>
+    request(`/height-records/${encodeURIComponent(id)}`, familyCode, { method: 'DELETE' })
 };

@@ -1,7 +1,7 @@
 {
   "name": "fami-weight-record",
   "version": "2.15.4",
-  "description": "家與毛孩體重誌 (Kin & Paws Weight) — 溫潤文青風格的家庭與毛孩體重紀錄前端",
+  "description": "家與毛孩成長誌 (Kin & Paws) — 溫潤文青風格的家庭與毛孩體重及身高成長紀錄前端",
   "main": "index.js",
   "scripts": {
     "build:css": "tailwindcss -i ./src/input.css -o ./www/styles.css --minify",

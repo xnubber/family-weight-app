@@ -86,6 +86,7 @@ export const createMemberSchema = z.strictObject({
   bcs_score: bcsScoreSchema,
   pet_activity_factor: petActivityFactorSchema,
   hide_weight: z.boolean({ message: '隱私設定必須為布林值' }).optional(),
+  track_height: z.boolean({ message: '身高追蹤設定必須為布林值' }).optional(),
   privacy_pin: privacyPinSchema,
   height_cm: z
     .number({ message: '身高必須為數字' })
@@ -117,6 +118,7 @@ export const updateMemberSchema = z
     bcs_score: bcsScoreSchema,
     pet_activity_factor: petActivityFactorSchema,
     hide_weight: z.boolean({ message: '隱私設定必須為布林值' }).optional(),
+    track_height: z.boolean({ message: '身高追蹤設定必須為布林值' }).optional(),
     privacy_pin: privacyPinSchema,
     current_pin: z
       .string()
@@ -152,6 +154,7 @@ export const updateMemberSchema = z
       data.bcs_score !== undefined ||
       data.pet_activity_factor !== undefined ||
       data.hide_weight !== undefined ||
+      data.track_height !== undefined ||
       data.privacy_pin !== undefined ||
       data.height_cm !== undefined ||
       data.target_weight !== undefined,
@@ -178,6 +181,28 @@ export const createRecordSchema = z.strictObject({
     .finite('體重必須為有效數值')
     .min(0.1, '體重須介於 0.1–500 kg')
     .max(500, '體重須介於 0.1–500 kg'),
+  recorded_at: z
+    .string()
+    .trim()
+    .refine(isValidRecordedDate, '日期格式不正確或超出合理範圍')
+    .optional(),
+  note: z
+    .string()
+    .trim()
+    .max(200, '備註不可超過 200 字元')
+    .nullable()
+    .optional()
+    .transform((v) => v ?? '')
+});
+
+export const createHeightRecordSchema = z.strictObject({
+  family_code: z.string().optional(),
+  member_id: uuidSchema,
+  height_cm: z
+    .number({ message: '身高必須為數字' })
+    .finite('身高必須為有效數值')
+    .min(20, '身高須介於 20–300 cm')
+    .max(300, '身高須介於 20–300 cm'),
   recorded_at: z
     .string()
     .trim()

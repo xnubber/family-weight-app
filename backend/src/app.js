@@ -11,6 +11,7 @@ import healthRoutes from './routes/health.routes.js';
 import familiesRoutes from './routes/families.routes.js';
 import membersRoutes from './routes/members.routes.js';
 import recordsRoutes from './routes/records.routes.js';
+import heightRecordsRoutes from './routes/heightRecords.routes.js';
 
 export function createApp() {
   const app = express();
@@ -42,6 +43,7 @@ export function createApp() {
   app.use('/api/families', familiesRoutes);
   app.use('/api/members', membersRoutes);
   app.use('/api/records', recordsRoutes);
+  app.use('/api/height-records', heightRecordsRoutes);
 
   // 8. 全域錯誤處理中介層
   app.use(errorHandler);

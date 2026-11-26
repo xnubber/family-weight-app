@@ -24,7 +24,7 @@ router.get('/:familyCode/data', asyncHandler(async (req, res) => {
   const cutoffDate = getTwoYearsAgoDate(req.clientTimeZone);
   const supabase = getSupabaseClient();
 
-  const [membersRes, recordsRes, historyRes] = await Promise.all([
+  const [membersRes, recordsRes, heightRecordsRes, historyRes] = await Promise.all([
     supabase.from('members').select('*').eq('family_code', familyCode).order('created_at'),
     supabase
       .from('weight_records')
@@ -32,6 +32,12 @@ router.get('/:familyCode/data', asyncHandler(async (req, res) => {
       .eq('family_code', familyCode)
       .gte('recorded_at', cutoffDate) // 只保留近兩年
       .order('recorded_at', { ascending: true }),
+    supabase
+      .from('height_records')
+      .select('*')
+      .eq('family_code', familyCode)
+      .order('recorded_at', { ascending: true })
+      .order('created_at', { ascending: true }),
     supabase
       .from('target_weight_history')
       .select('id, member_id, target_weight, effective_date, created_at')
@@ -42,6 +48,17 @@ router.get('/:familyCode/data', asyncHandler(async (req, res) => {
 
   if (membersRes.error) throw membersRes.error;
   if (recordsRes.error) throw recordsRes.error;
+
+  let heightRecords = [];
+  if (heightRecordsRes.error) {
+    if (isMissingHistoryTableError(heightRecordsRes.error)) {
+      logger.warn('尚未建立 height_records 資料表，請執行 backend/sql/007_height_records.sql');
+    } else {
+      throw heightRecordsRes.error;
+    }
+  } else {
+    heightRecords = heightRecordsRes.data || [];
+  }
 
   let targetHistory = [];
   if (historyRes.error) {
@@ -66,11 +83,13 @@ router.get('/:familyCode/data', asyncHandler(async (req, res) => {
   logger.info('讀取家庭資料成功', {
     membersCount: sortedMembers.length,
     recordsCount: recordsRes.data.length,
+    heightRecordsCount: heightRecords.length,
     targetHistoryCount: targetHistory.length
   });
   res.json({
     members: sortedMembers,
     records: recordsRes.data,
+    heightRecords,
     targetHistory
   });
 }));

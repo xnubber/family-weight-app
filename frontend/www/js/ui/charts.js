@@ -1,9 +1,9 @@
 import { state } from '../state.js';
-import { optimisticDeleteRecord } from '../services/syncQueue.js';
+import { optimisticDeleteRecord, optimisticDeleteHeightRecord } from '../services/syncQueue.js';
 import { createEl, playSoftFade, showToast } from '../utils/dom.js';
 import { createIcon } from '../utils/icons.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
-import { requestMemberUnlock } from './modals.js';
+import { requestMemberUnlock, openRecordModal } from './modals.js';
 import {
   MASKED_WEIGHT,
   isMemberPrivacyEnabled,
@@ -13,10 +13,14 @@ import {
 } from '../utils/privacy.js';
 import {
   aggregateRecords,
+  aggregateHeightRecords,
   resolveTargetWeightSeries,
   calculateTargetGap,
   calculatePeriodStats,
+  calculateHeightPeriodStats,
   calculateGoalProgress,
+  formatHeightCm,
+  formatHeightDeltaCm,
   getDaysSinceLastRecord,
   getLocalTodayDate,
   getPresetHistoryRange,
@@ -184,11 +188,14 @@ function renderInspectBar() {
   if (!bar) return;
 
   const ctxData = inspectState.context;
+  const isHeightMetric = ctxData?.metric === 'height';
+  const fallbackTitle = isHeightMetric ? t('charts.heightTrendTitle') : t('charts.trendTitle');
+
   if (!ctxData || ctxData.values.length === 0) {
     bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400';
     bar.classList.remove('hidden');
     bar.replaceChildren(
-      createEl('span', 'font-medium text-ink-500 min-w-0 leading-snug', ctxData?.rangeSummary || t('charts.trendTitle')),
+      createEl('span', 'font-medium text-ink-500 min-w-0 leading-snug', ctxData?.rangeSummary || fallbackTitle),
       createEl('span', 'shrink-0 whitespace-nowrap text-ink-400', t('common.noData'))
     );
     return;
@@ -199,9 +206,9 @@ function renderInspectBar() {
 
   if (idx === null || idx < 0 || idx >= ctxData.values.length) {
     bar.className = 'min-h-[34px] rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 text-fluid-label bg-oat-50 border border-oat-200/70 text-ink-400';
-    const hintText = ctxData.isHidden ? t('charts.hintHidden') : t('charts.hintVisible');
+    const hintText = !isHeightMetric && ctxData.isHidden ? t('charts.hintHidden') : t('charts.hintVisible');
     bar.replaceChildren(
-      createEl('span', 'font-medium text-ink-600 min-w-0 leading-snug', ctxData.rangeSummary || t('charts.trendTitle')),
+      createEl('span', 'font-medium text-ink-600 min-w-0 leading-snug', ctxData.rangeSummary || fallbackTitle),
       createEl('span', 'shrink-0 whitespace-nowrap text-ink-400', hintText)
     );
     return;
@@ -226,7 +233,18 @@ function renderInspectBar() {
 
   const rightWrap = createEl('div', 'flex items-center gap-2 shrink-0 tabular-nums whitespace-nowrap');
 
-  if (isHidden) {
+  if (isHeightMetric) {
+    if (idx > 0 && Number.isFinite(val) && Number.isFinite(Number(values[idx - 1]))) {
+      const stepDeltaCm = Number((val - Number(values[idx - 1])).toFixed(1));
+      const deltaClass = stepDeltaCm > 0 ? 'text-sage-700' : 'text-ink-500';
+      rightWrap.appendChild(
+        createEl('span', `text-fluid-label font-medium ${deltaClass}`, formatHeightDeltaCm(stepDeltaCm, { withUnit: false }))
+      );
+    }
+    rightWrap.appendChild(
+      createEl('span', 'font-semibold text-sm text-ink', formatHeightCm(val))
+    );
+  } else if (isHidden) {
     const baseline = Number(values[0]);
     let relText = t('charts.periodStart');
     if (idx > 0 && Number.isFinite(val) && Number.isFinite(baseline)) {
@@ -396,6 +414,82 @@ function createStatCell(labelText, valueText, valueClass = 'text-ink') {
     createEl('div', `text-fluid-metric font-semibold tabular-nums mt-0.5 whitespace-nowrap ${valueClass}`, valueText)
   );
   return cell;
+}
+
+function renderHeightStatsSummary(member, allHeightRecs, filteredRecords) {
+  const container = document.getElementById('chart-stats-summary');
+  if (!container) return;
+
+  if (!member) {
+    container.replaceChildren();
+    return;
+  }
+
+  const blocks = [];
+
+  if (!allHeightRecs || allHeightRecs.length === 0) {
+    const notice = createEl(
+      'div',
+      'bg-sage-50 border border-sage-200/90 text-sage-700 rounded-2xl px-3.5 py-2.5 text-xs flex items-start gap-2'
+    );
+    notice.append(
+      createIcon('clock', 'w-4 h-4 shrink-0 mt-0.5 text-sage-600'),
+      createEl('span', 'leading-relaxed', t('charts.remindNoHeightRecord', { name: member.name }))
+    );
+    blocks.push(notice);
+  }
+
+  const stats = calculateHeightPeriodStats(filteredRecords);
+  const statsCard = createEl('div', 'journal-card p-3 rounded-2xl space-y-2.5');
+  const grid = createEl('div', 'grid grid-cols-2 gap-2');
+
+  if (stats) {
+    const growthText = stats.delta === null
+      ? '--'
+      : stats.delta === 0
+        ? t('history.flat')
+        : formatHeightDeltaCm(stats.delta);
+    const growthColor = stats.delta === null || stats.delta === 0
+      ? 'text-ink-400'
+      : stats.delta > 0
+        ? 'text-sage-600'
+        : 'text-ink-600';
+    const rangeText = stats.min === stats.max
+      ? formatHeightCm(stats.max)
+      : `${Number(stats.max.toFixed(1))} / ${Number(stats.min.toFixed(1))} cm`;
+
+    grid.append(
+      createStatCell(t('charts.heightStatLatest'), formatHeightCm(stats.latest), 'text-ink'),
+      createStatCell(t('charts.heightStatGrowth'), growthText, growthColor),
+      createStatCell(t('charts.heightStatRange'), rangeText, 'text-ink'),
+      createStatCell(t('charts.heightStatCount'), t('charts.heightCountVal', { count: stats.count }), 'text-ink')
+    );
+  } else {
+    const fallbackHeight = member.height_cm ? formatHeightCm(member.height_cm) : '--';
+    grid.append(
+      createStatCell(t('charts.heightStatLatest'), fallbackHeight, member.height_cm ? 'text-ink' : 'text-ink-400'),
+      createStatCell(t('charts.heightStatGrowth'), '--', 'text-ink-400'),
+      createStatCell(t('charts.heightStatRange'), '--', 'text-ink-400'),
+      createStatCell(t('charts.heightStatCount'), t('charts.heightCountVal', { count: 0 }), 'text-ink-400')
+    );
+  }
+
+  const addHeightBtn = createEl(
+    'button',
+    'w-full py-2 rounded-xl bg-sage-50 hover:bg-sage-100/80 border border-sage-200/80 text-sage-700 text-xs font-medium inline-flex items-center justify-center gap-1.5 transition'
+  );
+  addHeightBtn.type = 'button';
+  addHeightBtn.append(
+    createIcon('plus', 'w-3.5 h-3.5 shrink-0'),
+    createEl('span', '', t('charts.addHeightBtn'))
+  );
+  addHeightBtn.onclick = () => {
+    openRecordModal(member.id, 'single');
+  };
+
+  statsCard.append(grid, addHeightBtn);
+  blocks.push(statsCard);
+  container.replaceChildren(...blocks);
 }
 
 function renderStatsSummary(member, allMemberRecs, filteredRecords) {
@@ -703,27 +797,43 @@ function formatHistoryDateWithWeekday(ymd, currentYear) {
   return formatLocalizedHistoryDate(ymd, currentYear, getWeekdayFromYmd(ymd));
 }
 
-function buildPreviousWeightMap(allMemberRecs) {
+function isHeightMetricForMember(member) {
+  return Boolean(member && member.type === 'human' && member.track_height && state.chartMetric === 'height');
+}
+
+function buildPreviousValueMap(allMemberRecs, valueField = 'weight_kg') {
   const sorted = (allMemberRecs || [])
     .slice()
-    .sort((a, b) => String(a.recorded_at || '').localeCompare(String(b.recorded_at || '')));
+    .sort((a, b) => {
+      const dCmp = String(a.recorded_at || '').localeCompare(String(b.recorded_at || ''));
+      if (dCmp !== 0) return dCmp;
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    });
   const map = new Map();
-  let prevWeight = null;
+  let prevVal = null;
   for (const rec of sorted) {
-    map.set(rec.id, prevWeight);
-    const w = Number(rec.weight_kg);
-    if (Number.isFinite(w)) prevWeight = w;
+    map.set(rec.id, prevVal);
+    const v = Number(rec[valueField]);
+    if (Number.isFinite(v)) prevVal = v;
   }
   return map;
 }
 
 function refreshCurrentMemberHistoryOnly(animate = false) {
   const member = state.appData.members.find((m) => m.id === state.selectedMemberId);
-  const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
-  const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
-  const { filteredRecords } = aggregateRecords(recs, state.selectedRange);
-  const historyRecords = resolveHistoryRecords(recs, filteredRecords);
-  renderHistoryList(member, memberHistory, historyRecords, recs);
+  const useHeight = isHeightMetricForMember(member);
+  if (useHeight) {
+    const heightRecs = (state.appData.heightRecords || []).filter((r) => r.member_id === state.selectedMemberId);
+    const { filteredRecords } = aggregateHeightRecords(heightRecs, state.selectedRange);
+    const historyRecords = resolveHistoryRecords(heightRecs, filteredRecords);
+    renderHistoryList(member, [], historyRecords, heightRecs, 'height');
+  } else {
+    const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
+    const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
+    const { filteredRecords } = aggregateRecords(recs, state.selectedRange);
+    const historyRecords = resolveHistoryRecords(recs, filteredRecords);
+    renderHistoryList(member, memberHistory, historyRecords, recs, 'weight');
+  }
   if (animate) {
     playSoftFade(document.getElementById('history-list'));
   }
@@ -897,10 +1007,11 @@ function bindGlobalHistorySwipeListeners() {
   });
 }
 
-function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs = filteredRecords) {
+function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs = filteredRecords, metric = 'weight') {
   const list = document.getElementById('history-list');
   const countEl = document.getElementById('history-count');
   const pagerEl = document.getElementById('history-pagination');
+  const isHeightMetric = metric === 'height';
 
   activeHistorySwipe = null;
   openHistorySwipeRow = null;
@@ -924,10 +1035,10 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
     return;
   }
 
-  const isHidden = isMemberWeightHidden(member);
+  const isHidden = !isHeightMetric && isMemberWeightHidden(member);
   const currentYear = getCurrentYearInTimeZone();
   const unitLabel = getWeightUnitLabel();
-  const prevWeightMap = buildPreviousWeightMap(allMemberRecs);
+  const prevValueMap = buildPreviousValueMap(allMemberRecs, isHeightMetric ? 'height_cm' : 'weight_kg');
   const totalPages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
   state.historyPage = Math.min(Math.max(1, Number(state.historyPage) || 1), totalPages);
 
@@ -941,48 +1052,73 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
       : t('history.countTotal', { total });
   }
 
-  // 僅針對目前分頁顯示的紀錄計算「當下生效的目標體重」，與趨勢圖表規則完全一致
-  const recordTargetSeries = resolveTargetWeightSeries(
-    pageRecords.map((r) => r.recorded_at),
-    memberHistory,
-    member
-  );
+  // 僅針對體重模式計算目前分頁每筆紀錄「當下生效的目標體重」
+  const recordTargetSeries = isHeightMetric
+    ? { values: pageRecords.map(() => null) }
+    : resolveTargetWeightSeries(
+        pageRecords.map((r) => r.recorded_at),
+        memberHistory,
+        member
+      );
 
   const items = pageRecords.map((r, idx) => {
     const li = createEl('li', 'history-swipe-row');
     const contentEl = createEl('div', 'history-swipe-content py-2.5 flex items-center gap-2');
 
-    const numericWeight = Number(r.weight_kg);
-    const weightDisplay = isHidden
-      ? `${MASKED_WEIGHT} ${unitLabel}`
-      : Number.isFinite(numericWeight)
-        ? formatWeight(numericWeight)
-        : `${r.weight_kg} ${unitLabel}`;
-
-    // 較前次紀錄變化（依完整時間序列計算，跨分頁也精準；隱私模式僅顯相對漲跌、不洩露真實體重）
-    const prevWeight = prevWeightMap.has(r.id) ? prevWeightMap.get(r.id) : null;
+    let primaryDisplay;
     let deltaText = t('history.firstRecord');
     let deltaColor = 'text-ink-400';
-    if (prevWeight !== null && Number.isFinite(numericWeight)) {
-      const diff = Number((numericWeight - prevWeight).toFixed(2));
-      if (diff === 0) {
-        deltaText = t('history.flat');
-        deltaColor = 'text-ink-400';
-      } else if (diff > 0) {
-        deltaText = `↗ ${formatWeightDelta(diff)}`;
-        deltaColor = 'text-rosewood-600';
-      } else {
-        deltaText = `↘ ${formatWeightDelta(diff)}`;
-        deltaColor = 'text-sage-600';
+
+    if (isHeightMetric) {
+      const numericHeight = Number(r.height_cm);
+      primaryDisplay = Number.isFinite(numericHeight)
+        ? formatHeightCm(numericHeight)
+        : `${r.height_cm} cm`;
+      const prevHeight = prevValueMap.has(r.id) ? prevValueMap.get(r.id) : null;
+      if (prevHeight !== null && Number.isFinite(numericHeight)) {
+        const diff = Number((numericHeight - prevHeight).toFixed(1));
+        if (diff === 0) {
+          deltaText = t('history.flat');
+          deltaColor = 'text-ink-400';
+        } else if (diff > 0) {
+          deltaText = `↗ ${formatHeightDeltaCm(diff)}`;
+          deltaColor = 'text-sage-600';
+        } else {
+          deltaText = `↘ ${formatHeightDeltaCm(diff)}`;
+          deltaColor = 'text-ink-500';
+        }
+      }
+    } else {
+      const numericWeight = Number(r.weight_kg);
+      primaryDisplay = isHidden
+        ? `${MASKED_WEIGHT} ${unitLabel}`
+        : Number.isFinite(numericWeight)
+          ? formatWeight(numericWeight)
+          : `${r.weight_kg} ${unitLabel}`;
+
+      // 較前次紀錄變化（依完整時間序列計算，跨分頁也精準；隱私模式僅顯相對漲跌、不洩露真實體重）
+      const prevWeight = prevValueMap.has(r.id) ? prevValueMap.get(r.id) : null;
+      if (prevWeight !== null && Number.isFinite(numericWeight)) {
+        const diff = Number((numericWeight - prevWeight).toFixed(2));
+        if (diff === 0) {
+          deltaText = t('history.flat');
+          deltaColor = 'text-ink-400';
+        } else if (diff > 0) {
+          deltaText = `↗ ${formatWeightDelta(diff)}`;
+          deltaColor = 'text-rosewood-600';
+        } else {
+          deltaText = `↘ ${formatWeightDelta(diff)}`;
+          deltaColor = 'text-sage-600';
+        }
       }
     }
 
-    // 左欄：體重 ＋ 量測日期（含星期幾），固定欄寬與雙行結構確保各筆列高一致
+    // 左欄：體重／身高 ＋ 量測日期（含星期幾），固定欄寬與雙行結構確保各筆列高一致
     const leftCol = createEl('div', 'w-[5.25rem] shrink-0 flex flex-col justify-center gap-1');
-    const weightEl = createEl(
+    const primaryEl = createEl(
       'span',
       `font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
-      weightDisplay
+      primaryDisplay
     );
     const dateCell = createEl(
       'span',
@@ -990,36 +1126,38 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
       formatHistoryDateWithWeekday(r.recorded_at, currentYear)
     );
     dateCell.setAttribute('title', String(r.recorded_at ?? ''));
-    leftCol.append(weightEl, dateCell);
+    leftCol.append(primaryEl, dateCell);
 
     // 中欄：目標差距膠囊與備註（僅在實際存在時渲染，無備註時不留空白並自然上下置中）
     const midCol = createEl('div', 'min-w-0 flex-1 flex flex-col justify-center items-start gap-1');
-    const activeTarget = recordTargetSeries.values[idx];
-    const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
-    if (targetGap) {
-      if (isHidden) {
-        if (targetGap.isAchieved) {
+    if (!isHeightMetric) {
+      const activeTarget = recordTargetSeries.values[idx];
+      const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
+      if (targetGap) {
+        if (isHidden) {
+          if (targetGap.isAchieved) {
+            midCol.appendChild(
+              createEl(
+                'span',
+                'inline-block max-w-full truncate rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
+                t('overview.achieved')
+              )
+            );
+          }
+        } else {
+          const pillStyle = targetGap.isAchieved
+            ? 'bg-sage-50 text-sage-700 border border-sage-200/80'
+            : targetGap.gap > 0
+              ? 'bg-ochre-50 text-ochre-700 border border-ochre-200/80'
+              : 'bg-sage-50 text-sage-700 border border-sage-200/80';
           midCol.appendChild(
             createEl(
               'span',
-              'inline-block max-w-full truncate rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap bg-sage-50 text-sage-700 border border-sage-200/80',
-              t('overview.achieved')
+              `inline-block max-w-full truncate rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
+              targetGap.compactLabel
             )
           );
         }
-      } else {
-        const pillStyle = targetGap.isAchieved
-          ? 'bg-sage-50 text-sage-700 border border-sage-200/80'
-          : targetGap.gap > 0
-            ? 'bg-ochre-50 text-ochre-700 border border-ochre-200/80'
-            : 'bg-sage-50 text-sage-700 border border-sage-200/80';
-        midCol.appendChild(
-          createEl(
-            'span',
-            `inline-block max-w-full truncate rounded-full px-1.5 py-0.5 text-[11px] leading-4 font-medium tabular-nums whitespace-nowrap ${pillStyle}`,
-            targetGap.compactLabel
-          )
-        );
       }
     }
 
@@ -1068,6 +1206,14 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
       contentEl.appendChild(swipeCue);
 
       const triggerDelete = () => {
+        if (isHeightMetric) {
+          if (!confirm(t('history.deleteHeightConfirm'))) return false;
+          if (optimisticDeleteHeightRecord(r.id)) {
+            showToast(t('history.deleted'));
+            return true;
+          }
+          return false;
+        }
         if (isMemberWeightHidden(member)) {
           showToast(t('history.deleteHiddenBlocked'), true);
           renderCharts();
@@ -1083,8 +1229,9 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
       const actionBtn = createEl('button', 'history-swipe-action');
       actionBtn.type = 'button';
-      actionBtn.setAttribute('aria-label', t('history.deleteAria'));
-      actionBtn.setAttribute('title', t('history.deleteAria'));
+      const delAria = isHeightMetric ? t('history.deleteHeightAria') : t('history.deleteAria');
+      actionBtn.setAttribute('aria-label', delAria);
+      actionBtn.setAttribute('title', delAria);
       actionBtn.appendChild(createIcon('trash', 'w-4 h-4 shrink-0'));
       actionBtn.onclick = (e) => {
         e.stopPropagation();
@@ -1151,7 +1298,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
   const goToPage = (targetPage) => {
     state.historyPage = targetPage;
-    renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs);
+    renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs, metric);
     playSoftFade(list);
   };
 
@@ -1242,7 +1389,25 @@ export function renderCharts() {
   pills.replaceChildren(...pillButtons);
 
   const member = state.appData.members.find((m) => m.id === state.selectedMemberId);
+  const canTrackHeight = Boolean(member && member.type === 'human' && member.track_height);
+  if (!canTrackHeight && state.chartMetric !== 'weight') {
+    state.chartMetric = 'weight';
+  }
+
+  const metricPills = document.getElementById('chart-metric-pills');
+  if (metricPills) {
+    metricPills.classList.toggle('hidden', !canTrackHeight);
+    metricPills.querySelectorAll('.metric-btn').forEach((b) => {
+      const active = b.dataset.metric === state.chartMetric;
+      b.className = active
+        ? 'metric-btn flex-1 py-1.5 rounded-xl bg-linen text-sage-700 shadow-sm'
+        : 'metric-btn flex-1 py-1.5 rounded-xl text-ink-500';
+    });
+  }
+
+  const useHeight = isHeightMetricForMember(member);
   const recs = state.appData.records.filter((r) => r.member_id === state.selectedMemberId);
+  const heightRecs = (state.appData.heightRecords || []).filter((r) => r.member_id === state.selectedMemberId);
   const memberHistory = (state.appData.targetHistory || []).filter((h) => h.member_id === state.selectedMemberId);
   const {
     labels,
@@ -1253,11 +1418,20 @@ export function renderCharts() {
     pointDates,
     filteredRecords,
     rangeSummary
-  } = aggregateRecords(recs, state.selectedRange);
-  const isHidden = isMemberWeightHidden(member);
-  const theme = getMemberTheme(member?.type);
+  } = useHeight
+    ? aggregateHeightRecords(heightRecs, state.selectedRange)
+    : aggregateRecords(recs, state.selectedRange);
+  const isHidden = useHeight ? false : isMemberWeightHidden(member);
+  const baseTheme = getMemberTheme(member?.type);
+  const theme = useHeight
+    ? { ...baseTheme, lineColor: '#4B7A72', fillColor: 'rgba(75, 122, 114, 0.16)' }
+    : baseTheme;
 
-  renderStatsSummary(member, recs, filteredRecords);
+  if (useHeight) {
+    renderHeightStatsSummary(member, heightRecs, filteredRecords);
+  } else {
+    renderStatsSummary(member, recs, filteredRecords);
+  }
 
   const canvas = document.getElementById('weightChart');
   const canvasWrap = document.getElementById('chart-canvas-wrap');
@@ -1268,8 +1442,11 @@ export function renderCharts() {
     chartInstance = null;
   }
 
-  const targetSeries = resolveTargetWeightSeries(pointDates, memberHistory, member);
+  const targetSeries = useHeight
+    ? { values: [], hasAnyTarget: false, pointRadii: [] }
+    : resolveTargetWeightSeries(pointDates, memberHistory, member);
   inspectState.context = {
+    metric: useHeight ? 'height' : 'weight',
     labels,
     tagLabels,
     detailLabels,
@@ -1285,29 +1462,44 @@ export function renderCharts() {
   bindChartLongPressEvents(canvas);
   renderInspectBar();
 
-  const historyRecords = resolveHistoryRecords(recs, filteredRecords);
+  const historyRecords = useHeight
+    ? resolveHistoryRecords(heightRecs, filteredRecords)
+    : resolveHistoryRecords(recs, filteredRecords);
 
   const hasData = values.length > 0;
   if (canvasWrap) canvasWrap.classList.toggle('hidden', !hasData);
-  if (emptyStateEl) emptyStateEl.classList.toggle('hidden', hasData);
+  if (emptyStateEl) {
+    emptyStateEl.textContent = t(useHeight ? 'charts.emptyHeightPeriod' : 'charts.emptyPeriod');
+    emptyStateEl.classList.toggle('hidden', hasData);
+  }
 
   if (!hasData) {
-    renderHistoryList(member, memberHistory, historyRecords, recs);
+    renderHistoryList(
+      member,
+      useHeight ? [] : memberHistory,
+      historyRecords,
+      useHeight ? heightRecs : recs,
+      useHeight ? 'height' : 'weight'
+    );
     return;
   }
 
   const ctx = canvas.getContext('2d');
   const unit = getWeightUnit();
   const unitLabel = getWeightUnitLabel(unit);
-  const displayValues = values.map((v) => kgToDisplay(v, unit, 2));
-  const displayTargetValues = targetSeries.values.map((v) => (v === null ? null : kgToDisplay(v, unit, 2)));
+  const displayValues = useHeight ? values : values.map((v) => kgToDisplay(v, unit, 2));
+  const displayTargetValues = useHeight
+    ? []
+    : targetSeries.values.map((v) => (v === null ? null : kgToDisplay(v, unit, 2)));
   const baselineDisplayWeight = Number(displayValues[0]);
   const isDaily = state.selectedRange === 'day';
   const pointRadius = values.length <= 12 ? 3 : 2;
   const datasets = [{
-    label: isHidden
-      ? (isDaily ? t('charts.legendTrendDaily') : t('charts.legendTrendAvg'))
-      : (isDaily ? t('charts.legendWeightDaily', { unit: unitLabel }) : t('charts.legendWeightAvg', { unit: unitLabel })),
+    label: useHeight
+      ? t('charts.legendHeight')
+      : isHidden
+        ? (isDaily ? t('charts.legendTrendDaily') : t('charts.legendTrendAvg'))
+        : (isDaily ? t('charts.legendWeightDaily', { unit: unitLabel }) : t('charts.legendWeightAvg', { unit: unitLabel })),
     data: displayValues,
     borderColor: theme.lineColor,
     backgroundColor: theme.fillColor,
@@ -1321,7 +1513,7 @@ export function renderCharts() {
     tension: 0.3
   }];
 
-  if (targetSeries.hasAnyTarget && labels.length > 0) {
+  if (!useHeight && targetSeries.hasAnyTarget && labels.length > 0) {
     const targetLabel = isHidden
       ? t('charts.legendTargetHidden')
       : member?.target_weight
@@ -1385,6 +1577,9 @@ export function renderCharts() {
               return !isDaily && cnt > 1 ? `${base} (${t('charts.bucketCount', { count: cnt })})` : base;
             },
             label: (ctxItem) => {
+              if (useHeight) {
+                return t('charts.tooltipHeight', { value: formatHeightCm(ctxItem.parsed.y) });
+              }
               if (!isHidden) {
                 const valStr = `${ctxItem.parsed.y} ${unitLabel}`;
                 if (ctxItem.datasetIndex === 0) {
@@ -1440,10 +1635,28 @@ export function renderCharts() {
     }
   });
 
-  renderHistoryList(member, memberHistory, historyRecords, recs);
+  renderHistoryList(
+    member,
+    useHeight ? [] : memberHistory,
+    historyRecords,
+    useHeight ? heightRecs : recs,
+    useHeight ? 'height' : 'weight'
+  );
 }
 
 export function initChartRangeControls({ onRangeChange }) {
+  document.querySelectorAll('.metric-btn').forEach((btn) => {
+    btn.onclick = () => {
+      const nextMetric = btn.dataset.metric === 'height' ? 'height' : 'weight';
+      if (state.chartMetric === nextMetric) return;
+      state.chartMetric = nextMetric;
+      state.historyPage = 1;
+      onRangeChange();
+      playSoftFade(document.getElementById('chart-stats-summary'));
+      playSoftFade(document.getElementById('history-list'));
+    };
+  });
+
   document.querySelectorAll('.range-btn').forEach((btn) => {
     btn.onclick = () => {
       state.selectedRange = btn.dataset.range;

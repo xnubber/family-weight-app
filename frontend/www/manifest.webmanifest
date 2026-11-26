@@ -1,7 +1,7 @@
 {
-  "name": "家與毛孩體重誌 · Kin & Paws Weight",
-  "short_name": "家與毛孩體重誌",
-  "description": "溫潤樸素的家庭與毛孩體重紀錄日誌（Kin & Paws Weight），支援家人、貓咪與狗狗體重趨勢、健康指標、隱私密碼鎖與雲端同步。",
+  "name": "家與毛孩成長誌 · Kin & Paws",
+  "short_name": "家與毛孩成長誌",
+  "description": "溫潤樸素的家庭與毛孩成長紀錄日誌（Kin & Paws），支援家人與毛孩體重趨勢、小孩身高成長追蹤、健康指標、隱私密碼鎖與雲端同步。",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#F6F4EE",

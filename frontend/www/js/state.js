@@ -10,9 +10,10 @@ function initFamilyCode() {
 
 export const state = {
   familyCode: initFamilyCode(),
-  appData: { members: [], records: [], targetHistory: [] },
+  appData: { members: [], records: [], heightRecords: [], targetHistory: [] },
   selectedMemberId: null,
   selectedRange: 'day', // 'day' | 'week' | 'month' | 'year'
+  chartMetric: 'weight', // 'weight' | 'height'
   historyPage: 1,
   historyFilter: {
     active: false,

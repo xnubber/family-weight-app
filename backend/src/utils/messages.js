@@ -141,6 +141,31 @@ const MESSAGES = {
     en: 'Failed to delete weight record. Please try again later.',
     ja: '体重記録の削除に失敗しました。しばらくしてからもう一度お試しください。'
   },
+  addHeightRecordForbidden: {
+    'zh-TW': '無權限對此成員新增身高紀錄',
+    en: 'You do not have permission to add height records for this member.',
+    ja: 'このメンバーに身長記録を追加する権限がありません。'
+  },
+  addHeightRecordPetForbidden: {
+    'zh-TW': '毛孩成員不支援記錄身高',
+    en: 'Height records are only supported for human family members.',
+    ja: 'ペットメンバーは身長記録に対応していません。'
+  },
+  addHeightRecordFailed: {
+    'zh-TW': '新增身高紀錄失敗，請稍後再試',
+    en: 'Failed to add height record. Please try again later.',
+    ja: '身長記録の追加に失敗しました。しばらくしてからもう一度お試しください。'
+  },
+  deleteHeightRecordFailed: {
+    'zh-TW': '刪除身高紀錄失敗，請稍後再試',
+    en: 'Failed to delete height record. Please try again later.',
+    ja: '身長記録の削除に失敗しました。しばらくしてからもう一度お試しください。'
+  },
+  heightMigrationRequired: {
+    'zh-TW': '資料庫尚未建立身高紀錄資料表，請先於 Supabase 執行 backend/sql/007_height_records.sql',
+    en: 'Height tracking migration required. Please run backend/sql/007_height_records.sql in Supabase.',
+    ja: '身長記録テーブルが未作成です。Supabase で backend/sql/007_height_records.sql を実行してください。'
+  },
   invalidRequestFields: {
     'zh-TW': '請求欄位格式不正確',
     en: 'Invalid request field format',
@@ -172,6 +197,7 @@ const ZOD_MESSAGE_TRANSLATIONS = {
   '名稱不可超過 50 字元': { en: 'Name must be 50 characters or fewer', ja: '名前は50文字以内で入力してください' },
   '成員類型必須為 human、cat 或 dog': { en: 'Member type must be human, cat, or dog', ja: 'メンバータイプは人・猫・犬のいずれかにしてください' },
   '隱私設定必須為布林值': { en: 'Privacy setting must be a boolean', ja: 'プライバシー設定の形式が正しくありません' },
+  '身高追蹤設定必須為布林值': { en: 'Height tracking setting must be a boolean', ja: '身長記録設定の形式が正しくありません' },
   '身高必須為數字': { en: 'Height must be a number', ja: '身長は数値で入力してください' },
   '身高必須為有效數值': { en: 'Height must be a valid number', ja: '身長は有効な数値で入力してください' },
   '身高須介於 20–300 cm': { en: 'Height must be between 20 and 300 cm', ja: '身長は20〜300 cmの範囲にしてください' },
