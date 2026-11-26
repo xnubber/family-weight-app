@@ -11,6 +11,7 @@
 
 | 日期 | 版本號 | 對應 Commit | 修改內容摘要 |
 | :--- | :--- | :--- | :--- |
+| 2026-11-26 | **v2.16.0** | `9eeb35c` | 新增「小孩身高成長追蹤」完整功能（`track_height` 開關、`height_records` 資料庫與 API、單筆／批量身高紀錄、總覽身高指標、統計頁體重／身高切換與 10 年成長趨勢圖，自動同步成員最新身高）；APP 顯示名稱更新為「家與毛孩成長誌 · Kin & Paws」（保留原 `appId` 支援原地升級） |
 | 2026-11-26 | **v2.15.4** | `2f66968` | 設定頁「成員管理」將刪除成員功能整合至編輯成員彈窗底部（防誤觸並僅於編輯模式顯示），成員列表右側簡化為單一鉛筆編輯圖標按鈕並補齊三語無障礙文案 |
 | 2026-11-26 | **v2.15.3** | `da4662d` | 重構歷史紀錄列表單筆列為獨立三欄排版：無備註時不再保留空白區塊並使目標膠囊自然上下置中；最右側「較前次變化」拆分為獨立區塊搭配細分隔線並全列上下置中 |
 | 2026-11-26 | **v2.15.2** | `b23e535` | 精簡歷史紀錄「區間查詢」選定日期區間標籤並改用 `~` 連接（今年 `MM/DD~MM/DD`、往年同年度 `YY/MM/DD~MM/DD`、跨年 `YY/MM/DD~YY/MM/DD`），移除重複日曆圖示並支援點擊文字重開面板 |
@@ -69,6 +70,14 @@
 ---
 
 ## 各版本詳細變更紀錄
+
+### v2.16.0（2026-11-26）
+- **對應 Commit**：`9eeb35c`
+- **修改內容**：
+  - **資料庫與後端身高紀錄 API（`007_height_records.sql`、`000_init_schema.sql`、`heightRecords.routes.js`、`members.routes.js`、`families.routes.js`、`validation.js`）**：於 `members` 新增 `track_height` 布林欄位並建立 `height_records` 資料表（`20–300 cm`、含索引與 `service_role` RLS）；提供 `POST /api/height-records` 與 `DELETE /api/height-records/:id`（僅限家人成員），新增或刪除時自動將最新一筆身高同步寫回 `members.height_cm`，且 `height_records` 不套用 2 年清理以保留多年成長歷程。
+  - **成員「追蹤身高成長」開關與總覽／記錄整合（`modals.js`、`overview.js`、`settings.js`、`syncQueue.js`、`cache.js`、`validation.js`）**：於新增／編輯成員彈窗、個人詳情頁（支援一鍵即時切換）與設定成員清單整合 `track_height`（毛孩類別自動隱藏）；單筆與批量記錄模式皆支援獨立或同時記錄體重與身高（樂觀更新＋FIFO 背景同步）；總覽卡片第 3 欄顯示最新身高，未設目標體重時第 2 欄一併顯示身高變化。
+  - **統計頁「體重／身高」切換與成長分析（`charts.js`、`metrics.js`、`index.html`、`i18n.js`）**：對開啟身高追蹤的家人顯示指標切換列，身高模式提供最新身高／區間成長／高低／量測次數摘要、最高 10 年季度成長折線圖（支援長按拖曳檢視 `cm` 與單步成長量）、區間查詢與 3 欄式左滑刪除歷史紀錄，並補齊繁中／英語／日語三語文案。
+  - **品牌顯示名稱更新（`capacitor.config.json`、`manifest.webmanifest`、`index.html`、`i18n.js`、`README.md`、`package.json`）**：將全站與原生 App 顯示名稱更新為「**家與毛孩成長誌 · Kin & Paws**」，同時維持 `appId`（`com.familyweight.app`）不變以確保既有 Android 裝置可原地無痛升級。
 
 ### v2.15.4（2026-11-26）
 - **對應 Commit**：`2f66968`
