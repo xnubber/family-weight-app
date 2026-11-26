@@ -15,6 +15,7 @@
 
 ## 專案目錄
 - `frontend/`：Capacitor + Tailwind CSS + 原生 ES Module 前端（嚴格 CSP、零外部 CDN）。
+  - 編譯前端與同步 Android 原生外掛（含 `@capacitor/app` 系統返回手勢接管）：`cd frontend && npm install && npm run build && npx cap sync android`。
   - `frontend/www/icons/`：網頁 Favicon、Apple Touch Icon 與 PWA 圖示（SVG / 192px / 512px）。
   - `frontend/resources/`：Capacitor 原生 App 圖示母檔（`icon-only.png`、`icon-foreground.png`、`icon-background.png`，可透過 `npx @capacitor/assets generate` 一鍵產生 Android / iOS 圖示）。
 - `backend/`：Express + Supabase + Zod v4 嚴格驗證後端 API。

@@ -46,7 +46,7 @@ function resolveModalEl(modalOrId) {
 export function isModalOpen(modalOrId) {
   const modal = resolveModalEl(modalOrId);
   if (!modal) return false;
-  return !modal.classList.contains('hidden') && modal.classList.contains('is-open');
+  return !modal.classList.contains('hidden') && (modal.classList.contains('is-open') || modal.dataset.modalOpen === '1');
 }
 
 export function openModal(modalOrId) {
@@ -57,17 +57,22 @@ export function openModal(modalOrId) {
     clearTimeout(prevTimer);
     modalCloseTimers.delete(modal);
   }
-  const alreadyVisible = !modal.classList.contains('hidden') && modal.classList.contains('is-open');
+  const alreadyVisible = !modal.classList.contains('hidden') && (modal.classList.contains('is-open') || modal.dataset.modalOpen === '1');
   modal.classList.remove('hidden');
+  modal.dataset.modalOpen = '1';
   if (alreadyVisible) return;
+
+  // 同步通知導覽狀態更新，確保瀏覽器／PWA 的 history.pushState 落在原生使用者點擊手勢內，不會被 Chrome 略過
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('app:nav-state-change'));
+  }
 
   modal.classList.remove('is-open');
   const nextFrame = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
   nextFrame(() => {
     nextFrame(() => {
-      modal.classList.add('is-open');
-      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
-        window.dispatchEvent(new CustomEvent('app:nav-state-change'));
+      if (modal.dataset.modalOpen === '1') {
+        modal.classList.add('is-open');
       }
     });
   });
@@ -79,10 +84,11 @@ export function closeModal(modalOrId) {
   const prevTimer = modalCloseTimers.get(modal);
   if (prevTimer) clearTimeout(prevTimer);
 
+  delete modal.dataset.modalOpen;
   modal.classList.remove('is-open');
   const timer = setTimeout(() => {
     modalCloseTimers.delete(modal);
-    if (!modal.classList.contains('is-open')) {
+    if (!modal.classList.contains('is-open') && modal.dataset.modalOpen !== '1') {
       modal.classList.add('hidden');
     }
   }, MODAL_EXIT_MS);

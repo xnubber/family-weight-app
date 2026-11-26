@@ -37,6 +37,10 @@ let currentTab = 'overview';
 let tabTransitionSeq = 0;
 const tabHistory = ['overview'];
 let lastRootBackPromptAt = 0;
+let historyTrapDepth = 0;
+let isCapacitorBackHandled = false;
+const MAX_HISTORY_TRAP_DEPTH = 25;
+const ROOT_EXIT_CONFIRM_MS = 2000;
 
 function refreshSyncIndicator() {
   updateSyncIndicator({ pendingCount: getPendingCount(), isFetching });
@@ -51,15 +55,21 @@ function canGoBack() {
   return hasOpenModal() || tabHistory.length > 1 || currentTab !== 'overview';
 }
 
-// 單一哨兵歷史狀態：讓 Android 系統邊緣返回手勢與瀏覽器返回鍵能優雅逐層返回，不直接跳出 App
-function ensureHistoryBackTrap() {
+// 同步推入瀏覽器歷史堆疊（須於使用者真實點擊手勢內呼叫，避免被 Android Chrome 歷史介入機制略過）
+function pushHistoryNavEntry(kind = 'nav') {
+  if (isCapacitorBackHandled) return;
   if (typeof window === 'undefined' || !window.history || typeof window.history.pushState !== 'function') {
     return;
   }
+  if (historyTrapDepth >= MAX_HISTORY_TRAP_DEPTH) return;
+  historyTrapDepth += 1;
+  window.history.pushState({ appBackTrap: true, kind, depth: historyTrapDepth }, '');
+}
+
+function ensureHistoryBackTrap() {
+  if (isCapacitorBackHandled) return;
   if (!canGoBack()) return;
-  if (!window.history.state || !window.history.state.appBackTrap) {
-    window.history.pushState({ appBackTrap: true }, '');
-  }
+  pushHistoryNavEntry('layer');
 }
 
 function switchTab(tabName, { pushHistory = true } = {}) {
@@ -135,7 +145,9 @@ function switchTab(tabName, { pushHistory = true } = {}) {
     nextFrame(() => resizeChart());
   }
 
-  ensureHistoryBackTrap();
+  if (pushHistory) {
+    ensureHistoryBackTrap();
+  }
 
   setTimeout(() => {
     if (seq === tabTransitionSeq) {
@@ -277,31 +289,59 @@ window.addEventListener('beforeunload', (e) => {
   }
 });
 
-// 監聽彈窗開啟事件，補上 History 返回哨兵，並攔截系統邊緣返回／瀏覽器返回鍵
-window.addEventListener('app:nav-state-change', ensureHistoryBackTrap);
-
-if (typeof window.history?.replaceState === 'function') {
-  window.history.replaceState({ appRoot: true }, '');
+// 若以 Capacitor Android APK 執行且已同步 @capacitor/app 外掛，由原生 OnBackPressedCallback 接管系統返回鍵與螢幕左右邊緣滑動返回
+const capacitorAppPlugin = window.Capacitor?.Plugins?.App;
+const isNativeCapacitor = Boolean(window.Capacitor?.isNativePlatform?.());
+if (isNativeCapacitor && typeof capacitorAppPlugin?.addListener === 'function') {
+  isCapacitorBackHandled = true;
+  capacitorAppPlugin.addListener('backButton', () => {
+    if (handleAppBack()) return;
+    const now = Date.now();
+    if (now - lastRootBackPromptAt < ROOT_EXIT_CONFIRM_MS) {
+      capacitorAppPlugin.exitApp?.();
+    } else {
+      lastRootBackPromptAt = now;
+      showToast(t('nav.exitPrompt'));
+    }
+  });
 }
 
-window.addEventListener('popstate', () => {
-  const handled = handleAppBack();
-  if (handled && canGoBack()) {
-    ensureHistoryBackTrap();
-  }
-});
+// 瀏覽器／PWA 環境（或未同步原生外掛時）：於使用者真實點擊手勢內同步推入歷史節點，攔截左右邊緣返回手勢不直接跳出 APP
+if (!isCapacitorBackHandled) {
+  window.addEventListener('app:nav-state-change', ensureHistoryBackTrap);
 
-// 若以 Capacitor Android APK 執行且載入 App 外掛，同步接管系統返回鍵／系統邊緣滑動返回
-window.Capacitor?.Plugins?.App?.addListener?.('backButton', () => {
-  if (handleAppBack()) return;
-  const now = Date.now();
-  if (now - lastRootBackPromptAt < 1800) {
-    window.Capacitor?.Plugins?.App?.exitApp?.();
-  } else {
-    lastRootBackPromptAt = now;
-    showToast(t('nav.exitPrompt'));
+  if (typeof window.history?.replaceState === 'function') {
+    window.history.replaceState({ appRoot: true, depth: 0 }, '');
   }
-});
+
+  // 在首頁（總覽）第一次有效點擊時同步補上一層根節點保護，避免手機誤滑邊緣直接退出 PWA
+  const armRootBackGuard = () => {
+    if (historyTrapDepth === 0) {
+      pushHistoryNavEntry('root-guard');
+    }
+  };
+  document.addEventListener('pointerdown', armRootBackGuard, { passive: true });
+  document.addEventListener('click', armRootBackGuard, { passive: true });
+
+  window.addEventListener('popstate', (e) => {
+    const stateDepth = typeof e.state?.depth === 'number' ? e.state.depth : Math.max(0, historyTrapDepth - 1);
+    historyTrapDepth = Math.max(0, stateDepth);
+
+    if (handleAppBack()) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastRootBackPromptAt < ROOT_EXIT_CONFIRM_MS) {
+      if (historyTrapDepth > 0 && typeof window.history?.go === 'function') {
+        window.history.go(-(historyTrapDepth + 1));
+      }
+    } else {
+      lastRootBackPromptAt = now;
+      showToast(t('nav.exitPrompt'));
+    }
+  });
+}
 
 // 啟動時立即套用多語系 DOM 與動態單位標籤（避免首屏閃爍）
 applyI18nToDOM();
