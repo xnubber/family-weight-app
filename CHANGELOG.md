@@ -11,6 +11,7 @@
 
 | 日期 | 版本號 | 對應 Commit | 修改內容摘要 |
 | :--- | :--- | :--- | :--- |
+| 2026-11-25 | **v2.14.1** | `5eccbac` | 修正手機左右邊緣滑動直接退出 APP 的問題：安裝 `@capacitor/app` 接管 Android 原生系統返回手勢，並修正瀏覽器／PWA 彈窗非同步推入歷史堆疊被 Chrome 略過、補齊首頁雙重返回防呆與 `overscroll-behavior-x: none` |
 | 2026-11-25 | **v2.14.0** | `24be4a5` | 記錄體重彈窗（批量與單筆模式）新增寵物「抱著量自動相減」計算器：輸入抱毛孩總重與主人體重即即時防浮點誤差相減並自動帶入，並支援隱私安全之一鍵帶入主人體重、`kg`/`lb` 與三語介面 |
 | 2026-11-25 | **v2.13.2** | `4789ddf` | 調整設定頁卡片順序，將「語言、單位與時區」收合面板移至最下方（雲端同步設定 → 成員管理 → 語言、單位與時區） |
 | 2026-11-25 | **v2.13.1** | `fade7fa` | 設定頁「語言、單位與時區」卡片改為預設收合並呈現精簡摘要膠囊（目前語言／單位／時區與 UTC 偏移），點擊標題或「變更」按鈕再柔和展開編輯 |
@@ -61,6 +62,13 @@
 ---
 
 ## 各版本詳細變更紀錄
+
+### v2.14.1（2026-11-25）
+- **對應 Commit**：`5eccbac`
+- **修改內容**：
+  - **安裝 `@capacitor/app`（`^8.0.0`）接管 Android 原生系統返回**：補齊缺失的 `@capacitor/app` 套件，使 Capacitor Android `BridgeActivity` 正式註冊 `OnBackPressedCallback`，在手機上從左右邊緣往內滑或按返回鍵時不再直接退出 APP，改為逐層關閉彈窗／退回上一分頁，並於總覽首頁採 2 秒內雙次返回確認退出。
+  - **修正瀏覽器／PWA 同步歷史堆疊與 Chrome 略過問題（`dom.js`、`app.js`）**：將 `openModal` 派發 `app:nav-state-change` 改為同步執行於原生使用者點擊手勢內，並依層級獨立推入歷史節點與首頁根節點保護，徹底避開 Android Chrome 的 History Manipulation Intervention。
+  - **補上水平越界防護與打包同步說明（`input.css`、`README.md`）**：新增 `overscroll-behavior-x: none` 阻擋瀏覽器橫向越界離開，並於 `README.md` 註明打包 Android APK 前需執行 `npm install && npm run build && npx cap sync android`。
 
 ### v2.14.0（2026-11-25）
 - **對應 Commit**：`24be4a5`
