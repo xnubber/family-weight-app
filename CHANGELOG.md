@@ -11,6 +11,7 @@
 
 | 日期 | 版本號 | 對應 Commit | 修改內容摘要 |
 | :--- | :--- | :--- | :--- |
+| 2026-11-26 | **v2.18.1** | `f5b5a30` | 自用雲端版徹底移除所有廣告相關設計（零廣告組態欄位、不載入 `adBanner.js`、移除 `#ad-banner-spacer`／廣告隱私條款與 Pro 廣告 DOM、解耦底部安全區 CSS）；精準對齊歷史紀錄三欄版面（左／右欄皆改固定 `w-[5.75rem]` 與統一列高 `min-h-[3.5rem]`，消除右側分隔線參差與左欄溢出） |
 | 2026-11-26 | **v2.18.0** | `911f3bc` | 底部導覽列升級為 4 分頁（總覽／統計／家庭／設定），新增獨立「APP 設定」專頁（自用版與單機上架版皆完整支援）：4 款文青主題（含護眼深色「靜夜墨林」與跟隨系統深淺色、Chart.js 動態配色）、本機通知提醒（每日排程與逾 7 天提醒）、資料匯出／還原、隱私權政策、版本與「關於此 APP」彈窗 |
 | 2026-11-26 | **v2.17.0** | `cd372db` | 新增單一程式碼庫雙版本建置架構（`build:selfhost` 自用雲端版 `com.familyweight.app`／`build:store` Google Play 單機上架版 `com.xnubber.kinpaws`，自動隔離 `config.js` 防金鑰外洩）；實作 IndexedDB 離線儲存與 PBKDF2 本機 PIN、JSON 備份還原、Pro 雲端付費解鎖介面、健康免責與隱私權政策（含 `docs/privacy-policy.html`），以及 AdMob 底部橫幅安全區動態避讓 |
 | 2026-11-26 | **v2.16.0** | `9eeb35c` | 新增「小孩身高成長追蹤」完整功能（`track_height` 開關、`height_records` 資料庫與 API、單筆／批量身高紀錄、總覽身高指標、統計頁體重／身高切換與 10 年成長趨勢圖，自動同步成員最新身高）；APP 顯示名稱更新為「家與毛孩成長誌 · Kin & Paws」（保留原 `appId` 支援原地升級） |
@@ -72,6 +73,12 @@
 ---
 
 ## 各版本詳細變更紀錄
+
+### v2.18.1（2026-11-26）
+- **對應 Commit**：`f5b5a30`
+- **修改內容**：
+  - **自用版徹底移除廣告設計（`selfhost.json`、`build-edition.mjs`、`entitlement.js`、`app.js`、`settings.js`、`index.html`、`input.css`、`i18n.js`）**：自用版組態與 `edition.js` 移除所有 `adsEnabled`/`admob` 欄位；改由 `store` 版條件式動態載入 `adBanner.js`，自用版啟動時直接移除 `#ad-banner-spacer`、`#legal-ads-section` 與 `#settings-pro-cloud-card` DOM 節點，並透過 `html[data-edition='selfhost']` 將底部偏移完全解耦於廣告變數（同時移除隱私權小標寫死的序號避免跳號）。
+  - **歷史紀錄三欄精準對齊（`charts.js`、`styles.css`）**：將最右側「較前次變化」由彈性 `min-w-[4.75rem]` 改為固定 `w-[5.75rem]`（數值改採 `text-[12px] tabular-nums`），左欄放寬並固定為 `w-[5.75rem]`（`text-[15px]` 主數值＋`text-[11.5px]` 日期），且統一單列最小高度 `min-h-[3.5rem]` 與三欄全高垂直置中，使每筆紀錄的左欄邊界與右側分隔線筆直成線。
 
 ### v2.18.0（2026-11-26）
 - **對應 Commit**：`911f3bc`
