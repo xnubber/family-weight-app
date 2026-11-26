@@ -3,6 +3,7 @@ import { FamilyAPI } from '../services/api.js';
 import {
   optimisticAddMember,
   optimisticUpdateMember,
+  optimisticDeleteMember,
   optimisticAddRecord
 } from '../services/syncQueue.js';
 import { createEl, openModal, closeModal, isModalOpen, playSoftFade, showToast } from '../utils/dom.js';
@@ -960,6 +961,8 @@ export function openMemberModal(member = null) {
   const bcsWrap = document.getElementById('mem-bcs-wrap');
   const bcsSelect = document.getElementById('mem-bcs');
   const targetInput = document.getElementById('mem-target');
+  const deleteWrap = document.getElementById('mem-delete-wrap');
+  const deleteBtn = document.getElementById('btn-mem-delete');
 
   form.reset();
 
@@ -993,6 +996,16 @@ export function openMemberModal(member = null) {
         syncPrivacyFormUI('mem', member);
       });
     };
+
+    if (deleteWrap) deleteWrap.classList.remove('hidden');
+    if (deleteBtn) {
+      deleteBtn.onclick = () => {
+        if (!confirm(t('settings.deleteMemberConfirm'))) return;
+        optimisticDeleteMember(member.id);
+        closeModal('modal-member');
+        showToast(t('settings.memberDeleted'));
+      };
+    }
   } else {
     memberAvatarManuallyPicked = false;
     titleEl.textContent = t('memberModal.addTitle');
@@ -1008,6 +1021,8 @@ export function openMemberModal(member = null) {
     bcsSelect.value = '';
     setMemberModalAvatar(getDefaultAvatarForType('human'));
     syncPrivacyFormUI('mem', null);
+    if (deleteWrap) deleteWrap.classList.add('hidden');
+    if (deleteBtn) deleteBtn.onclick = null;
   }
 
   renderTargetWeightStepper(document.getElementById('mem-target-stepper'), targetInput, {

@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { hasInjectedApiKey } from '../services/api.js';
-import { optimisticDeleteMember } from '../services/syncQueue.js';
 import { createEl, playSoftFade, showToast } from '../utils/dom.js';
+import { createIcon } from '../utils/icons.js';
 import { createAvatarNode, resolveMemberAvatar } from '../utils/avatars.js';
 import { isMemberPrivacyEnabled, lockAllMembers, memberHasPrivacyPin } from '../utils/privacy.js';
 import { clearFamilyCache } from '../utils/cache.js';
@@ -188,22 +188,17 @@ export function renderSettingsMembers({ onEditMember }) {
     );
     identity.append(createAvatarNode(resolveMemberAvatar(m), 'w-8 h-8'), nameGroup);
 
-    const actions = createEl('div', 'flex items-center gap-1.5 shrink-0');
-
-    const editBtn = createEl('button', 'whitespace-nowrap text-xs text-sage-700 hover:bg-sage-50 px-2.5 py-1 rounded-lg font-medium', t('common.edit'));
+    const editBtn = createEl(
+      'button',
+      'w-9 h-9 inline-flex items-center justify-center rounded-xl text-ink-500 hover:text-sage-700 hover:bg-sage-50 transition shrink-0'
+    );
     editBtn.type = 'button';
+    editBtn.setAttribute('aria-label', t('settings.editMemberAria', { name: String(m.name ?? '') }));
+    editBtn.setAttribute('title', t('common.edit'));
+    editBtn.appendChild(createIcon('edit', 'w-4 h-4'));
     editBtn.onclick = () => onEditMember(m);
 
-    const delBtn = createEl('button', 'whitespace-nowrap text-xs text-rosewood-600 hover:bg-rosewood-50 px-2.5 py-1 rounded-lg font-medium', t('common.delete'));
-    delBtn.type = 'button';
-    delBtn.onclick = () => {
-      if (!confirm(t('settings.deleteMemberConfirm'))) return;
-      optimisticDeleteMember(m.id);
-      showToast(t('settings.memberDeleted'));
-    };
-
-    actions.append(editBtn, delBtn);
-    li.append(identity, actions);
+    li.append(identity, editBtn);
     return li;
   });
   list.replaceChildren(...items);

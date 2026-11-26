@@ -196,6 +196,7 @@ const DICTIONARY = {
     'settings.privacyHideSuffix': '體重隱私',
     'settings.deleteMemberConfirm': '刪除成員會連同所有體重紀錄一起刪除，確定嗎？',
     'settings.memberDeleted': '已刪除成員',
+    'settings.editMemberAria': '編輯 {name}',
     'settings.codeGenerated': '已產生新同步碼，請點擊儲存生效',
     'settings.invalidFamilyCode': '同步碼需為 12-64 字元英數字、- 或 _，且不可使用舊預設碼',
     'settings.saved': '設定已儲存',
@@ -275,6 +276,7 @@ const DICTIONARY = {
     'memberModal.targetStepperAria': '微調目標體重 {delta} {unit}',
     'memberModal.added': '成員已新增',
     'memberModal.updated': '成員資料已更新',
+    'memberModal.deleteBtn': '刪除成員',
 
     // 隱私設定與解鎖
     'privacy.lockedDesc': '已啟用密碼保護，解鎖後可修改目標體重與隱私設定',
@@ -693,6 +695,7 @@ const DICTIONARY = {
     'settings.privacyHideSuffix': 'Private',
     'settings.deleteMemberConfirm': 'Deleting this member also removes all their weight records. Continue?',
     'settings.memberDeleted': 'Member deleted',
+    'settings.editMemberAria': 'Edit {name}',
     'settings.codeGenerated': 'New code generated — tap Save & Sync to apply',
     'settings.invalidFamilyCode': 'Sync code must be 12–64 letters, numbers, - or _ (default code disallowed)',
     'settings.saved': 'Settings saved',
@@ -772,6 +775,7 @@ const DICTIONARY = {
     'memberModal.targetStepperAria': 'Adjust goal weight {delta} {unit}',
     'memberModal.added': 'Member added',
     'memberModal.updated': 'Member updated',
+    'memberModal.deleteBtn': 'Delete Member',
 
     // Privacy
     'privacy.lockedDesc': 'PIN protected — unlock to edit goal weight and privacy settings',
@@ -1190,6 +1194,7 @@ const DICTIONARY = {
     'settings.privacyHideSuffix': '非表示',
     'settings.deleteMemberConfirm': 'メンバーを削除すると体重記録もすべて削除されます。よろしいですか？',
     'settings.memberDeleted': 'メンバーを削除しました',
+    'settings.editMemberAria': '{name}を編集',
     'settings.codeGenerated': '新しいコードを生成しました。「保存して同期」で反映されます',
     'settings.invalidFamilyCode': '同期コードは12〜64文字の半角英数字・-・_にしてください（旧デフォルト不可）',
     'settings.saved': '設定を保存しました',
@@ -1269,6 +1274,7 @@ const DICTIONARY = {
     'memberModal.targetStepperAria': '目標体重を {delta} {unit} 調整',
     'memberModal.added': 'メンバーを追加しました',
     'memberModal.updated': 'メンバー情報を更新しました',
+    'memberModal.deleteBtn': 'メンバーを削除',
 
     // プライバシー設定
     'privacy.lockedDesc': 'PIN保護が有効です。解除すると目標体重やプライバシー設定を変更できます',
