@@ -1,7 +1,6 @@
 import { state } from './js/state.js';
 import { DataService } from './js/services/dataService.js';
-import { isCloudSyncActive, subscribeEntitlementChange } from './js/services/entitlement.js';
-import { initAdBanner } from './js/services/adBanner.js';
+import { getAppEdition, isCloudSyncActive, isStoreEdition, subscribeEntitlementChange } from './js/services/entitlement.js';
 import { initSyncQueue, flushQueue, getPendingCount, optimisticReorderMembers } from './js/services/syncQueue.js';
 import { updateSyncIndicator, showToast, initTapFeedback } from './js/utils/dom.js';
 import { renderOverview, isOverviewReordering } from './js/ui/overview.js';
@@ -384,6 +383,17 @@ if (!isCapacitorBackHandled) {
   });
 }
 
+// 標記目前發行版本，並於自用版徹底移除所有廣告與商店專屬 DOM 節點（完全不載入廣告模組）
+const currentEdition = getAppEdition();
+if (document.documentElement) {
+  document.documentElement.dataset.edition = currentEdition;
+}
+if (!isStoreEdition()) {
+  document.getElementById('ad-banner-spacer')?.remove();
+  document.getElementById('legal-ads-section')?.remove();
+  document.getElementById('settings-pro-cloud-card')?.remove();
+}
+
 // 啟動時立即套用主題風格、多語系 DOM 與動態單位標籤（避免首屏閃爍）
 initTheme({
   onChange: () => {
@@ -410,11 +420,13 @@ initSyncQueue({
   }
 });
 
-// 未來付費解鎖 Pro 雲端同步或去廣告時即時切換介面與資料來源
-subscribeEntitlementChange(() => {
-  renderAll();
-  syncData();
-});
+// 未來付費解鎖 Pro 雲端同步時即時切換介面與資料來源（僅商店版使用）
+if (isStoreEdition()) {
+  subscribeEntitlementChange(() => {
+    renderAll();
+    syncData();
+  });
+}
 
 // 底部導覽列分頁切換
 document.querySelectorAll('.nav-btn').forEach((btn) => {
@@ -462,8 +474,12 @@ initSettings({
   }
 });
 
-// 免費上架版初始化固定式橫幅廣告與底部安全區避讓（自用版與 Pro 版自動不顯示）
-initAdBanner();
+// 僅於 Google Play 單機上架版動態載入固定式橫幅廣告模組（自用版完全不載入）
+if (isStoreEdition()) {
+  import('./js/services/adBanner.js')
+    .then(({ initAdBanner }) => initAdBanner())
+    .catch(() => {});
+}
 // 同步原生本機每日提醒排程（不依賴雲端伺服器）
 syncNativeDailySchedule();
 

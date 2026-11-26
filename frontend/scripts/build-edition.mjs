@@ -89,13 +89,16 @@ function writeEditionJs(profile, appVersion) {
     defaultStorageMode: profile.defaultStorageMode,
     cloudSyncBuiltIn: Boolean(profile.cloudSyncBuiltIn),
     cloudProPlanned: Boolean(profile.cloudProPlanned),
-    adsEnabled: Boolean(profile.adsEnabled),
-    admob: {
-      androidBannerId: profile.admob?.androidBannerId || '',
-      testing: profile.admob?.testing !== false
-    },
     privacyPolicyUrl: profile.privacyPolicyUrl || ''
   };
+
+  if (profile.edition === 'store') {
+    payload.adsEnabled = Boolean(profile.adsEnabled);
+    payload.admob = {
+      androidBannerId: profile.admob?.androidBannerId || '',
+      testing: profile.admob?.testing !== false
+    };
+  }
 
   const content = `// 由 scripts/build-edition.mjs 自動產生（目前建置目標：${profile.edition}）
 window.__APP_EDITION__ = Object.freeze(${JSON.stringify(payload, null, 2)});

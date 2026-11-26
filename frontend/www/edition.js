@@ -7,10 +7,5 @@ window.__APP_EDITION__ = Object.freeze({
   "defaultStorageMode": "cloud",
   "cloudSyncBuiltIn": true,
   "cloudProPlanned": false,
-  "adsEnabled": false,
-  "admob": {
-    "androidBannerId": "",
-    "testing": true
-  },
   "privacyPolicyUrl": ""
 });

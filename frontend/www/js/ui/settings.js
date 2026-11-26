@@ -353,6 +353,7 @@ export function renderEditionSettings() {
   const versionBadge = document.getElementById('settings-version-badge');
   const storageBadge = document.getElementById('settings-storage-badge');
   const legalDataDesc = document.getElementById('legal-data-desc');
+  const legalAdsSection = document.getElementById('legal-ads-section');
   const legalExternalLink = document.getElementById('link-legal-external');
 
   // 關於此 APP 彈窗欄位
@@ -364,6 +365,7 @@ export function renderEditionSettings() {
   if (cloudCard) cloudCard.classList.toggle('hidden', !cloudActive);
   // 僅於 Google Play 單機上架版且尚未解鎖 Pro 時顯示未來雲端同步預告
   if (proCard) proCard.classList.toggle('hidden', !(storeMode && !ent.cloudSyncUnlocked && ent.cloudProPlanned));
+  if (legalAdsSection) legalAdsSection.classList.toggle('hidden', !storeMode);
 
   // 資料備份卡在自用版與單機版皆顯示：雲端版提供 JSON 匯出留存；單機版提供完整匯出＋匯入還原＋一鍵清除
   if (backupBadge) {

@@ -5,10 +5,5 @@
   "defaultStorageMode": "cloud",
   "cloudSyncBuiltIn": true,
   "cloudProPlanned": false,
-  "adsEnabled": false,
-  "admob": {
-    "androidBannerId": "",
-    "testing": true
-  },
   "privacyPolicyUrl": ""
 }

@@ -11,11 +11,6 @@ const DEFAULT_EDITION_CONFIG = Object.freeze({
   defaultStorageMode: 'cloud',
   cloudSyncBuiltIn: true,
   cloudProPlanned: false,
-  adsEnabled: false,
-  admob: Object.freeze({
-    androidBannerId: '',
-    testing: true
-  }),
   privacyPolicyUrl: ''
 });
 
@@ -55,7 +50,7 @@ export function getEditionConfig() {
     return DEFAULT_EDITION_CONFIG;
   }
   const edition = injected.edition === 'store' ? 'store' : 'selfhost';
-  return {
+  const base = {
     edition,
     appId: typeof injected.appId === 'string' && injected.appId ? injected.appId : DEFAULT_EDITION_CONFIG.appId,
     appName: typeof injected.appName === 'string' && injected.appName ? injected.appName : DEFAULT_EDITION_CONFIG.appName,
@@ -63,13 +58,16 @@ export function getEditionConfig() {
     defaultStorageMode: injected.defaultStorageMode === 'local' ? 'local' : 'cloud',
     cloudSyncBuiltIn: Boolean(injected.cloudSyncBuiltIn),
     cloudProPlanned: Boolean(injected.cloudProPlanned),
-    adsEnabled: Boolean(injected.adsEnabled),
-    admob: {
-      androidBannerId: typeof injected.admob?.androidBannerId === 'string' ? injected.admob.androidBannerId : '',
-      testing: injected.admob?.testing !== false
-    },
     privacyPolicyUrl: typeof injected.privacyPolicyUrl === 'string' ? injected.privacyPolicyUrl : ''
   };
+  if (edition === 'store') {
+    base.adsEnabled = Boolean(injected.adsEnabled);
+    base.admob = {
+      androidBannerId: typeof injected.admob?.androidBannerId === 'string' ? injected.admob.androidBannerId : '',
+      testing: injected.admob?.testing !== false
+    };
+  }
+  return base;
 }
 
 export function getAppEdition() {

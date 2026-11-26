@@ -1065,7 +1065,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
 
   const items = pageRecords.map((r, idx) => {
     const li = createEl('li', 'history-swipe-row');
-    const contentEl = createEl('div', 'history-swipe-content py-2.5 flex items-center gap-2');
+    const contentEl = createEl('div', 'history-swipe-content min-h-[3.5rem] py-2.5 flex items-center gap-2');
 
     let primaryDisplay;
     let deltaText = t('history.firstRecord');
@@ -1115,23 +1115,23 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
       }
     }
 
-    // 左欄：體重／身高 ＋ 量測日期（含星期幾），固定欄寬與雙行結構確保各筆列高一致
-    const leftCol = createEl('div', 'w-[5.25rem] shrink-0 flex flex-col justify-center gap-1');
+    // 左欄：體重／身高 ＋ 量測日期（含星期幾），固定欄寬與垂直置中確保各列左緣與中欄起始線筆直對齊
+    const leftCol = createEl('div', 'w-[5.75rem] shrink-0 self-stretch flex flex-col justify-center gap-0.5 overflow-hidden');
     const primaryEl = createEl(
       'span',
-      `font-semibold text-sm leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
+      `font-semibold text-[15px] leading-5 tabular-nums whitespace-nowrap ${isHidden ? 'text-ink-400' : 'text-ink'}`,
       primaryDisplay
     );
     const dateCell = createEl(
       'span',
-      'text-[12px] text-ink-400 tabular-nums leading-4 whitespace-nowrap',
+      'text-[11.5px] text-ink-400 tabular-nums leading-4 whitespace-nowrap',
       formatHistoryDateWithWeekday(r.recorded_at, currentYear)
     );
     dateCell.setAttribute('title', String(r.recorded_at ?? ''));
     leftCol.append(primaryEl, dateCell);
 
     // 中欄：目標差距膠囊與備註（僅在實際存在時渲染，無備註時不留空白並自然上下置中）
-    const midCol = createEl('div', 'min-w-0 flex-1 flex flex-col justify-center items-start gap-1');
+    const midCol = createEl('div', 'min-w-0 flex-1 self-stretch flex flex-col justify-center items-start gap-1');
     if (!isHeightMetric) {
       const activeTarget = recordTargetSeries.values[idx];
       const targetGap = calculateTargetGap(r.weight_kg, activeTarget);
@@ -1167,7 +1167,7 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
     if (noteText) {
       const noteBtn = createEl(
         'button',
-        'block w-full text-left text-xs leading-4 text-ink-500 hover:text-ink truncate',
+        'block w-full text-left text-[12px] leading-4 text-ink-500 hover:text-ink truncate',
         noteText
       );
       noteBtn.type = 'button';
@@ -1185,14 +1185,14 @@ function renderHistoryList(member, memberHistory, filteredRecords, allMemberRecs
       midCol.appendChild(noteBtn);
     }
 
-    // 最右側獨立區塊：較前次變化（獨立欄位搭配淡分隔線並上下置中對齊）
+    // 最右側獨立區塊：較前次變化（固定欄寬使各列垂直分隔線完全筆直對齊，並跨全列上下置中）
     const rightCol = createEl(
       'div',
-      'min-w-[4.75rem] shrink-0 self-stretch flex items-center justify-end pl-2 border-l border-oat-100'
+      'w-[5.75rem] shrink-0 self-stretch flex items-center justify-end pl-2 border-l border-oat-100'
     );
     const deltaEl = createEl(
       'span',
-      `text-xs font-medium leading-4 tabular-nums whitespace-nowrap ${deltaColor}`,
+      `text-[12px] font-medium leading-4 tabular-nums whitespace-nowrap ${deltaColor}`,
       deltaText
     );
     rightCol.appendChild(deltaEl);

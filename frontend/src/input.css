@@ -47,6 +47,11 @@
     --bottom-bar-offset: calc(var(--ad-banner-height) + var(--safe-bottom));
   }
 
+  /* 自用版完全不載入廣告，底部偏移僅保留系統安全區 */
+  html[data-edition='selfhost'] {
+    --bottom-bar-offset: var(--safe-bottom);
+  }
+
   html[data-theme='clay'] {
     color-scheme: light;
     --c-paper: 249 243 236;
