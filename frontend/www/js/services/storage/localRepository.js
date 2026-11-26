@@ -746,7 +746,7 @@ export const LocalRepository = {
   },
 
   // 匯出本機完整 JSON 備份檔（保留 PBKDF2 雜湊密碼，絕不含明碼）
-  async exportBackupSnapshot({ appVersion = '2.17.0', edition = 'store' } = {}) {
+  async exportBackupSnapshot({ appVersion = '2.18.0', edition = 'store' } = {}) {
     const dataset = await readDataset();
     return {
       schema: 'kinpaws-backup',
